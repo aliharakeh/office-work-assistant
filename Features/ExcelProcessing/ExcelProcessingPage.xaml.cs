@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Data;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
 using Microsoft.Win32;
 using WorkAssistant.Expressions;
 using WorkAssistant.Views;
@@ -708,61 +707,8 @@ namespace WorkAssistant.Features.ExcelProcessing
 
         void Variables_Click(object sender, RoutedEventArgs e)
         {
-            var win = new Window
-            {
-                Title = "Built-in variables",
-                Width = 680,
-                Height = 540,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = Window.GetWindow(this)
-            };
-            var stack = new StackPanel { Margin = new Thickness(10) };
-            win.Content = new ScrollViewer
-            {
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Content = stack
-            };
-
-            stack.Children.Add(new TextBlock
-            {
-                Text = "Type {Today} in a formula. {A} is the full value of the 1st column on that file, {B} the 2nd. After Split, $1 $2 are parts of the chosen column. IF() works inside the formula.",
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 8)
-            });
-
-            var varGrid = new DataGrid
-            {
-                AutoGenerateColumns = false,
-                IsReadOnly = true,
-                CanUserAddRows = false,
-                HeadersVisibility = DataGridHeadersVisibility.Column,
-                MaxHeight = 250,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            varGrid.Columns.Add(new DataGridTextColumn { Header = "Name", Binding = new Binding("Name"), Width = 140 });
-            varGrid.Columns.Add(new DataGridTextColumn { Header = "Means", Binding = new Binding("Description"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-            varGrid.Columns.Add(new DataGridTextColumn { Header = "Value now", Binding = new Binding("Example"), Width = 110 });
-            varGrid.ItemsSource = ExpressionEngine.GetVariableHelp();
-            stack.Children.Add(varGrid);
-
-            var fnGrid = new DataGrid
-            {
-                AutoGenerateColumns = false,
-                IsReadOnly = true,
-                CanUserAddRows = false,
-                HeadersVisibility = DataGridHeadersVisibility.Column,
-                MaxHeight = 200,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            fnGrid.Columns.Add(new DataGridTextColumn { Header = "Function", Binding = new Binding("Signature"), Width = 210 });
-            fnGrid.Columns.Add(new DataGridTextColumn { Header = "Means", Binding = new Binding("Description"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-            fnGrid.ItemsSource = ExpressionEngine.GetFunctionHelp();
-            stack.Children.Add(fnGrid);
-
-            var close = new Button { Content = "Close", Width = 90, HorizontalAlignment = HorizontalAlignment.Right };
-            close.Click += delegate { win.Close(); };
-            stack.Children.Add(close);
-            win.ShowDialog();
+            ExpressionHelp.Show(Window.GetWindow(this),
+                "Type {Today} in a formula. {A} is the full value of the 1st column on that file, {B} the 2nd. After Split, $1 $2 are parts of the chosen column. IF() works inside the formula.");
         }
 
         void Alert(string message, string title, MessageBoxImage icon)

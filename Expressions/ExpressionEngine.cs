@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace WorkAssistant.Expressions
@@ -132,6 +133,12 @@ namespace WorkAssistant.Expressions
                 new FunctionHelp { Signature = "STARTOFWEEK(d) ENDOFWEEK(d)", Description = "Monday / Sunday of that week.", Example = "STARTOFWEEK({Today})" },
                 new FunctionHelp { Signature = "STARTOFMONTH(d) ENDOFMONTH(d)", Description = "First / last day of that month.", Example = "ENDOFMONTH({Today})" },
                 new FunctionHelp { Signature = "FORMAT(d, fmt)", Description = ".NET date format to text.", Example = "FORMAT({Today}, \"dd/MM/yyyy\")" },
+                new FunctionHelp { Signature = "REMOVEDIGITS(text)", Description = "Strip 0-9 from text.", Example = "REMOVEDIGITS({A})" },
+                new FunctionHelp { Signature = "CLEARSYMBOLS(text)", Description = "Keep letters, digits, and spaces only.", Example = "CLEARSYMBOLS({A})" },
+                new FunctionHelp { Signature = "TRIM(text)", Description = "Strip leading and trailing spaces.", Example = "TRIM({A})" },
+                new FunctionHelp { Signature = "CONTAINS(text, needle)", Description = "True if text contains needle (ignore case).", Example = "CONTAINS({Name}, \"report\")" },
+                new FunctionHelp { Signature = "STARTSWITH(text, prefix)", Description = "True if text starts with prefix (ignore case).", Example = "STARTSWITH({Name}, \"INV\")" },
+                new FunctionHelp { Signature = "ENDSWITH(text, suffix)", Description = "True if text ends with suffix (ignore case).", Example = "ENDSWITH({Name}, \".pdf\")" },
             };
         }
 
@@ -497,6 +504,43 @@ namespace WorkAssistant.Expressions
                 }
                 return ToText(args[0]);
             }
+            if (fn == "REMOVEDIGITS" || fn == "CLEARSYMBOLS")
+            {
+                if (args.Length != 1)
+                    throw new InvalidOperationException(fn + " needs (text).");
+                string s = ToText(args[0]);
+                var sb = new StringBuilder();
+                for (var i = 0; i < s.Length; i++)
+                {
+                    char c = s[i];
+                    if (fn == "REMOVEDIGITS")
+                    {
+                        if (!char.IsDigit(c))
+                            sb.Append(c);
+                    }
+                    else if (char.IsLetterOrDigit(c) || char.IsWhiteSpace(c))
+                        sb.Append(c);
+                }
+                return sb.ToString();
+            }
+            if (fn == "TRIM")
+            {
+                if (args.Length != 1)
+                    throw new InvalidOperationException("TRIM needs (text).");
+                return ToText(args[0]).Trim();
+            }
+            if (fn == "CONTAINS" || fn == "STARTSWITH" || fn == "ENDSWITH")
+            {
+                if (args.Length != 2)
+                    throw new InvalidOperationException(fn + " needs (text, needle).");
+                string hay = ToText(args[0]);
+                string needle = ToText(args[1]);
+                if (fn == "CONTAINS")
+                    return hay.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+                if (fn == "STARTSWITH")
+                    return hay.StartsWith(needle, StringComparison.OrdinalIgnoreCase);
+                return hay.EndsWith(needle, StringComparison.OrdinalIgnoreCase);
+            }
             throw new InvalidOperationException("Unknown function '" + name + "'.");
         }
 
@@ -516,6 +560,14 @@ namespace WorkAssistant.Expressions
                 fn == "STARTOFWEEK" || fn == "ENDOFWEEK" || fn == "STARTOFMONTH" || fn == "ENDOFMONTH")
             {
                 if (count != 1) need = "needs (date)";
+            }
+            else if (fn == "REMOVEDIGITS" || fn == "CLEARSYMBOLS" || fn == "TRIM")
+            {
+                if (count != 1) need = "needs (text)";
+            }
+            else if (fn == "CONTAINS" || fn == "STARTSWITH" || fn == "ENDSWITH")
+            {
+                if (count != 2) need = "needs (text, needle)";
             }
             else if (fn == "ADDDAYS" || fn == "ADDWEEKS" || fn == "ADDMONTHS" || fn == "ADDYEARS" || fn == "FORMAT")
             {
@@ -924,9 +976,11 @@ namespace WorkAssistant.Expressions
                 if (c == '$')
                 {
                     _pos++;
-                    if (_pos >= _text.Length || !char.IsDigit(_text[_pos]))
-                        throw new InvalidOperationException("Use $1 $2 for split parts.");
                     int start = _pos;
+                    if (_pos < _text.Length && (_text[_pos] == 'A' || _text[_pos] == 'a' || _text[_pos] == 'B' || _text[_pos] == 'b'))
+                        _pos++;
+                    if (_pos >= _text.Length || !char.IsDigit(_text[_pos]))
+                        throw new InvalidOperationException("Use $1 $2 or $A1 $B1 for split parts.");
                     while (_pos < _text.Length && char.IsDigit(_text[_pos]))
                         _pos++;
                     return new ColumnNode("$" + _text.Substring(start, _pos - start));

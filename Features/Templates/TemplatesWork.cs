@@ -100,16 +100,6 @@ namespace WorkAssistant.Features.Templates
             return ExpressionEngine.TryGetVariable(name, out value);
         }
 
-        public static List<VariableHelp> GetVariableHelp()
-        {
-            return ExpressionEngine.GetVariableHelp();
-        }
-
-        public static List<FunctionHelp> GetFunctionHelp()
-        {
-            return ExpressionEngine.GetFunctionHelp();
-        }
-
         static string ExpandFixed(string fixedValue)
         {
             return ExpressionEngine.ExpandVariables(fixedValue);

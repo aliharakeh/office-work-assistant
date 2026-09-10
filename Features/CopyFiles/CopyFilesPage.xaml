@@ -44,27 +44,69 @@
                     </Grid>
                     <WrapPanel>
                         <CheckBox x:Name="RecurseBox" Content="Include subfolders" VerticalAlignment="Center" Margin="0,0,16,6" />
-                        <CheckBox x:Name="WrapBox" Content="Create wrapper folder" VerticalAlignment="Center" Margin="0,0,16,6" Checked="WrapBox_Changed" Unchecked="WrapBox_Changed" />
-                        <CheckBox x:Name="FolderOnlyBox" Content="Pattern on folder only" VerticalAlignment="Center" Margin="0,0,16,6" IsEnabled="False" ToolTip="Keep the original file name inside the renamed wrapper folder." />
-                        <TextBlock Text="Separator" VerticalAlignment="Center" Margin="0,0,6,6" />
-                        <ComboBox x:Name="SepBox" Width="110" Margin="0,0,8,6" SelectedIndex="1" SelectionChanged="SepBox_Changed">
+                        <CheckBox x:Name="WrapBox" Content="Create wrapper folder" VerticalAlignment="Center" Margin="0,0,0,6" Checked="WrapBox_Changed" Unchecked="WrapBox_Changed" />
+                    </WrapPanel>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="88" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="File filter" VerticalAlignment="Center" />
+                        <TextBox x:Name="FileFilterBox" Grid.Column="1"
+                                 ToolTip="Blank = all files. Formula must be true. {Name} {Stem} {Ext} {Path} {Folder} {FolderName} {Relative} {Size} {Modified} $1 from the file split. Example: CONTAINS({Name}, &quot;report&quot;) &amp;&amp; {Ext} == &quot;.pdf&quot;" />
+                    </Grid>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="88" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Folder filter" VerticalAlignment="Center" />
+                        <TextBox x:Name="FolderFilterBox" Grid.Column="1"
+                                 ToolTip="Blank = all folders. Formula must be true for the file's folder. {Name} {Path} {Relative} $1 from the folder split. Combined with File filter. Example: CONTAINS({Relative}, &quot;2024&quot;)" />
+                    </Grid>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="88" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="88" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="File split" VerticalAlignment="Center" />
+                        <ComboBox x:Name="FileSepBox" Grid.Column="1" Width="110" Margin="0,0,8,0" SelectedIndex="1" SelectionChanged="FileSep_Changed">
                             <ComboBoxItem Content="Space" />
                             <ComboBoxItem Content="Underscore" />
                             <ComboBoxItem Content="Dash" />
                             <ComboBoxItem Content="Custom" />
                         </ComboBox>
-                        <TextBox x:Name="CustomSep" Width="40" MaxLength="1" IsEnabled="False" Margin="0,0,16,6" />
-                        <TextBlock Text="Pattern" VerticalAlignment="Center" Margin="0,0,6,6" />
-                        <TextBox x:Name="PatternBox" Width="160" Text="$1" Margin="0,0,0,6" />
-                    </WrapPanel>
-                    <WrapPanel>
-                        <TextBlock Text="Extensions" VerticalAlignment="Center" Margin="0,0,6,6" ToolTip="Blank = all files. Example: .pdf, .docx" />
-                        <TextBox x:Name="ExtFilterBox" Width="160" Margin="0,0,16,6" ToolTip="Blank = all files. Example: .pdf, .docx" />
-                        <TextBlock Text="Name contains" VerticalAlignment="Center" Margin="0,0,6,6" />
-                        <TextBox x:Name="ContainsBox" Width="140" Margin="0,0,16,6" ToolTip="Blank = all files. Only copy files whose name contains this text." />
-                        <TextBlock Text="Folder contains" VerticalAlignment="Center" Margin="0,0,6,6" />
-                        <TextBox x:Name="FolderBox" Width="140" Margin="0,0,0,6" ToolTip="Blank = all folders. Only copy files whose folder path (relative to Source) contains this text." />
-                    </WrapPanel>
+                        <TextBox x:Name="FileCustomSep" Grid.Column="2" Width="40" MaxLength="1" IsEnabled="False" Margin="0,0,16,0" />
+                        <TextBlock Grid.Column="3" Text="File pattern" VerticalAlignment="Center" />
+                        <TextBox x:Name="FilePatternBox" Grid.Column="4" Text="$1"
+                                 ToolTip="Formula for the new file name (extension is kept). $1 $2 split the file stem with File split. {Stem} {Name} TRIM() FORMAT() IF() &amp; for text." />
+                    </Grid>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="88" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="88" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Folder split" VerticalAlignment="Center" />
+                        <ComboBox x:Name="FolderSepBox" Grid.Column="1" Width="110" Margin="0,0,8,0" SelectedIndex="1" SelectionChanged="FolderSep_Changed">
+                            <ComboBoxItem Content="Space" />
+                            <ComboBoxItem Content="Underscore" />
+                            <ComboBoxItem Content="Dash" />
+                            <ComboBoxItem Content="Custom" />
+                        </ComboBox>
+                        <TextBox x:Name="FolderCustomSep" Grid.Column="2" Width="40" MaxLength="1" IsEnabled="False" Margin="0,0,16,0" />
+                        <TextBlock Grid.Column="3" Text="Folder pattern" VerticalAlignment="Center" />
+                        <TextBox x:Name="FolderPatternBox" Grid.Column="4" IsEnabled="False" Text="$1"
+                                 ToolTip="Used when Create wrapper folder is on. $1 $2 split the source folder name with Folder split. {Name} {Path} {Relative}." />
+                    </Grid>
+                    <TextBlock Margin="88,0,0,6" Foreground="#666" TextWrapping="Wrap"
+                               Text="File $1 splits the file name. Folder $1 splits the source folder name. Glue text with &amp;. $1-$2 subtracts." />
+                    <Button Content="Variables..." Width="88" HorizontalAlignment="Left" Click="Variables_Click" />
                 </StackPanel>
             </GroupBox>
 

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
+using WorkAssistant.Expressions;
 
 namespace WorkAssistant.Features.MergeDuplicates
 {
@@ -34,6 +34,23 @@ namespace WorkAssistant.Features.MergeDuplicates
 
     public static class MergeDuplicatesWork
     {
+        static MergeDuplicatesWork()
+        {
+            var a = Entry("foo_bar", '_');
+            var b = Entry("foo_zzz", '_');
+            if (!Matches(a, b, "{A1} == {B1}"))
+                throw new InvalidOperationException("MergeDuplicatesWork match check failed.");
+            if (Matches(a, b, "{A2} == {B2}"))
+                throw new InvalidOperationException("MergeDuplicatesWork reject check failed.");
+            if (!Matches(a, b, "$A1 == $B1 && CONTAINS({A}, \"foo\")"))
+                throw new InvalidOperationException("MergeDuplicatesWork formula check failed.");
+        }
+
+        static MergeDuplicatesEntry Entry(string name, char separator)
+        {
+            return new MergeDuplicatesEntry { Name = name, Parts = SplitParts(name, separator) };
+        }
+
         public static string[] SplitParts(string folderName, char separator)
         {
             if (string.IsNullOrEmpty(folderName))
@@ -70,16 +87,15 @@ namespace WorkAssistant.Features.MergeDuplicates
         public static void CheckCondition(string condition)
         {
             if (string.IsNullOrWhiteSpace(condition))
-                throw new InvalidOperationException("Enter a condition such as $A1 == $B1.");
-            var parser = new ConditionParser(condition);
-            parser.Parse();
+                throw new InvalidOperationException("Enter a formula such as {A1} == {B1}.");
+            var err = ExpressionEngine.Validate(condition);
+            if (err != null)
+                throw new InvalidOperationException(err);
         }
 
-        public static bool Matches(string[] partsA, string[] partsB, string condition)
+        public static bool Matches(MergeDuplicatesEntry a, MergeDuplicatesEntry b, string condition)
         {
-            var parser = new ConditionParser(condition);
-            var root = parser.Parse();
-            return root.Eval(partsA, partsB);
+            return ExpressionEngine.ToBool(ExpressionEngine.Evaluate(condition, Lookup(a, b)));
         }
 
         public static List<MergeDuplicatesGroup> FindGroups(string parentDir, char separator, string condition)
@@ -98,7 +114,7 @@ namespace WorkAssistant.Features.MergeDuplicates
                     bool hit;
                     try
                     {
-                        hit = Matches(entries[i].Parts, entries[j].Parts, condition);
+                        hit = Matches(entries[i], entries[j], condition);
                     }
                     catch (Exception ex)
                     {
@@ -362,284 +378,49 @@ namespace WorkAssistant.Features.MergeDuplicates
                 parent[rb] = ra;
         }
 
-        // ponytail: tiny recursive-descent parser, no expression lib to stay on net48 BCL.
-        sealed class ConditionParser
+        static Func<string, object> Lookup(MergeDuplicatesEntry a, MergeDuplicatesEntry b)
         {
-            readonly List<Token> _tokens;
-            int _pos;
-
-            public ConditionParser(string text)
+            return delegate(string name)
             {
-                _tokens = Tokenize(text);
-            }
+                object builtin;
+                if (ExpressionEngine.TryGetVariable(name, out builtin))
+                    return builtin;
 
-            public Node Parse()
-            {
-                var node = ParseOr();
-                if (_pos != _tokens.Count)
-                    throw new InvalidOperationException("Unexpected \"" + _tokens[_pos].Text + "\". Use == != && || ( ).");
-                return node;
-            }
+                var key = name != null ? name.Trim() : "";
+                if (key.Length == 0)
+                    return null;
+                if (key[0] == '$')
+                    key = key.Substring(1);
 
-            Node ParseOr()
-            {
-                var left = ParseAnd();
-                while (Match("||"))
-                    left = new OrNode(left, ParseAnd());
-                return left;
-            }
+                if (key.Equals("A", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("NameA", StringComparison.OrdinalIgnoreCase))
+                    return a != null ? a.Name : "";
+                if (key.Equals("B", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("NameB", StringComparison.OrdinalIgnoreCase))
+                    return b != null ? b.Name : "";
 
-            Node ParseAnd()
-            {
-                var left = ParseUnary();
-                while (Match("&&"))
-                    left = new AndNode(left, ParseUnary());
-                return left;
-            }
-
-            Node ParseUnary()
-            {
-                if (Match("!"))
-                    return new NotNode(ParseUnary());
-                return ParsePrimary();
-            }
-
-            Node ParsePrimary()
-            {
-                if (Match("("))
-                {
-                    var inner = ParseOr();
-                    Expect(")");
-                    return inner;
-                }
-                var left = ParseOperand();
-                string op;
-                if (Match("=="))
-                    op = "==";
-                else if (Match("!="))
-                    op = "!=";
-                else
-                    throw new InvalidOperationException("Expected == or != after \"" + left.Describe() + "\".");
-                var right = ParseOperand();
-                return new CompareNode(left, op, right);
-            }
-
-            Operand ParseOperand()
-            {
-                if (_pos >= _tokens.Count)
-                    throw new InvalidOperationException("Incomplete condition, expected a value.");
-                var t = _tokens[_pos++];
-                if (t.Kind == TokenKind.Part)
-                    return new Operand { Side = t.Side, Index = t.Index };
-                if (t.Kind == TokenKind.Literal)
-                    return new Operand { Literal = t.Text };
-                throw new InvalidOperationException("Unexpected \"" + t.Text + "\".");
-            }
-
-            bool Match(string op)
-            {
-                if (_pos < _tokens.Count && _tokens[_pos].Kind == TokenKind.Op && _tokens[_pos].Text == op)
-                {
-                    _pos++;
-                    return true;
-                }
-                return false;
-            }
-
-            void Expect(string op)
-            {
-                if (!Match(op))
-                    throw new InvalidOperationException("Expected \"" + op + "\".");
-            }
-
-            enum TokenKind { Op, Part, Literal }
-
-            sealed class Token
-            {
-                public TokenKind Kind;
-                public string Text;
-                public char Side;
-                public int Index;
-            }
-
-            static List<Token> Tokenize(string text)
-            {
-                var tokens = new List<Token>();
-                var i = 0;
-                while (i < text.Length)
-                {
-                    var c = text[i];
-                    if (char.IsWhiteSpace(c))
-                    {
-                        i++;
-                        continue;
-                    }
-                    if (c == '(' || c == ')')
-                    {
-                        tokens.Add(new Token { Kind = TokenKind.Op, Text = c.ToString() });
-                        i++;
-                        continue;
-                    }
-                    if (c == '!' || c == '=')
-                    {
-                        if (i + 1 < text.Length && text[i + 1] == '=')
-                        {
-                            tokens.Add(new Token { Kind = TokenKind.Op, Text = text.Substring(i, 2) });
-                            i += 2;
-                            continue;
-                        }
-                        if (c == '!')
-                        {
-                            tokens.Add(new Token { Kind = TokenKind.Op, Text = "!" });
-                            i++;
-                            continue;
-                        }
-                        throw new InvalidOperationException("Single = is not valid, use ==.");
-                    }
-                    if (c == '&' || c == '|')
-                    {
-                        if (i + 1 < text.Length && text[i + 1] == c)
-                        {
-                            tokens.Add(new Token { Kind = TokenKind.Op, Text = text.Substring(i, 2) });
-                            i += 2;
-                            continue;
-                        }
-                        throw new InvalidOperationException("Use && and ||, not single " + c + ".");
-                    }
-                    if (c == '"' || c == '\'')
-                    {
-                        var sb = new StringBuilder();
-                        i++;
-                        bool closed = false;
-                        while (i < text.Length)
-                        {
-                            if (text[i] == c)
-                            {
-                                closed = true;
-                                i++;
-                                break;
-                            }
-                            sb.Append(text[i]);
-                            i++;
-                        }
-                        if (!closed)
-                            throw new InvalidOperationException("Unclosed quote in condition.");
-                        tokens.Add(new Token { Kind = TokenKind.Literal, Text = sb.ToString() });
-                        continue;
-                    }
-                    char partSide;
-                    int partIndex;
-                    int partLen;
-                    if ((c == '$' || c == 'A' || c == 'a' || c == 'B' || c == 'b') && TryReadPart(text, i, out partSide, out partIndex, out partLen))
-                    {
-                        tokens.Add(new Token { Kind = TokenKind.Part, Text = "$" + partSide + partIndex, Side = partSide, Index = partIndex });
-                        i += partLen;
-                        continue;
-                    }
-                    var start = i;
-                    while (i < text.Length && !char.IsWhiteSpace(text[i]) && "()!=\"'&|=".IndexOf(text[i]) < 0)
-                        i++;
-                    if (i == start)
-                        throw new InvalidOperationException("Unexpected character '" + text[i] + "'.");
-                    tokens.Add(new Token { Kind = TokenKind.Literal, Text = text.Substring(start, i - start) });
-                }
-                if (tokens.Count == 0)
-                    throw new InvalidOperationException("Enter a condition such as $A1 == $B1.");
-                return tokens;
-            }
-
-            static bool TryReadPart(string text, int at, out char side, out int index, out int len)
-            {
-                side = '\0';
-                index = 0;
-                len = 0;
-                var i = at;
-                if (text[i] == '$')
-                    i++;
-                else
-                    return false;
-                if (i >= text.Length || (text[i] != 'A' && text[i] != 'a' && text[i] != 'B' && text[i] != 'b'))
-                    return false;
-                side = char.ToUpperInvariant(text[i]);
-                i++;
-                var d = i;
-                while (i < text.Length && char.IsDigit(text[i]))
-                    i++;
-                if (i == d)
-                    return false;
-                if (!int.TryParse(text.Substring(d, i - d), out index) || index < 1)
-                    return false;
-                len = i - at;
-                return true;
-            }
+                return LookupPart(key, a, b);
+            };
         }
 
-        abstract class Node
+        static object LookupPart(string key, MergeDuplicatesEntry a, MergeDuplicatesEntry b)
         {
-            public abstract bool Eval(string[] a, string[] b);
-        }
-
-        sealed class OrNode : Node
-        {
-            readonly Node _l;
-            readonly Node _r;
-            public OrNode(Node l, Node r) { _l = l; _r = r; }
-            public override bool Eval(string[] a, string[] b) { return _l.Eval(a, b) || _r.Eval(a, b); }
-        }
-
-        sealed class AndNode : Node
-        {
-            readonly Node _l;
-            readonly Node _r;
-            public AndNode(Node l, Node r) { _l = l; _r = r; }
-            public override bool Eval(string[] a, string[] b) { return _l.Eval(a, b) && _r.Eval(a, b); }
-        }
-
-        sealed class NotNode : Node
-        {
-            readonly Node _inner;
-            public NotNode(Node inner) { _inner = inner; }
-            public override bool Eval(string[] a, string[] b) { return !_inner.Eval(a, b); }
-        }
-
-        sealed class CompareNode : Node
-        {
-            readonly Operand _l;
-            readonly string _op;
-            readonly Operand _r;
-            public CompareNode(Operand l, string op, Operand r) { _l = l; _op = op; _r = r; }
-            public override bool Eval(string[] a, string[] b)
+            if (string.IsNullOrEmpty(key))
+                return null;
+            char side = char.ToUpperInvariant(key[0]);
+            string digits = key;
+            MergeDuplicatesEntry entry = a;
+            if (side == 'A' || side == 'B')
             {
-                var lv = _l.Resolve(a, b, true);
-                var rv = _r.Resolve(a, b, false);
-                var eq = string.Equals(lv.Trim(), rv.Trim(), StringComparison.OrdinalIgnoreCase);
-                return _op == "==" ? eq : !eq;
+                digits = key.Substring(1);
+                entry = side == 'A' ? a : b;
             }
-        }
-
-        sealed class Operand
-        {
-            public char Side;
-            public int Index;
-            public string Literal;
-            public bool IsPart { get { return Side == 'A' || Side == 'B'; } }
-
-            public string Resolve(string[] a, string[] b, bool isLeft)
-            {
-                if (!IsPart)
-                    return Literal ?? "";
-                var parts = Side == 'A' ? a : b;
-                if (parts == null || Index < 1 || Index > parts.Length)
-                    return "";
-                return parts[Index - 1] ?? "";
-            }
-
-            public string Describe()
-            {
-                if (IsPart)
-                    return "$" + Side + Index;
-                return Literal ?? "";
-            }
+            int n;
+            if (!int.TryParse(digits, out n) || n < 1)
+                return null;
+            if (entry == null || entry.Parts == null || n > entry.Parts.Length)
+                return "";
+            return entry.Parts[n - 1];
         }
     }
 }

@@ -123,7 +123,8 @@
       <DependentUpon>TemplatesPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\Templates\TemplatesWork.cs" />
-    <Compile Include="Expressions\ExpressionEngine.cs" />
+            <Compile Include="Expressions\ExpressionEngine.cs" />
+    <Compile Include="Expressions\ExpressionHelp.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">

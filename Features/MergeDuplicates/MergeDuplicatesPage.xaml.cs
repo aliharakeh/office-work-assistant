@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using Forms = System.Windows.Forms;
+using WorkAssistant.Expressions;
 using WorkAssistant.Views;
 
 namespace WorkAssistant.Features.MergeDuplicates
@@ -46,6 +47,21 @@ namespace WorkAssistant.Features.MergeDuplicates
                 if (dlg.ShowDialog() == Forms.DialogResult.OK)
                     PathParent.Text = dlg.SelectedPath;
             }
+        }
+
+        void Variables_Click(object sender, RoutedEventArgs e)
+        {
+            ExpressionHelp.Show(Window.GetWindow(this),
+                "Match two folders. {A} and {B} are the folder names. After the separator split, {A1} is part 1 of A, {B2} part 2 of B. $A1 and $B1 work the same. {Today} and functions like CONTAINS() also work.",
+                new[]
+                {
+                    new VariableHelp { Name = "{A}", Description = "Name of folder A." },
+                    new VariableHelp { Name = "{B}", Description = "Name of folder B." },
+                    new VariableHelp { Name = "{A1}", Description = "Split part 1 of folder A. {A2} is part 2." },
+                    new VariableHelp { Name = "{B1}", Description = "Split part 1 of folder B." },
+                    new VariableHelp { Name = "$A1", Description = "Same as {A1}." },
+                    new VariableHelp { Name = "$B1", Description = "Same as {B1}." },
+                });
         }
 
         void SepBox_Changed(object sender, SelectionChangedEventArgs e)
@@ -295,9 +311,9 @@ namespace WorkAssistant.Features.MergeDuplicates
                 Alert("Enter a custom separator.", "Missing separator", MessageBoxImage.Warning);
                 return false;
             }
-            if (string.IsNullOrWhiteSpace(ConditionBox.Text))
+                if (string.IsNullOrWhiteSpace(ConditionBox.Text))
             {
-                Alert("Enter a condition such as $A1 == $B1.", "Missing condition", MessageBoxImage.Warning);
+                Alert("Enter a match formula such as {A1} == {B1}.", "Missing match", MessageBoxImage.Warning);
                 return false;
             }
             try
