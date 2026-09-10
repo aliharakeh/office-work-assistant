@@ -35,13 +35,9 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <ComboBox x:Name="SheetA" Grid.Column="1" Margin="0,0,12,0" SelectionChanged="SheetA_SelectionChanged" />
-                            <TextBlock Grid.Column="2" Text="Key" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <ComboBox x:Name="KeyA" Grid.Column="3" SelectionChanged="Key_SelectionChanged" />
+                            <ComboBox x:Name="SheetA" Grid.Column="1" SelectionChanged="SheetA_SelectionChanged" />
                         </Grid>
                         <DataGrid x:Name="GridA" AutoGenerateColumns="True" IsReadOnly="True"
                                   CanUserAddRows="False" HeadersVisibility="Column" />
@@ -62,13 +58,9 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <ComboBox x:Name="SheetB" Grid.Column="1" Margin="0,0,12,0" SelectionChanged="SheetB_SelectionChanged" />
-                            <TextBlock Grid.Column="2" Text="Key" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <ComboBox x:Name="KeyB" Grid.Column="3" SelectionChanged="Key_SelectionChanged" />
+                            <ComboBox x:Name="SheetB" Grid.Column="1" SelectionChanged="SheetB_SelectionChanged" />
                         </Grid>
                         <DataGrid x:Name="GridB" AutoGenerateColumns="True" IsReadOnly="True"
                                   CanUserAddRows="False" HeadersVisibility="Column" />
@@ -76,23 +68,26 @@
                 </GroupBox>
             </Grid>
 
-            <GroupBox Header="Also match when" Grid.Row="1" Margin="0,0,0,8">
+            <GroupBox Header="Match rules" Grid.Row="1" Margin="0,0,0,8">
                 <DockPanel LastChildFill="True" Margin="6">
-                    <Button DockPanel.Dock="Right" Content="Add" Width="72" VerticalAlignment="Top"
-                            Click="AddCond_Click" />
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                        <Button Content="Variables..." Width="88" Margin="0,0,8,0" Click="Variables_Click" />
+                        <Button Content="Add" Width="72" Click="AddCond_Click" />
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Top" Margin="0,0,80,6" TextWrapping="Wrap" Foreground="#555"
+                               Text="Each side is a formula. {A} is the full first-column value, {B} the second, or use {Header}. Split that file's chosen column (space, underscore, dash, custom) then use $1 $2. IF() still works inside the formula. Operators: == != &gt; &gt;= &lt; &lt;=." />
                     <Grid DockPanel.Dock="Top" Margin="0,0,80,4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="56" />
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="140" />
                             <ColumnDefinition Width="72" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="A column" Foreground="#555" />
-                        <TextBlock Grid.Column="2" Text="B column" Foreground="#555" />
-                        <TextBlock Grid.Column="3" Text="Equals value" Foreground="#555" Margin="0,0,6,0" />
+                        <TextBlock Text="A" Foreground="#555" />
+                        <TextBlock Grid.Column="1" Text="Op" Foreground="#555" />
+                        <TextBlock Grid.Column="2" Text="B" Foreground="#555" />
                     </Grid>
-                    <ScrollViewer MaxHeight="88" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="CondPanel" />
                     </ScrollViewer>
                 </DockPanel>
@@ -108,7 +103,7 @@
                     <ListBox x:Name="OpList" Margin="0,0,8,0" SelectionChanged="Op_SelectionChanged">
                         <ListBoxItem Content="Found in A but not in B" Tag="AOnly" />
                         <ListBoxItem Content="Found in B but not A" Tag="BOnly" />
-                        <ListBoxItem Content="Common between A &amp; B by key column" Tag="Common" />
+                        <ListBoxItem Content="Common between A &amp; B" Tag="Common" />
                     </ListBox>
 
                     <DockPanel Grid.Column="1">

@@ -921,6 +921,16 @@ namespace WorkAssistant.Expressions
                     _pos = end + 1;
                     return new ColumnNode(name);
                 }
+                if (c == '$')
+                {
+                    _pos++;
+                    if (_pos >= _text.Length || !char.IsDigit(_text[_pos]))
+                        throw new InvalidOperationException("Use $1 $2 for split parts.");
+                    int start = _pos;
+                    while (_pos < _text.Length && char.IsDigit(_text[_pos]))
+                        _pos++;
+                    return new ColumnNode("$" + _text.Substring(start, _pos - start));
+                }
                 if (c == '"' || c == '\'')
                 {
                     char quote = c;
@@ -1026,7 +1036,7 @@ namespace WorkAssistant.Expressions
                     }
                     return new ColumnNode(name);
                 }
-                throw new InvalidOperationException("Unexpected '" + c + "'. Use {Column}, {Today}, numbers, quotes, + - * / ^, comparisons, && || ! and functions like TODAY().");
+                throw new InvalidOperationException("Unexpected '" + c + "'. Use {Column}, $1, {Today}, numbers, quotes, + - * / ^, comparisons, && || ! and functions like TODAY().");
             }
 
             void SkipSpaces()

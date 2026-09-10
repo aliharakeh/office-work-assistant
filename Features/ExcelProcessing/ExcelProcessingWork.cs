@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using ClosedXML.Excel;
+using WorkAssistant.Expressions;
 
 namespace WorkAssistant.Features.ExcelProcessing
 {
@@ -24,7 +25,11 @@ namespace WorkAssistant.Features.ExcelProcessing
     {
         public string ColumnA { get; set; }
         public string ColumnB { get; set; }
-        public string Value { get; set; }
+        public string ExpressionA { get; set; }
+        public string ExpressionB { get; set; }
+        public string Operator { get; set; }
+        public string SplitA { get; set; }
+        public string SplitB { get; set; }
     }
 
     public static class ExcelProcessingWork
@@ -73,33 +78,37 @@ namespace WorkAssistant.Features.ExcelProcessing
             }
         }
 
-        public static ExcelProcessingCompareResult OnlyInA(DataTable a, DataTable b, string keyA, string keyB, IList<ExcelProcessingMatch> extra)
+        public static ExcelProcessingCompareResult OnlyInA(DataTable a, DataTable b, IList<ExcelProcessingMatch> extra)
         {
-            return FromOne(CopyUnmatched(a, keyA, extra, true, KeySet(b, keyB, extra, false)), 'A');
+            return FromOne(CopyUnmatched(a, b, extra, true), 'A');
         }
 
-        public static ExcelProcessingCompareResult OnlyInB(DataTable a, DataTable b, string keyA, string keyB, IList<ExcelProcessingMatch> extra)
+        public static ExcelProcessingCompareResult OnlyInB(DataTable a, DataTable b, IList<ExcelProcessingMatch> extra)
         {
-            return FromOne(CopyUnmatched(b, keyB, extra, false, KeySet(a, keyA, extra, true)), 'B');
+            return FromOne(CopyUnmatched(b, a, extra, false), 'B');
         }
 
-        public static ExcelProcessingCompareResult Common(DataTable a, DataTable b, string keyA, string keyB, IList<ExcelProcessingMatch> extra)
+        public static ExcelProcessingCompareResult Common(DataTable a, DataTable b, IList<ExcelProcessingMatch> extra)
         {
             string[] originals;
             char[] sources;
-            var result = NewJoinTable(a, b, keyB, out originals, out sources);
-            var lookup = BuildLookup(b, keyB, extra, false);
+            var result = NewJoinTable(a, b, out originals, out sources);
+            var lookup = BuildLookup(b, extra, false);
 
             foreach (DataRow rowA in a.Rows)
             {
-                if (!RowFilter(rowA, extra, true))
+                if (!RowFilter(a, rowA, extra, true))
                     continue;
-                var k = FullKey(rowA, keyA, extra, true);
+                var k = FullKey(a, rowA, extra, true);
                 List<DataRow> hits;
                 if (k.Length == 0 || !lookup.TryGetValue(k, out hits))
                     continue;
                 foreach (var rowB in hits)
-                    result.Rows.Add(FillJoin(result, a, b, keyB, rowA, rowB));
+                {
+                    if (!PairFilter(a, rowA, b, rowB, extra))
+                        continue;
+                    result.Rows.Add(FillJoin(result, a, b, rowA, rowB));
+                }
             }
 
             return new ExcelProcessingCompareResult { Table = result, Sources = sources, Originals = originals };
@@ -224,14 +233,14 @@ namespace WorkAssistant.Features.ExcelProcessing
             return Convert.ToString(value, CultureInfo.InvariantCulture).Trim().ToLowerInvariant();
         }
 
-        static Dictionary<string, List<DataRow>> BuildLookup(DataTable table, string keyCol, IList<ExcelProcessingMatch> extra, bool isA)
+        static Dictionary<string, List<DataRow>> BuildLookup(DataTable table, IList<ExcelProcessingMatch> extra, bool isA)
         {
             var map = new Dictionary<string, List<DataRow>>(StringComparer.Ordinal);
             foreach (DataRow row in table.Rows)
             {
-                if (!RowFilter(row, extra, isA))
+                if (!RowFilter(table, row, extra, isA))
                     continue;
-                var k = FullKey(row, keyCol, extra, isA);
+                var k = FullKey(table, row, extra, isA);
                 if (k.Length == 0)
                     continue;
                 List<DataRow> list;
@@ -245,56 +254,62 @@ namespace WorkAssistant.Features.ExcelProcessing
             return map;
         }
 
-        static HashSet<string> KeySet(DataTable table, string keyCol, IList<ExcelProcessingMatch> extra, bool isA)
+        static string FullKey(DataTable table, DataRow row, IList<ExcelProcessingMatch> extra, bool isA)
         {
-            var set = new HashSet<string>(StringComparer.Ordinal);
-            foreach (DataRow row in table.Rows)
+            var k = "";
+            if (extra != null)
             {
-                if (!RowFilter(row, extra, isA))
-                    continue;
-                var k = FullKey(row, keyCol, extra, isA);
-                if (k.Length > 0)
-                    set.Add(k);
+                for (var i = 0; i < extra.Count; i++)
+                {
+                    var m = extra[i];
+                    if (!IsJoin(m) || Op(m) != "==")
+                        continue;
+                    var part = NormKey(SideValue(table, row, m, isA));
+                    if (part.Length == 0)
+                        return "";
+                    if (k.Length > 0)
+                        k += "\x1f";
+                    k += part;
+                }
             }
-            return set;
-        }
-
-        static string FullKey(DataRow row, string keyCol, IList<ExcelProcessingMatch> extra, bool isA)
-        {
-            var k = NormKey(row[keyCol]);
             if (k.Length == 0)
-                return "";
-            if (extra == null)
-                return k;
-            for (var i = 0; i < extra.Count; i++)
-            {
-                var m = extra[i];
-                if (string.IsNullOrEmpty(m.ColumnA) || string.IsNullOrEmpty(m.ColumnB))
-                    continue;
-                k += "\x1f" + NormKey(row[isA ? m.ColumnA : m.ColumnB]);
-            }
+                return HasEquality(extra) ? "" : "\x1e"; // ponytail: one bucket, nested PairFilter if no == key
             return k;
         }
 
-        static bool RowFilter(DataRow row, IList<ExcelProcessingMatch> extra, bool isA)
+        static bool RowFilter(DataTable table, DataRow row, IList<ExcelProcessingMatch> extra, bool isA)
         {
             if (extra == null)
                 return true;
             for (var i = 0; i < extra.Count; i++)
             {
                 var m = extra[i];
-                if (string.IsNullOrWhiteSpace(m.Value))
+                if (IsJoin(m))
                     continue;
-                var col = isA ? m.ColumnA : m.ColumnB;
-                if (string.IsNullOrEmpty(col))
+                if (isA ? !HasA(m) : !HasB(m))
                     continue;
-                if (NormKey(row[col]) != NormKey(m.Value))
+                if (!PassSide(table, row, m, isA))
                     return false;
             }
             return true;
         }
 
-        static DataTable NewJoinTable(DataTable a, DataTable b, string keyB, out string[] originals, out char[] sources)
+        static bool PairFilter(DataTable a, DataRow rowA, DataTable b, DataRow rowB, IList<ExcelProcessingMatch> extra)
+        {
+            if (extra == null)
+                return true;
+            for (var i = 0; i < extra.Count; i++)
+            {
+                var m = extra[i];
+                if (!IsJoin(m) || Op(m) == "==")
+                    continue;
+                if (!ExpressionEngine.Compare(Op(m), SideValue(a, rowA, m, true), SideValue(b, rowB, m, false)))
+                    return false;
+            }
+            return true;
+        }
+
+        static DataTable NewJoinTable(DataTable a, DataTable b, out string[] originals, out char[] sources)
         {
             var result = new DataTable();
             var orig = new List<string>();
@@ -309,8 +324,6 @@ namespace WorkAssistant.Features.ExcelProcessing
 
             foreach (DataColumn col in b.Columns)
             {
-                if (string.Equals(col.ColumnName, keyB, StringComparison.OrdinalIgnoreCase))
-                    continue;
                 result.Columns.Add("c" + result.Columns.Count, typeof(object));
                 orig.Add(col.ColumnName);
                 src.Add('B');
@@ -321,39 +334,188 @@ namespace WorkAssistant.Features.ExcelProcessing
             return result;
         }
 
-        static object[] FillJoin(DataTable result, DataTable a, DataTable b, string keyB, DataRow rowA, DataRow rowB)
+        static object[] FillJoin(DataTable result, DataTable a, DataTable b, DataRow rowA, DataRow rowB)
         {
             var values = new object[result.Columns.Count];
             var i = 0;
             foreach (DataColumn col in a.Columns)
                 values[i++] = rowA[col.ColumnName];
-
             foreach (DataColumn col in b.Columns)
-            {
-                if (string.Equals(col.ColumnName, keyB, StringComparison.OrdinalIgnoreCase))
-                    continue;
                 values[i++] = rowB[col.ColumnName];
-            }
-
             return values;
         }
 
-        static DataTable CopyUnmatched(DataTable source, string keyCol, IList<ExcelProcessingMatch> extra, bool isA, HashSet<string> otherKeys)
+        static DataTable CopyUnmatched(DataTable source, DataTable other, IList<ExcelProcessingMatch> extra, bool isA)
         {
             var result = source.Clone();
             foreach (DataColumn col in result.Columns)
                 col.DataType = typeof(object);
 
+            var lookup = BuildLookup(other, extra, !isA);
             foreach (DataRow row in source.Rows)
             {
-                if (!RowFilter(row, extra, isA))
+                if (!RowFilter(source, row, extra, isA))
                     continue;
-                var k = FullKey(row, keyCol, extra, isA);
-                if (k.Length > 0 && otherKeys.Contains(k))
+                if (HasPair(source, row, other, lookup, extra, isA))
                     continue;
                 result.ImportRow(row);
             }
             return result;
+        }
+
+        static bool HasPair(DataTable source, DataRow row, DataTable other, Dictionary<string, List<DataRow>> lookup, IList<ExcelProcessingMatch> extra, bool isA)
+        {
+            var k = FullKey(source, row, extra, isA);
+            if (k.Length == 0)
+                return false;
+            List<DataRow> hits;
+            if (!lookup.TryGetValue(k, out hits))
+                return false;
+            for (var i = 0; i < hits.Count; i++)
+            {
+                if (isA)
+                {
+                    if (PairFilter(source, row, other, hits[i], extra))
+                        return true;
+                }
+                else if (PairFilter(other, hits[i], source, row, extra))
+                    return true;
+            }
+            return false;
+        }
+
+        static bool HasEquality(IList<ExcelProcessingMatch> extra)
+        {
+            if (extra == null)
+                return false;
+            for (var i = 0; i < extra.Count; i++)
+            {
+                if (IsJoin(extra[i]) && Op(extra[i]) == "==")
+                    return true;
+            }
+            return false;
+        }
+
+        static string Op(ExcelProcessingMatch m)
+        {
+            if (m == null || string.IsNullOrWhiteSpace(m.Operator))
+                return "==";
+            return m.Operator.Trim();
+        }
+
+        static bool HasA(ExcelProcessingMatch m)
+        {
+            return m != null && !string.IsNullOrWhiteSpace(m.ExpressionA);
+        }
+
+        static bool HasB(ExcelProcessingMatch m)
+        {
+            return m != null && !string.IsNullOrWhiteSpace(m.ExpressionB);
+        }
+
+        static bool IsJoin(ExcelProcessingMatch m)
+        {
+            return HasA(m) && HasB(m);
+        }
+
+        static bool PassSide(DataTable table, DataRow row, ExcelProcessingMatch m, bool isA)
+        {
+            return ExpressionEngine.ToBool(SideValue(table, row, m, isA));
+        }
+
+        static object SideValue(DataTable table, DataRow row, ExcelProcessingMatch m, bool isA)
+        {
+            return EvalExpr(table, row, isA ? m.ExpressionA : m.ExpressionB, PartsFor(table, row, m, isA));
+        }
+
+        static string[] PartsFor(DataTable table, DataRow row, ExcelProcessingMatch m, bool isA)
+        {
+            var sep = isA ? m.SplitA : m.SplitB;
+            var col = isA ? m.ColumnA : m.ColumnB;
+            if (string.IsNullOrEmpty(sep) || string.IsNullOrEmpty(col) || table == null || !table.Columns.Contains(col))
+                return new string[0];
+            return SplitParts(ExpressionEngine.ToText(row[col]), sep[0]);
+        }
+
+        static string[] SplitParts(string text, char separator)
+        {
+            if (string.IsNullOrEmpty(text))
+                return new string[0];
+            var raw = text.Split(new[] { separator }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = new List<string>(raw.Length);
+            for (var i = 0; i < raw.Length; i++)
+            {
+                var t = raw[i].Trim();
+                if (t.Length > 0)
+                    parts.Add(t);
+            }
+            return parts.ToArray();
+        }
+
+        static object LookupPart(string[] parts, string token)
+        {
+            if (parts == null || string.IsNullOrWhiteSpace(token))
+                return "";
+            var t = token.Trim();
+            if (t.Length > 0 && t[0] == '$')
+                t = t.Substring(1);
+            int n;
+            if (!int.TryParse(t, NumberStyles.Integer, CultureInfo.InvariantCulture, out n))
+                return "";
+            if (n < 1 || n > parts.Length)
+                return "";
+            return parts[n - 1];
+        }
+
+        static object EvalExpr(DataTable table, DataRow row, string expression, string[] parts)
+        {
+            return ExpressionEngine.Evaluate(expression, delegate(string name) { return FindValue(table, row, parts, name); });
+        }
+
+        static object FindValue(DataTable table, DataRow row, string[] parts, string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return null;
+            if (name[0] == '$')
+                return LookupPart(parts, name);
+            object builtin;
+            if (ExpressionEngine.TryGetVariable(name, out builtin))
+                return builtin;
+            if (table == null)
+                return null;
+            int letter;
+            if (TryParseColumnLetter(name, out letter) && letter >= 0 && letter < table.Columns.Count)
+                return row[letter];
+            if (table.Columns.Contains(name))
+                return row[name];
+            foreach (DataColumn c in table.Columns)
+            {
+                if (string.Equals(c.ColumnName, name, StringComparison.OrdinalIgnoreCase))
+                    return row[c.ColumnName];
+            }
+            return null;
+        }
+
+        static bool TryParseColumnLetter(string text, out int index)
+        {
+            index = -1;
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+            var t = text.Trim();
+            var n = 0;
+            for (var i = 0; i < t.Length; i++)
+            {
+                var c = t[i];
+                if (c >= 'a' && c <= 'z')
+                    c = (char)(c - 'a' + 'A');
+                if (c < 'A' || c > 'Z')
+                    return false;
+                n = n * 26 + (c - 'A' + 1);
+            }
+            if (n < 1 || n > 16384)
+                return false;
+            index = n - 1;
+            return true;
         }
     }
 }

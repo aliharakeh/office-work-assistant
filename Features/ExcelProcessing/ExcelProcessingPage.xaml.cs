@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Data;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using Microsoft.Win32;
+using WorkAssistant.Expressions;
 using WorkAssistant.Views;
 
 namespace WorkAssistant.Features.ExcelProcessing
@@ -21,6 +23,7 @@ namespace WorkAssistant.Features.ExcelProcessing
         public ExcelProcessingPage()
         {
             InitializeComponent();
+            AddCond(null);
         }
 
         void Home_Click(object sender, RoutedEventArgs e)
@@ -55,14 +58,9 @@ namespace WorkAssistant.Features.ExcelProcessing
             ReloadSheet(false);
         }
 
-        void Key_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            RefreshPreview(false);
-        }
-
         void AddCond_Click(object sender, RoutedEventArgs e)
         {
-            AddCond(null, null, null);
+            AddCond(null);
         }
 
         void Op_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -155,8 +153,6 @@ namespace WorkAssistant.Features.ExcelProcessing
                     PathA.Text = path;
                     SheetA.ItemsSource = loaded.Sheets;
                     SheetA.SelectedItem = loaded.Sheet;
-                    KeyA.ItemsSource = ColumnNames(loaded.Table);
-                    SelectKey(KeyA, loaded.Table);
                     GridA.ItemsSource = loaded.Table.DefaultView;
                     RefreshCondCombos();
                 }
@@ -166,8 +162,6 @@ namespace WorkAssistant.Features.ExcelProcessing
                     PathB.Text = path;
                     SheetB.ItemsSource = loaded.Sheets;
                     SheetB.SelectedItem = loaded.Sheet;
-                    KeyB.ItemsSource = ColumnNames(loaded.Table);
-                    SelectKey(KeyB, loaded.Table);
                     GridB.ItemsSource = loaded.Table.DefaultView;
                     RefreshCondCombos();
                 }
@@ -178,15 +172,6 @@ namespace WorkAssistant.Features.ExcelProcessing
             }
 
             RefreshPreview(false);
-        }
-
-        static void SelectKey(ComboBox box, DataTable table)
-        {
-            var keep = box.SelectedItem as string;
-            if (keep != null && table.Columns.Contains(keep))
-                box.SelectedItem = keep;
-            else if (box.Items.Count > 0)
-                box.SelectedIndex = 0;
         }
 
         static string[] ColumnNames(DataTable table)
@@ -211,9 +196,7 @@ namespace WorkAssistant.Features.ExcelProcessing
 
             DataTable a;
             DataTable b;
-            string keyA;
-            string keyB;
-            if (!TryReady(out a, out b, out keyA, out keyB, alert))
+            if (!TryReady(out a, out b, alert))
             {
                 ClearPreview();
                 return;
@@ -223,11 +206,11 @@ namespace WorkAssistant.Features.ExcelProcessing
             {
                 var extra = CollectedConds();
                 if (tag == "AOnly")
-                    _preview = ExcelProcessingWork.OnlyInA(a, b, keyA, keyB, extra);
+                    _preview = ExcelProcessingWork.OnlyInA(a, b, extra);
                 else if (tag == "BOnly")
-                    _preview = ExcelProcessingWork.OnlyInB(a, b, keyA, keyB, extra);
+                    _preview = ExcelProcessingWork.OnlyInB(a, b, extra);
                 else
-                    _preview = ExcelProcessingWork.Common(a, b, keyA, keyB, extra);
+                    _preview = ExcelProcessingWork.Common(a, b, extra);
 
                 _picks = new List<ColumnPick>();
                 for (var i = 0; i < _preview.Table.Columns.Count; i++)
@@ -456,52 +439,186 @@ namespace WorkAssistant.Features.ExcelProcessing
             return null;
         }
 
-        void AddCond(string colA, string colB, string value)
+        void AddCond(ExcelProcessingMatch seed)
         {
-            var row = new Grid { Margin = new Thickness(0, 0, 8, 4) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var root = new StackPanel { Margin = new Thickness(0, 0, 8, 8) };
+            var line = new Grid();
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            var a = new ComboBox { Margin = new Thickness(0, 0, 6, 0) };
-            var eq = new TextBlock
+            var panelA = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+            var opBox = new ComboBox { Margin = new Thickness(0, 0, 6, 0) };
+            opBox.Items.Add("==");
+            opBox.Items.Add("!=");
+            opBox.Items.Add(">");
+            opBox.Items.Add(">=");
+            opBox.Items.Add("<");
+            opBox.Items.Add("<=");
+            var opKeep = seed != null && !string.IsNullOrWhiteSpace(seed.Operator) ? seed.Operator : "==";
+            opBox.SelectedItem = opKeep;
+            if (opBox.SelectedIndex < 0)
+                opBox.SelectedIndex = 0;
+
+            var panelB = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
+            var del = new Button { Content = "Remove", Width = 72, VerticalAlignment = VerticalAlignment.Top };
+
+            Grid.SetColumn(opBox, 1);
+            Grid.SetColumn(panelB, 2);
+            Grid.SetColumn(del, 3);
+            line.Children.Add(panelA);
+            line.Children.Add(opBox);
+            line.Children.Add(panelB);
+            line.Children.Add(del);
+            root.Children.Add(line);
+
+            var item = new CondRow
             {
-                Text = "=",
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 6, 0)
+                Root = root,
+                Op = opBox,
+                PanelA = panelA,
+                PanelB = panelB,
+                ColA = new ComboBox(),
+                ColB = new ComboBox(),
+                SepA = NewSepBox(),
+                SepB = NewSepBox(),
+                CustomA = NewCustomSep(),
+                CustomB = NewCustomSep(),
+                ExprA = new TextBox { Text = seed != null && seed.ExpressionA != null ? seed.ExpressionA : "{A}" },
+                ExprB = new TextBox { Text = seed != null && seed.ExpressionB != null ? seed.ExpressionB : "{A}" }
             };
-            var b = new ComboBox { Margin = new Thickness(0, 0, 6, 0) };
-            var val = new TextBox { Margin = new Thickness(0, 0, 6, 0), Text = value ?? "" };
-            var del = new Button { Content = "Remove", Width = 72 };
+            item.SplitRowA = MakeSplitRow(item.SepA, item.CustomA);
+            item.SplitRowB = MakeSplitRow(item.SepB, item.CustomB);
+            if (seed != null)
+            {
+                ApplySep(item.SepA, item.CustomA, seed.SplitA);
+                ApplySep(item.SepB, item.CustomB, seed.SplitB);
+            }
 
-            Grid.SetColumn(eq, 1);
-            Grid.SetColumn(b, 2);
-            Grid.SetColumn(val, 3);
-            Grid.SetColumn(del, 4);
-            row.Children.Add(a);
-            row.Children.Add(eq);
-            row.Children.Add(b);
-            row.Children.Add(val);
-            row.Children.Add(del);
+            FillCondCombo(item.ColA, _tableA, seed != null ? seed.ColumnA : null);
+            FillCondCombo(item.ColB, _tableB, seed != null ? seed.ColumnB : null);
+            WireCond(item.ColA, item.ColB, item.Op, item.SepA, item.SepB, item.CustomA, item.CustomB,
+                item.ExprA, item.ExprB);
+            item.SepA.SelectionChanged += (s, e) => item.CustomA.IsEnabled = item.SepA.SelectedIndex == 4;
+            item.SepB.SelectionChanged += (s, e) => item.CustomB.IsEnabled = item.SepB.SelectedIndex == 4;
 
-            var item = new CondRow { Root = row, ColA = a, ColB = b, Value = val };
-            FillCondCombo(a, _tableA, colA);
-            FillCondCombo(b, _tableB, colB);
-            a.SelectionChanged += Cond_Changed;
-            b.SelectionChanged += Cond_Changed;
-            val.TextChanged += Cond_TextChanged;
             del.Click += (s, e) =>
             {
                 _conds.Remove(item);
-                CondPanel.Children.Remove(row);
-                RefreshPreview(false);
+                CondPanel.Children.Remove(root);
+                if (_conds.Count == 0)
+                    AddCond(null);
+                else
+                    RefreshPreview(false);
             };
 
+            FillSidePanels(item);
             _conds.Add(item);
-            CondPanel.Children.Add(row);
+            CondPanel.Children.Add(root);
             RefreshPreview(false);
+        }
+
+        void WireCond(params Control[] controls)
+        {
+            for (var i = 0; i < controls.Length; i++)
+            {
+                var box = controls[i] as ComboBox;
+                if (box != null)
+                    box.SelectionChanged += Cond_Changed;
+                var text = controls[i] as TextBox;
+                if (text != null)
+                    text.TextChanged += Cond_TextChanged;
+            }
+        }
+
+        static ComboBox NewSepBox()
+        {
+            var sep = new ComboBox { Width = 110, Margin = new Thickness(0, 0, 8, 2) };
+            sep.Items.Add("None");
+            sep.Items.Add("Space");
+            sep.Items.Add("Underscore");
+            sep.Items.Add("Dash");
+            sep.Items.Add("Custom");
+            sep.SelectedIndex = 0;
+            return sep;
+        }
+
+        static TextBox NewCustomSep()
+        {
+            return new TextBox { Width = 40, MaxLength = 1, IsEnabled = false, Margin = new Thickness(0, 0, 0, 2) };
+        }
+
+        static WrapPanel MakeSplitRow(ComboBox sep, TextBox custom)
+        {
+            var row = new WrapPanel();
+            row.Children.Add(new TextBlock
+            {
+                Text = "Split",
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 2)
+            });
+            row.Children.Add(sep);
+            row.Children.Add(custom);
+            return row;
+        }
+
+        static void ApplySep(ComboBox sep, TextBox custom, string stored)
+        {
+            if (stored == " ")
+                sep.SelectedIndex = 1;
+            else if (stored == "_")
+                sep.SelectedIndex = 2;
+            else if (stored == "-")
+                sep.SelectedIndex = 3;
+            else if (!string.IsNullOrEmpty(stored))
+            {
+                sep.SelectedIndex = 4;
+                custom.Text = stored.Substring(0, 1);
+                custom.IsEnabled = true;
+            }
+            else
+                sep.SelectedIndex = 0;
+        }
+
+        static string ReadSep(ComboBox sep, TextBox custom)
+        {
+            switch (sep.SelectedIndex)
+            {
+                case 1: return " ";
+                case 2: return "_";
+                case 3: return "-";
+                case 4: return custom.Text.Length > 0 ? custom.Text.Substring(0, 1) : "";
+                default: return "";
+            }
+        }
+
+        static void FillSidePanels(CondRow item)
+        {
+            item.PanelA.Children.Clear();
+            item.PanelB.Children.Clear();
+            item.PanelA.Children.Add(Hint("Column to split"));
+            item.PanelA.Children.Add(item.ColA);
+            item.PanelA.Children.Add(item.SplitRowA);
+            item.PanelA.Children.Add(Hint("Formula"));
+            item.PanelA.Children.Add(item.ExprA);
+            item.PanelB.Children.Add(Hint("Column to split"));
+            item.PanelB.Children.Add(item.ColB);
+            item.PanelB.Children.Add(item.SplitRowB);
+            item.PanelB.Children.Add(Hint("Formula"));
+            item.PanelB.Children.Add(item.ExprB);
+        }
+
+        static TextBlock Hint(string text)
+        {
+            return new TextBlock
+            {
+                Text = text,
+                Foreground = System.Windows.Media.Brushes.Gray,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 2)
+            };
         }
 
         void FillCondCombo(ComboBox box, DataTable table, string keep)
@@ -510,6 +627,8 @@ namespace WorkAssistant.Features.ExcelProcessing
             box.ItemsSource = names;
             if (keep != null && table != null && table.Columns.Contains(keep))
                 box.SelectedItem = keep;
+            else if (names.Length > 0)
+                box.SelectedIndex = 0;
             else
                 box.SelectedIndex = -1;
         }
@@ -544,18 +663,33 @@ namespace WorkAssistant.Features.ExcelProcessing
                 {
                     ColumnA = c.ColA.SelectedItem as string,
                     ColumnB = c.ColB.SelectedItem as string,
-                    Value = c.Value.Text
+                    ExpressionA = c.ExprA.Text,
+                    ExpressionB = c.ExprB.Text,
+                    Operator = c.Op.SelectedItem as string,
+                    SplitA = ReadSep(c.SepA, c.CustomA),
+                    SplitB = ReadSep(c.SepB, c.CustomB)
                 });
             }
             return list;
         }
 
-        bool TryReady(out DataTable a, out DataTable b, out string keyA, out string keyB, bool alert)
+        static bool HasJoin(IList<ExcelProcessingMatch> extra)
+        {
+            if (extra == null)
+                return false;
+            for (var i = 0; i < extra.Count; i++)
+            {
+                var m = extra[i];
+                if (!string.IsNullOrWhiteSpace(m.ExpressionA) && !string.IsNullOrWhiteSpace(m.ExpressionB))
+                    return true;
+            }
+            return false;
+        }
+
+        bool TryReady(out DataTable a, out DataTable b, bool alert)
         {
             a = _tableA;
             b = _tableB;
-            keyA = KeyA.SelectedItem as string;
-            keyB = KeyB.SelectedItem as string;
 
             if (a == null || b == null)
             {
@@ -563,13 +697,72 @@ namespace WorkAssistant.Features.ExcelProcessing
                     Alert("Open both Excel files first.", "Missing file", MessageBoxImage.Warning);
                 return false;
             }
-            if (string.IsNullOrEmpty(keyA) || string.IsNullOrEmpty(keyB))
+            if (!HasJoin(CollectedConds()))
             {
                 if (alert)
-                    Alert("Choose a key column on each file.", "Missing key", MessageBoxImage.Warning);
+                    Alert("Set a match rule that uses both A and B.", "Missing match", MessageBoxImage.Warning);
                 return false;
             }
             return true;
+        }
+
+        void Variables_Click(object sender, RoutedEventArgs e)
+        {
+            var win = new Window
+            {
+                Title = "Built-in variables",
+                Width = 680,
+                Height = 540,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = Window.GetWindow(this)
+            };
+            var stack = new StackPanel { Margin = new Thickness(10) };
+            win.Content = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = stack
+            };
+
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Type {Today} in a formula. {A} is the full value of the 1st column on that file, {B} the 2nd. After Split, $1 $2 are parts of the chosen column. IF() works inside the formula.",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            var varGrid = new DataGrid
+            {
+                AutoGenerateColumns = false,
+                IsReadOnly = true,
+                CanUserAddRows = false,
+                HeadersVisibility = DataGridHeadersVisibility.Column,
+                MaxHeight = 250,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            varGrid.Columns.Add(new DataGridTextColumn { Header = "Name", Binding = new Binding("Name"), Width = 140 });
+            varGrid.Columns.Add(new DataGridTextColumn { Header = "Means", Binding = new Binding("Description"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+            varGrid.Columns.Add(new DataGridTextColumn { Header = "Value now", Binding = new Binding("Example"), Width = 110 });
+            varGrid.ItemsSource = ExpressionEngine.GetVariableHelp();
+            stack.Children.Add(varGrid);
+
+            var fnGrid = new DataGrid
+            {
+                AutoGenerateColumns = false,
+                IsReadOnly = true,
+                CanUserAddRows = false,
+                HeadersVisibility = DataGridHeadersVisibility.Column,
+                MaxHeight = 200,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            fnGrid.Columns.Add(new DataGridTextColumn { Header = "Function", Binding = new Binding("Signature"), Width = 210 });
+            fnGrid.Columns.Add(new DataGridTextColumn { Header = "Means", Binding = new Binding("Description"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+            fnGrid.ItemsSource = ExpressionEngine.GetFunctionHelp();
+            stack.Children.Add(fnGrid);
+
+            var close = new Button { Content = "Close", Width = 90, HorizontalAlignment = HorizontalAlignment.Right };
+            close.Click += delegate { win.Close(); };
+            stack.Children.Add(close);
+            win.ShowDialog();
         }
 
         void Alert(string message, string title, MessageBoxImage icon)
@@ -588,10 +781,20 @@ namespace WorkAssistant.Features.ExcelProcessing
 
         sealed class CondRow
         {
-            public Grid Root;
+            public StackPanel Root;
+            public ComboBox Op;
+            public StackPanel PanelA;
+            public StackPanel PanelB;
             public ComboBox ColA;
             public ComboBox ColB;
-            public TextBox Value;
+            public ComboBox SepA;
+            public ComboBox SepB;
+            public TextBox CustomA;
+            public TextBox CustomB;
+            public WrapPanel SplitRowA;
+            public WrapPanel SplitRowB;
+            public TextBox ExprA;
+            public TextBox ExprB;
         }
     }
 }
