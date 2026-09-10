@@ -1,0 +1,679 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using Microsoft.Win32;
+using WorkAssistant.Views;
+
+namespace WorkAssistant.Features.Templates
+{
+    public partial class TemplatesPage : Page
+    {
+        DataTable _source;
+        List<TemplateColumn> _columns = new List<TemplateColumn>();
+        List<SourceColumnPick> _sourcePicks;
+        int _editingIndex = -1;
+        bool _loadingSheet;
+        bool _syncSource;
+
+        public TemplatesPage()
+        {
+            // KeepSource.Checked fires during InitializeComponent before later
+            // controls exist, so block handlers until load finishes.
+            _syncSource = true;
+            try
+            {
+                InitializeComponent();
+            }
+            finally
+            {
+                _syncSource = false;
+            }
+            ColKind.SelectedIndex = 0;
+            RefreshColumnList();
+            SyncSelectAll();
+        }
+
+        void Home_Click(object sender, RoutedEventArgs e)
+        {
+            if (NavigationService != null && NavigationService.CanGoBack)
+                NavigationService.GoBack();
+            else if (NavigationService != null)
+                NavigationService.Navigate(new HomePage());
+        }
+
+        void Browse_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Filter = "Excel files (*.xlsx)|*.xlsx",
+                Title = "Open data file"
+            };
+            if (dlg.ShowDialog() != true)
+                return;
+
+            try
+            {
+                ApplySource(TemplatesWork.LoadSource(dlg.FileName, null), dlg.FileName);
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not open file", MessageBoxImage.Error);
+            }
+        }
+
+        void Sheet_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_loadingSheet)
+                return;
+            string path = SourcePath.Text;
+            string sheet = SourceSheet.SelectedItem as string;
+            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(sheet))
+                return;
+
+            try
+            {
+                ApplySource(TemplatesWork.LoadSource(path, sheet), path);
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not load sheet", MessageBoxImage.Error);
+            }
+        }
+
+        void ApplySource(TemplateSourceResult loaded, string path)
+        {
+            _loadingSheet = true;
+            try
+            {
+                _source = loaded.Table;
+                SourcePath.Text = path;
+                SourceSheet.ItemsSource = loaded.Sheets;
+                SourceSheet.SelectedItem = loaded.Sheet;
+                GridSource.ItemsSource = loaded.Table.DefaultView;
+            }
+            finally
+            {
+                _loadingSheet = false;
+            }
+
+            RebuildSourcePicks(null);
+            RefreshSourceCombos();
+        }
+
+        void RefreshSourceCombos()
+        {
+            string[] labels = TemplatesWork.SourceLabels(_source);
+            CopySource.ItemsSource = labels;
+            if (CopySource.Items.Count > 0 && CopySource.SelectedIndex < 0)
+                CopySource.SelectedIndex = 0;
+        }
+
+        void RebuildSourcePicks(IList<string> keep)
+        {
+            _syncSource = true;
+            try
+            {
+                _sourcePicks = new List<SourceColumnPick>();
+                if (_source != null)
+                {
+                    HashSet<string> wantedNames = null;
+                    HashSet<int> wantedLetters = null;
+                    if (keep != null && keep.Count > 0)
+                    {
+                        wantedNames = new HashSet<string>(keep, StringComparer.OrdinalIgnoreCase);
+                        wantedLetters = new HashSet<int>();
+                        for (var k = 0; k < keep.Count; k++)
+                        {
+                            int li;
+                            if (TemplatesWork.TryParseColumnLetter(TemplatesWork.ExtractLetter(keep[k]), out li))
+                                wantedLetters.Add(li);
+                        }
+                    }
+                    for (var c = 0; c < _source.Columns.Count; c++)
+                    {
+                        DataColumn col = _source.Columns[c];
+                        bool include = wantedNames == null ||
+                            wantedNames.Contains(col.ColumnName) ||
+                            (wantedLetters != null && wantedLetters.Contains(c));
+                        _sourcePicks.Add(new SourceColumnPick
+                        {
+                            Name = col.ColumnName,
+                            Label = TemplatesWork.SourceLabel(_source, c),
+                            Include = include
+                        });
+                    }
+                }
+                SourceColumnList.ItemsSource = null;
+                SourceColumnList.ItemsSource = _sourcePicks;
+                SyncSelectAll();
+            }
+            finally
+            {
+                _syncSource = false;
+            }
+        }
+
+        void KeepSource_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_syncSource || KeepSource == null || SourceColumnList == null || SelectAllSource == null)
+                return;
+            SyncSelectAll();
+        }
+
+        void SourceColumn_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_syncSource || KeepSource == null || SourceColumnList == null || SelectAllSource == null)
+                return;
+            SyncSelectAll();
+        }
+
+        void SelectAllSource_Click(object sender, RoutedEventArgs e)
+        {
+            if (_syncSource || _sourcePicks == null)
+                return;
+            bool on = SelectAllSource.IsChecked != false;
+            _syncSource = true;
+            try
+            {
+                for (var i = 0; i < _sourcePicks.Count; i++)
+                    _sourcePicks[i].Include = on;
+                SourceColumnList.ItemsSource = null;
+                SourceColumnList.ItemsSource = _sourcePicks;
+                KeepSource.IsChecked = true;
+            }
+            finally
+            {
+                _syncSource = false;
+            }
+            SyncSelectAll();
+        }
+
+        void SyncSelectAll()
+        {
+            if (KeepSource == null || SourceColumnList == null || SelectAllSource == null)
+                return;
+            _syncSource = true;
+            try
+            {
+                bool enabled = KeepSource.IsChecked != false && _sourcePicks != null && _sourcePicks.Count > 0;
+                SourceColumnList.IsEnabled = enabled;
+                SelectAllSource.IsEnabled = enabled;
+                if (!enabled)
+                {
+                    SelectAllSource.IsChecked = false;
+                    return;
+                }
+                var all = true;
+                var none = true;
+                for (var i = 0; i < _sourcePicks.Count; i++)
+                {
+                    if (_sourcePicks[i].Include)
+                        none = false;
+                    else
+                        all = false;
+                }
+                if (all)
+                    SelectAllSource.IsChecked = true;
+                else if (none)
+                    SelectAllSource.IsChecked = false;
+                else
+                    SelectAllSource.IsChecked = null;
+            }
+            finally
+            {
+                _syncSource = false;
+            }
+        }
+
+        List<string> SelectedSourceColumns()
+        {
+            var list = new List<string>();
+            if (KeepSource.IsChecked == false || _sourcePicks == null || _source == null)
+                return list;
+            // Store Excel letters (A, B, ...) so templates follow position, not header names.
+            for (var i = 0; i < _sourcePicks.Count; i++)
+            {
+                if (!_sourcePicks[i].Include)
+                    continue;
+                int at = _source.Columns.IndexOf(_sourcePicks[i].Name);
+                if (at < 0)
+                {
+                    // Fallback: pick order matches source order.
+                    at = i;
+                }
+                list.Add(TemplatesWork.ColumnLetter(at));
+            }
+            return list;
+        }
+
+        void Kind_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (PanelFixed == null || PanelCopy == null || PanelConcat == null || PanelMath == null || PanelConditional == null || ColKind == null)
+                return;
+            int kind = ColKind.SelectedIndex;
+            PanelFixed.Visibility = kind == 0 ? Visibility.Visible : Visibility.Collapsed;
+            PanelCopy.Visibility = kind == 1 ? Visibility.Visible : Visibility.Collapsed;
+            PanelConcat.Visibility = kind == 2 ? Visibility.Visible : Visibility.Collapsed;
+            PanelMath.Visibility = kind == 3 ? Visibility.Visible : Visibility.Collapsed;
+            PanelConditional.Visibility = kind == 4 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        void Columns_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            int index = ColumnList.SelectedIndex;
+            if (index < 0 || index >= _columns.Count)
+                return;
+            _editingIndex = index;
+            LoadEditor(_columns[index]);
+            AddUpdateBtn.Content = "Update column";
+        }
+
+        void AddUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            TemplateColumn col;
+            try
+            {
+                col = BuildColumnFromEditor();
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Column", MessageBoxImage.Warning);
+                return;
+            }
+
+            string error = TemplatesWork.ValidateColumn(col);
+            if (error != null)
+            {
+                Alert(error, "Column", MessageBoxImage.Warning);
+                return;
+            }
+
+            if (_editingIndex >= 0 && _editingIndex < _columns.Count)
+            {
+                for (var i = 0; i < _columns.Count; i++)
+                {
+                    if (i != _editingIndex &&
+                        string.Equals(_columns[i].Name.Trim(), col.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        Alert("Duplicate column name: " + col.Name.Trim() + ".", "Column", MessageBoxImage.Warning);
+                        return;
+                    }
+                }
+                _columns[_editingIndex] = col;
+            }
+            else
+            {
+                for (var i = 0; i < _columns.Count; i++)
+                {
+                    if (string.Equals(_columns[i].Name.Trim(), col.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        Alert("Duplicate column name: " + col.Name.Trim() + ".", "Column", MessageBoxImage.Warning);
+                        return;
+                    }
+                }
+                _columns.Add(col);
+            }
+
+            ClearEditor();
+            RefreshColumnList();
+        }
+
+        void Remove_Click(object sender, RoutedEventArgs e)
+        {
+            int index = ColumnList.SelectedIndex;
+            if (index < 0 || index >= _columns.Count)
+            {
+                Alert("Select a column first.", "Remove", MessageBoxImage.Warning);
+                return;
+            }
+            _columns.RemoveAt(index);
+            ClearEditor();
+            RefreshColumnList();
+        }
+
+        void ClearEditor_Click(object sender, RoutedEventArgs e)
+        {
+            ClearEditor();
+            RefreshColumnList();
+        }
+
+        void Variables_Click(object sender, RoutedEventArgs e)
+        {
+            var win = new Window
+            {
+                Title = "Built-in variables",
+                Width = 680,
+                Height = 540,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = Window.GetWindow(this)
+            };
+            var scroll = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
+            var stack = new StackPanel { Margin = new Thickness(10) };
+            scroll.Content = stack;
+            win.Content = scroll;
+
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Variables - type the Name exactly, e.g. {Today}. Works in Fixed, Combine, Math and Conditional.",
+                FontWeight = FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Week starts Monday. Dates have no time except {Now}. Use {A} {B} for columns (A = 1st, B = 2nd).",
+                Foreground = System.Windows.Media.Brushes.DimGray,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+
+            var varGrid = new DataGrid
+            {
+                AutoGenerateColumns = false,
+                IsReadOnly = true,
+                CanUserAddRows = false,
+                HeadersVisibility = DataGridHeadersVisibility.Column,
+                MaxHeight = 250,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            varGrid.Columns.Add(new DataGridTextColumn { Header = "Name", Binding = new Binding("Name"), Width = 140 });
+            varGrid.Columns.Add(new DataGridTextColumn { Header = "Means", Binding = new Binding("Description"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+            varGrid.Columns.Add(new DataGridTextColumn { Header = "Value now", Binding = new Binding("Example"), Width = 110 });
+            varGrid.ItemsSource = TemplatesWork.GetVariableHelp();
+            stack.Children.Add(varGrid);
+
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Date functions for formulas (Math / Condition / Then / Else).",
+                FontWeight = FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+            var fnGrid = new DataGrid
+            {
+                AutoGenerateColumns = false,
+                IsReadOnly = true,
+                CanUserAddRows = false,
+                HeadersVisibility = DataGridHeadersVisibility.Column,
+                MaxHeight = 200,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            fnGrid.Columns.Add(new DataGridTextColumn { Header = "Function", Binding = new Binding("Signature"), Width = 210 });
+            fnGrid.Columns.Add(new DataGridTextColumn { Header = "Means", Binding = new Binding("Description"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+            fnGrid.ItemsSource = TemplatesWork.GetFunctionHelp();
+            stack.Children.Add(fnGrid);
+
+            var close = new Button { Content = "Close", Width = 90, HorizontalAlignment = HorizontalAlignment.Right };
+            close.Click += delegate { win.Close(); };
+            stack.Children.Add(close);
+
+            win.ShowDialog();
+        }
+
+        void Preview_Click(object sender, RoutedEventArgs e)
+        {
+            DataTable output;
+            if (!TryBuildOutput(out output))
+                return;
+            GridOut.ItemsSource = output.DefaultView;
+        }
+
+        void SaveExcel_Click(object sender, RoutedEventArgs e)
+        {
+            DataTable output;
+            if (!TryBuildOutput(out output))
+                return;
+
+            var dlg = new SaveFileDialog
+            {
+                Filter = "Excel files (*.xlsx)|*.xlsx",
+                FileName = "result.xlsx"
+            };
+            if (dlg.ShowDialog() != true)
+                return;
+
+            try
+            {
+                TemplatesWork.SaveTable(output, dlg.FileName);
+                Alert("Saved " + output.Rows.Count + " rows.", "Done", MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not save", MessageBoxImage.Error);
+            }
+        }
+
+        void SaveTemplate_Click(object sender, RoutedEventArgs e)
+        {
+            TemplateDefinition template = BuildTemplate();
+            string error = TemplatesWork.Validate(template, true);
+            if (error != null)
+            {
+                Alert(error, "Template", MessageBoxImage.Warning);
+                return;
+            }
+
+            var dlg = new SaveFileDialog
+            {
+                Filter = "Template files (*.xml)|*.xml",
+                FileName = (string.IsNullOrWhiteSpace(template.Name) ? "template" : template.Name.Trim()) + ".xml"
+            };
+            if (dlg.ShowDialog() != true)
+                return;
+
+            try
+            {
+                TemplatesWork.SaveTemplate(template, dlg.FileName);
+                Alert("Template saved.", "Done", MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not save template", MessageBoxImage.Error);
+            }
+        }
+
+        void LoadTemplate_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Filter = "Template files (*.xml)|*.xml",
+                Title = "Load template"
+            };
+            if (dlg.ShowDialog() != true)
+                return;
+
+            try
+            {
+                TemplateDefinition template = TemplatesWork.LoadTemplate(dlg.FileName);
+                TemplateName.Text = template.Name;
+                KeepSource.IsChecked = template.KeepSourceColumns;
+                _columns = new List<TemplateColumn>(template.Columns);
+                ClearEditor();
+                RefreshColumnList();
+                RebuildSourcePicks(template.SourceColumns);
+                DataTable output;
+                if (_source != null && TryBuildOutput(out output))
+                    GridOut.ItemsSource = output.DefaultView;
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not load template", MessageBoxImage.Error);
+            }
+        }
+
+        bool TryBuildOutput(out DataTable output)
+        {
+            output = null;
+            if (_source == null)
+            {
+                Alert("Choose a data file first.", "Missing file", MessageBoxImage.Warning);
+                return false;
+            }
+            TemplateDefinition template = BuildTemplate();
+            string error = TemplatesWork.Validate(template, true);
+            if (error != null)
+            {
+                Alert(error, "Template", MessageBoxImage.Warning);
+                return false;
+            }
+            try
+            {
+                output = TemplatesWork.ApplyTemplate(_source, template);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not build preview", MessageBoxImage.Error);
+                return false;
+            }
+        }
+
+        TemplateDefinition BuildTemplate()
+        {
+            var template = new TemplateDefinition();
+            template.Name = TemplateName.Text != null ? TemplateName.Text.Trim() : "";
+            template.KeepSourceColumns = KeepSource.IsChecked != false;
+            template.SourceColumns = SelectedSourceColumns();
+            template.Columns = new List<TemplateColumn>(_columns);
+            return template;
+        }
+
+        TemplateColumn BuildColumnFromEditor()
+        {
+            string name = ColName.Text != null ? ColName.Text.Trim() : "";
+            if (name.Length == 0)
+                throw new InvalidOperationException("Enter a column name.");
+
+            var col = new TemplateColumn();
+            col.Name = name;
+            int kind = ColKind.SelectedIndex;
+            if (kind == 1)
+            {
+                col.Kind = TemplateColumnKind.Copy;
+                string picked = CopySource.SelectedItem as string;
+                if (string.IsNullOrWhiteSpace(picked))
+                    picked = CopySource.Text != null ? CopySource.Text.Trim() : "";
+                // Store the Excel letter (A, B, ...) so templates use position, not header names.
+                col.SourceColumn = TemplatesWork.ExtractLetter(picked);
+            }
+            else if (kind == 2)
+            {
+                col.Kind = TemplateColumnKind.Concat;
+                col.Pattern = ConcatPattern.Text;
+            }
+            else if (kind == 3)
+            {
+                col.Kind = TemplateColumnKind.Math;
+                col.Expression = MathExpression.Text;
+                // Keep legacy fields filled so old readers still see something.
+                col.Left = MathExpression.Text;
+                col.Operator = "+";
+                col.Right = "";
+            }
+            else if (kind == 4)
+            {
+                col.Kind = TemplateColumnKind.Conditional;
+                col.Condition = CondCondition.Text;
+                col.TrueExpression = CondTrue.Text;
+                col.FalseExpression = CondFalse.Text;
+            }
+            else
+            {
+                col.Kind = TemplateColumnKind.Fixed;
+                col.FixedValue = FixedValue.Text;
+            }
+            return col;
+        }
+
+        void LoadEditor(TemplateColumn col)
+        {
+            ColName.Text = col.Name;
+            if (col.Kind == TemplateColumnKind.Copy)
+            {
+                ColKind.SelectedIndex = 1;
+                CopySource.Text = "";
+                CopySource.SelectedIndex = -1;
+                string wantLetter = TemplatesWork.ExtractLetter(col.SourceColumn);
+                for (var i = 0; i < CopySource.Items.Count; i++)
+                {
+                    string item = CopySource.Items[i] as string;
+                    // Match by letter first (new templates store "A"), then by old header name.
+                    if (string.Equals(TemplatesWork.ExtractLetter(item), wantLetter, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item, col.SourceColumn, StringComparison.OrdinalIgnoreCase))
+                    {
+                        CopySource.SelectedIndex = i;
+                        break;
+                    }
+                }
+                if (CopySource.SelectedIndex < 0)
+                    CopySource.Text = col.SourceColumn;
+            }
+            else if (col.Kind == TemplateColumnKind.Concat)
+            {
+                ColKind.SelectedIndex = 2;
+                ConcatPattern.Text = col.Pattern;
+            }
+            else if (col.Kind == TemplateColumnKind.Math)
+            {
+                ColKind.SelectedIndex = 3;
+                string expr = col.Expression;
+                if (string.IsNullOrWhiteSpace(expr) && !string.IsNullOrWhiteSpace(col.Left))
+                    expr = col.Left + " " + col.Operator + " " + col.Right;
+                MathExpression.Text = expr;
+            }
+            else if (col.Kind == TemplateColumnKind.Conditional)
+            {
+                ColKind.SelectedIndex = 4;
+                CondCondition.Text = col.Condition;
+                CondTrue.Text = col.TrueExpression;
+                CondFalse.Text = col.FalseExpression;
+            }
+            else
+            {
+                ColKind.SelectedIndex = 0;
+                FixedValue.Text = col.FixedValue;
+            }
+        }
+
+        void ClearEditor()
+        {
+            _editingIndex = -1;
+            ColumnList.SelectedIndex = -1;
+            AddUpdateBtn.Content = "Add column";
+            ColName.Text = "";
+            FixedValue.Text = "";
+            ConcatPattern.Text = "";
+            MathExpression.Text = "";
+            CondCondition.Text = "";
+            CondTrue.Text = "";
+            CondFalse.Text = "";
+            if (CopySource.Items.Count > 0)
+                CopySource.SelectedIndex = 0;
+        }
+
+        void RefreshColumnList()
+        {
+            ColumnList.ItemsSource = null;
+            ColumnList.ItemsSource = _columns;
+        }
+
+        public sealed class SourceColumnPick
+        {
+            public string Name { get; set; }
+            public string Label { get; set; }
+            public bool Include { get; set; }
+        }
+
+        void Alert(string message, string title, MessageBoxImage icon)
+        {
+            MessageBox.Show(Window.GetWindow(this), message, title, MessageBoxButton.OK, icon);
+        }
+    }
+}

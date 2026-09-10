@@ -1,0 +1,147 @@
+<Page x:Class="WorkAssistant.Features.ExcelProcessing.ExcelProcessingPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Excel Processing"
+      Background="White">
+    <DockPanel Margin="10">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
+            <Button DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <TextBlock Text="Excel Processing" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </DockPanel>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <GroupBox Header="File A" Grid.Column="0" Margin="0,0,6,0">
+                    <DockPanel LastChildFill="True" Margin="6">
+                        <Grid DockPanel.Dock="Top">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="PathA" IsReadOnly="True" Margin="0,0,6,6" />
+                            <Button Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="BrowseA_Click" />
+                        </Grid>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox x:Name="SheetA" Grid.Column="1" Margin="0,0,12,0" SelectionChanged="SheetA_SelectionChanged" />
+                            <TextBlock Grid.Column="2" Text="Key" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox x:Name="KeyA" Grid.Column="3" SelectionChanged="Key_SelectionChanged" />
+                        </Grid>
+                        <DataGrid x:Name="GridA" AutoGenerateColumns="True" IsReadOnly="True"
+                                  CanUserAddRows="False" HeadersVisibility="Column" />
+                    </DockPanel>
+                </GroupBox>
+
+                <GroupBox Header="File B" Grid.Column="1" Margin="6,0,0,0">
+                    <DockPanel LastChildFill="True" Margin="6">
+                        <Grid DockPanel.Dock="Top">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="PathB" IsReadOnly="True" Margin="0,0,6,6" />
+                            <Button Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="BrowseB_Click" />
+                        </Grid>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox x:Name="SheetB" Grid.Column="1" Margin="0,0,12,0" SelectionChanged="SheetB_SelectionChanged" />
+                            <TextBlock Grid.Column="2" Text="Key" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox x:Name="KeyB" Grid.Column="3" SelectionChanged="Key_SelectionChanged" />
+                        </Grid>
+                        <DataGrid x:Name="GridB" AutoGenerateColumns="True" IsReadOnly="True"
+                                  CanUserAddRows="False" HeadersVisibility="Column" />
+                    </DockPanel>
+                </GroupBox>
+            </Grid>
+
+            <GroupBox Header="Also match when" Grid.Row="1" Margin="0,0,0,8">
+                <DockPanel LastChildFill="True" Margin="6">
+                    <Button DockPanel.Dock="Right" Content="Add" Width="72" VerticalAlignment="Top"
+                            Click="AddCond_Click" />
+                    <Grid DockPanel.Dock="Top" Margin="0,0,80,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="72" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="A column" Foreground="#555" />
+                        <TextBlock Grid.Column="2" Text="B column" Foreground="#555" />
+                        <TextBlock Grid.Column="3" Text="Equals value" Foreground="#555" Margin="0,0,6,0" />
+                    </Grid>
+                    <ScrollViewer MaxHeight="88" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="CondPanel" />
+                    </ScrollViewer>
+                </DockPanel>
+            </GroupBox>
+
+            <GroupBox Header="Output" Grid.Row="2">
+                <Grid Margin="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <ListBox x:Name="OpList" Margin="0,0,8,0" SelectionChanged="Op_SelectionChanged">
+                        <ListBoxItem Content="Found in A but not in B" Tag="AOnly" />
+                        <ListBoxItem Content="Found in B but not A" Tag="BOnly" />
+                        <ListBoxItem Content="Common between A &amp; B by key column" Tag="Common" />
+                    </ListBox>
+
+                    <DockPanel Grid.Column="1">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="False">
+                            <CheckBox x:Name="PickA" Content="All A" Margin="0,0,12,0" VerticalAlignment="Center"
+                                      IsThreeState="True" Click="PickA_Click" />
+                            <CheckBox x:Name="PickB" Content="All B" Margin="0,0,12,0" VerticalAlignment="Center"
+                                      IsThreeState="True" Click="PickB_Click" />
+                            <CheckBox x:Name="PickBoth" Content="All" Margin="0,0,12,0" VerticalAlignment="Center"
+                                      IsThreeState="True" Click="PickBoth_Click" />
+                            <Button DockPanel.Dock="Right" Content="Save..." Width="88" Click="Save_Click" />
+                        </DockPanel>
+                        <ScrollViewer DockPanel.Dock="Top" MaxHeight="72" Margin="0,0,0,6"
+                                      HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="ColList">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Label}" IsChecked="{Binding Include, Mode=TwoWay}"
+                                                  Margin="0,0,12,4" Checked="Col_Changed" Unchecked="Col_Changed" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <DataGrid x:Name="GridOut" AutoGenerateColumns="True" IsReadOnly="True"
+                                  CanUserAddRows="False" HeadersVisibility="Column" />
+                    </DockPanel>
+                </Grid>
+            </GroupBox>
+        </Grid>
+    </DockPanel>
+</Page>
