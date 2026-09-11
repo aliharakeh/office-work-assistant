@@ -1,0 +1,208 @@
+<Page x:Class="WorkAssistant.Features.FilterSort.FilterSortPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Filter and Sort"
+      Background="White">
+    <DockPanel Margin="10">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
+            <Button DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
+                <ComboBox x:Name="PreviewBox" Width="96" SelectionChanged="PreviewBox_SelectionChanged" />
+            </StackPanel>
+            <TextBlock Text="Filter &amp; Sort" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </DockPanel>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <GroupBox Header="Filter rows" Grid.Column="0" Margin="0,0,6,0">
+                    <StackPanel Margin="6">
+                        <DockPanel Margin="0,0,0,6" LastChildFill="False">
+                            <TextBlock Text="Match" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox x:Name="MatchMode" Width="130" Margin="0,0,12,0">
+                                <ComboBoxItem Content="All conditions" />
+                                <ComboBoxItem Content="Any condition" />
+                            </ComboBox>
+                            <Button Content="Variables..." Width="96" Click="Variables_Click" />
+                        </DockPanel>
+                        <ListBox x:Name="CondList" Height="72" Margin="0,0,0,6"
+                                 SelectionChanged="Conds_SelectionChanged" />
+                        <WrapPanel Margin="0,0,0,6">
+                            <Button x:Name="AddCondBtn" Content="Add condition" Width="110" Margin="0,0,8,0" Click="AddCond_Click" />
+                            <Button Content="Remove" Width="80" Margin="0,0,8,0" Click="RemoveCond_Click" />
+                            <Button Content="Clear" Width="70" Click="ClearCond_Click" />
+                        </WrapPanel>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Type" VerticalAlignment="Center" />
+                            <ComboBox x:Name="CondKind" Grid.Column="1" SelectionChanged="CondKind_Changed">
+                                <ComboBoxItem Content="Column value" />
+                                <ComboBoxItem Content="Formula" />
+                            </ComboBox>
+                        </Grid>
+                        <StackPanel x:Name="PanelCondColumn" Margin="0,0,0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Column" VerticalAlignment="Center" />
+                                <ComboBox x:Name="CondColumn" Grid.Column="1" />
+                            </Grid>
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Op" VerticalAlignment="Center" />
+                                <ComboBox x:Name="CondOp" Grid.Column="1" Margin="0,0,8,0">
+                                    <ComboBoxItem Content="==" />
+                                    <ComboBoxItem Content="!=" />
+                                    <ComboBoxItem Content="&gt;" />
+                                    <ComboBoxItem Content="&gt;=" />
+                                    <ComboBoxItem Content="&lt;" />
+                                    <ComboBoxItem Content="&lt;=" />
+                                    <ComboBoxItem Content="contains" />
+                                    <ComboBoxItem Content="starts with" />
+                                    <ComboBoxItem Content="ends with" />
+                                    <ComboBoxItem Content="is empty" />
+                                    <ComboBoxItem Content="is not empty" />
+                                </ComboBox>
+                                <TextBox x:Name="CondValue" Grid.Column="2" />
+                            </Grid>
+                            <TextBlock Text="Keeps rows where the column passes. The value may use a built-in like $Today. Text checks ignore case." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel x:Name="PanelCondFormula" Margin="0,0,0,6" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Formula" VerticalAlignment="Center" />
+                                <TextBox x:Name="CondFormula" Grid.Column="1" />
+                            </Grid>
+                            <TextBlock Text="Checked on every row; true keeps it. $A $B are columns (A = 1st, B = 2nd). E.g. $A &gt; 10 &amp;&amp; $B == &quot;OK&quot;, CONTAINS($C, &quot;x&quot;), $D &gt; $Today." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Data file" Grid.Column="1" Margin="6,0,0,0">
+                    <DockPanel LastChildFill="True" Margin="6">
+                        <Grid DockPanel.Dock="Top">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SourcePath" IsReadOnly="True" Margin="0,0,6,6" />
+                            <Button Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="Browse_Click" />
+                        </Grid>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox x:Name="SourceSheet" Grid.Column="1" SelectionChanged="Sheet_SelectionChanged" />
+                        </Grid>
+                        <TextBlock x:Name="InfoSource" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777"
+                                   FontSize="11" Text="No file loaded." />
+                        <DataGrid x:Name="GridSource" AutoGenerateColumns="True" IsReadOnly="True"
+                                  CanUserAddRows="False" HeadersVisibility="Column" />
+                    </DockPanel>
+                </GroupBox>
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <GroupBox Header="Columns to keep" Grid.Column="0" Margin="0,0,6,0">
+                    <DockPanel Margin="6" LastChildFill="True">
+                        <CheckBox x:Name="SelectAllKeep" DockPanel.Dock="Right" Content="Select all" Margin="12,0,0,0"
+                                  VerticalAlignment="Center" IsThreeState="True" Click="SelectAllKeep_Click" />
+                        <TextBlock Text="Unchecked columns are removed from the result." Foreground="#666"
+                                   VerticalAlignment="Center" TextWrapping="Wrap" />
+                        <ScrollViewer MaxHeight="84" HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="KeepColumnList">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Label}" IsChecked="{Binding Include, Mode=TwoWay}"
+                                                  Margin="0,0,12,4" Checked="KeepColumn_Changed" Unchecked="KeepColumn_Changed" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </GroupBox>
+
+                <GroupBox Header="Sort by" Grid.Column="1" Margin="6,0,0,0">
+                    <DockPanel Margin="6" LastChildFill="False">
+                        <ListBox x:Name="SortList" DockPanel.Dock="Top" Height="60" Margin="0,0,0,6"
+                                 SelectionChanged="Sorts_SelectionChanged" />
+                        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Button x:Name="AddSortBtn" Content="Add sort" Width="90" Margin="0,0,8,0" Click="AddSort_Click" />
+                            <Button Content="Remove" Width="70" Margin="0,0,8,0" Click="RemoveSort_Click" />
+                            <Button Content="Up" Width="40" Margin="0,0,8,0" Click="SortUp_Click" />
+                            <Button Content="Down" Width="48" Click="SortDown_Click" />
+                        </WrapPanel>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Column" VerticalAlignment="Center" />
+                            <ComboBox x:Name="SortColumn" Grid.Column="1" />
+                        </Grid>
+                        <Grid DockPanel.Dock="Top">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Direction" VerticalAlignment="Center" />
+                            <ComboBox x:Name="SortDirection" Grid.Column="1">
+                                <ComboBoxItem Content="Ascending" />
+                                <ComboBoxItem Content="Descending" />
+                            </ComboBox>
+                        </Grid>
+                    </DockPanel>
+                </GroupBox>
+            </Grid>
+
+            <GroupBox Header="Result" Grid.Row="2">
+                <DockPanel Margin="6" LastChildFill="True">
+                    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Button Content="Preview" Width="90" Margin="0,0,8,0" Click="Preview_Click" />
+                        <Button Content="Save Excel..." Width="110" Margin="0,0,8,0" Click="SaveExcel_Click" />
+                        <TextBlock x:Name="InfoOut" VerticalAlignment="Center" Foreground="#777" FontSize="11"
+                                   Text="No preview yet." />
+                    </WrapPanel>
+                    <DataGrid x:Name="GridOut" AutoGenerateColumns="True" IsReadOnly="True"
+                              CanUserAddRows="False" HeadersVisibility="Column" />
+                </DockPanel>
+            </GroupBox>
+        </Grid>
+    </DockPanel>
+</Page>

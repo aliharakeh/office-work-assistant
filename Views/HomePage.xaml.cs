@@ -4,6 +4,7 @@ using WorkAssistant.Features.ExcelProcessing;
 using WorkAssistant.Features.CopyFiles;
 using WorkAssistant.Features.MergeDuplicates;
 using WorkAssistant.Features.Templates;
+using WorkAssistant.Features.FilterSort;
 
 namespace WorkAssistant.Views
 {
@@ -32,6 +33,11 @@ namespace WorkAssistant.Views
         void TemplatesCard_Click(object sender, RoutedEventArgs e)
         {
             NavigationService.Navigate(new TemplatesPage());
+        }
+
+        void FilterSortCard_Click(object sender, RoutedEventArgs e)
+        {
+            NavigationService.Navigate(new FilterSortPage());
         }
     }
 }

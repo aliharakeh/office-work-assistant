@@ -97,6 +97,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Features\FilterSort\FilterSortPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -123,6 +127,10 @@
       <DependentUpon>TemplatesPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\Templates\TemplatesWork.cs" />
+    <Compile Include="Features\FilterSort\FilterSortPage.xaml.cs">
+      <DependentUpon>FilterSortPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\FilterSort\FilterSortWork.cs" />
             <Compile Include="Expressions\ExpressionEngine.cs" />
     <Compile Include="Expressions\ExpressionHelp.cs" />
   </ItemGroup>
