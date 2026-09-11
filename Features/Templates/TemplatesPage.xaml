@@ -6,6 +6,10 @@
     <DockPanel Margin="10">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
             <Button DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
+                <ComboBox x:Name="PreviewBox" Width="96" SelectionChanged="PreviewBox_SelectionChanged" />
+            </StackPanel>
             <TextBlock Text="Templates" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
         </DockPanel>
         <Grid>
@@ -174,6 +178,8 @@
                             <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
                             <ComboBox x:Name="SourceSheet" Grid.Column="1" SelectionChanged="Sheet_SelectionChanged" />
                         </Grid>
+                        <TextBlock x:Name="InfoSource" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777"
+                                   FontSize="11" Text="No file loaded." />
                         <DataGrid x:Name="GridSource" AutoGenerateColumns="True" IsReadOnly="True"
                                   CanUserAddRows="False" HeadersVisibility="Column" />
                     </DockPanel>

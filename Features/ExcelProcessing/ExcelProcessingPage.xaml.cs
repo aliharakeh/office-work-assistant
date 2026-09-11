@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
@@ -13,6 +14,11 @@ namespace WorkAssistant.Features.ExcelProcessing
     {
         DataTable _tableA;
         DataTable _tableB;
+        DataTable _fullA;
+        DataTable _fullB;
+        bool _cutA;
+        bool _cutB;
+        int _previewRows = 1000;
         ExcelProcessingCompareResult _preview;
         List<ColumnPick> _picks;
         readonly List<CondRow> _conds = new List<CondRow>();
@@ -22,6 +28,10 @@ namespace WorkAssistant.Features.ExcelProcessing
         public ExcelProcessingPage()
         {
             InitializeComponent();
+            PreviewBox.Items.Add(200);
+            PreviewBox.Items.Add(1000);
+            PreviewBox.Items.Add(5000);
+            PreviewBox.SelectedItem = 1000;
             AddCond(null);
         }
 
@@ -55,6 +65,26 @@ namespace WorkAssistant.Features.ExcelProcessing
             if (_loadingSheet)
                 return;
             ReloadSheet(false);
+        }
+
+        void PreviewBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (PreviewBox.SelectedItem == null)
+                return;
+            var rows = (int)PreviewBox.SelectedItem;
+            if (rows == _previewRows)
+                return;
+            _previewRows = rows;
+            ReloadAll();
+        }
+
+        void ReloadAll()
+        {
+            if (!string.IsNullOrEmpty(PathA.Text) && SheetA.SelectedItem != null)
+                ReloadSheet(true);
+            if (!string.IsNullOrEmpty(PathB.Text) && SheetB.SelectedItem != null)
+                ReloadSheet(false);
+            RefreshPreview(false);
         }
 
         void AddCond_Click(object sender, RoutedEventArgs e)
@@ -92,7 +122,7 @@ namespace WorkAssistant.Features.ExcelProcessing
 
             try
             {
-                var table = Projected(selected);
+                var table = Projected(selected, 0);
                 ExcelProcessingWork.Save(table, dlg.FileName);
                 Alert("Saved " + table.Rows.Count + " rows.", "Done", MessageBoxImage.Information);
             }
@@ -106,7 +136,7 @@ namespace WorkAssistant.Features.ExcelProcessing
         {
             var dlg = new OpenFileDialog
             {
-                Filter = "Excel files (*.xlsx)|*.xlsx",
+                Filter = "Excel files (*.xlsx;*.xlsm)|*.xlsx;*.xlsm",
                 Title = isA ? "Open File A" : "Open File B"
             };
             if (dlg.ShowDialog() != true)
@@ -114,7 +144,7 @@ namespace WorkAssistant.Features.ExcelProcessing
 
             try
             {
-                ApplyLoad(isA, ExcelProcessingWork.Load(dlg.FileName, null), dlg.FileName);
+                ApplyLoad(isA, ExcelProcessingWork.Load(dlg.FileName, null, _previewRows), dlg.FileName);
             }
             catch (Exception ex)
             {
@@ -133,7 +163,7 @@ namespace WorkAssistant.Features.ExcelProcessing
 
             try
             {
-                ApplyLoad(isA, ExcelProcessingWork.Load(path, sheet), path);
+                ApplyLoad(isA, ExcelProcessingWork.Load(path, sheet, _previewRows), path);
             }
             catch (Exception ex)
             {
@@ -149,19 +179,25 @@ namespace WorkAssistant.Features.ExcelProcessing
                 if (isA)
                 {
                     _tableA = loaded.Table;
+                    _fullA = null;
+                    _cutA = loaded.Truncated;
                     PathA.Text = path;
                     SheetA.ItemsSource = loaded.Sheets;
                     SheetA.SelectedItem = loaded.Sheet;
                     GridA.ItemsSource = loaded.Table.DefaultView;
+                    InfoA.Text = RowInfo(loaded);
                     RefreshCondCombos();
                 }
                 else
                 {
                     _tableB = loaded.Table;
+                    _fullB = null;
+                    _cutB = loaded.Truncated;
                     PathB.Text = path;
                     SheetB.ItemsSource = loaded.Sheets;
                     SheetB.SelectedItem = loaded.Sheet;
                     GridB.ItemsSource = loaded.Table.DefaultView;
+                    InfoB.Text = RowInfo(loaded);
                     RefreshCondCombos();
                 }
             }
@@ -171,6 +207,34 @@ namespace WorkAssistant.Features.ExcelProcessing
             }
 
             RefreshPreview(false);
+        }
+
+        static string RowInfo(ExcelProcessingLoadResult loaded)
+        {
+            var rows = loaded.Table.Rows.Count.ToString("N0", CultureInfo.InvariantCulture);
+            if (!loaded.Truncated)
+                return rows + " rows";
+            return "Showing " + rows + " of " + loaded.TotalRows.ToString("N0", CultureInfo.InvariantCulture) +
+                   " rows (all rows are used when you run an operation)";
+        }
+
+        // The grids show a capped preview; operations need every row, so load it once and cache it.
+        DataTable FullTable(bool isA)
+        {
+            var cached = isA ? _fullA : _fullB;
+            if (cached != null)
+                return cached;
+            if (!(isA ? _cutA : _cutB))
+                return isA ? _tableA : _tableB;
+
+            var path = isA ? PathA.Text : PathB.Text;
+            var sheet = isA ? SheetA.SelectedItem as string : SheetB.SelectedItem as string;
+            var loaded = ExcelProcessingWork.Load(path, sheet, 0);
+            if (isA)
+                _fullA = loaded.Table;
+            else
+                _fullB = loaded.Table;
+            return loaded.Table;
         }
 
         static string[] ColumnNames(DataTable table)
@@ -263,7 +327,7 @@ namespace WorkAssistant.Features.ExcelProcessing
             return list;
         }
 
-        DataTable Projected(List<ColumnPick> selected)
+        DataTable Projected(List<ColumnPick> selected, int maxRows)
         {
             var internals = new string[selected.Count];
             var originals = new string[selected.Count];
@@ -279,7 +343,7 @@ namespace WorkAssistant.Features.ExcelProcessing
             for (var i = 0; i < selected.Count; i++)
                 outputs[i] = ExcelProcessingWork.OutputName(originals[i], sources[i], originals, sources);
 
-            return ExcelProcessingWork.Project(_preview.Table, internals, outputs);
+            return ExcelProcessingWork.Project(_preview.Table, internals, outputs, maxRows);
         }
 
         void ApplyPickLabels()
@@ -304,7 +368,7 @@ namespace WorkAssistant.Features.ExcelProcessing
                 GridOut.ItemsSource = null;
                 return;
             }
-            GridOut.ItemsSource = Projected(SelectedPicks()).DefaultView;
+            GridOut.ItemsSource = Projected(SelectedPicks(), _previewRows).DefaultView;
         }
 
         void Col_Changed(object sender, RoutedEventArgs e)
@@ -687,10 +751,10 @@ namespace WorkAssistant.Features.ExcelProcessing
 
         bool TryReady(out DataTable a, out DataTable b, bool alert)
         {
-            a = _tableA;
-            b = _tableB;
+            a = null;
+            b = null;
 
-            if (a == null || b == null)
+            if (_tableA == null || _tableB == null)
             {
                 if (alert)
                     Alert("Open both Excel files first.", "Missing file", MessageBoxImage.Warning);
@@ -702,7 +766,19 @@ namespace WorkAssistant.Features.ExcelProcessing
                     Alert("Set a match rule that uses both A and B.", "Missing match", MessageBoxImage.Warning);
                 return false;
             }
-            return true;
+
+            try
+            {
+                a = FullTable(true);
+                b = FullTable(false);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (alert)
+                    Alert(ex.Message, "Could not read all rows", MessageBoxImage.Error);
+                return false;
+            }
         }
 
         void Variables_Click(object sender, RoutedEventArgs e)

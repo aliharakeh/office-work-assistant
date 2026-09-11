@@ -91,6 +91,8 @@ namespace WorkAssistant.Features.Templates
         public DataTable Table { get; set; }
         public string[] Sheets { get; set; }
         public string Sheet { get; set; }
+        public int TotalRows { get; set; }
+        public bool Truncated { get; set; }
     }
 
     public static class TemplatesWork
@@ -122,23 +124,51 @@ namespace WorkAssistant.Features.Templates
 
         public static TemplateSourceResult LoadSource(string path, string sheetName)
         {
-            using (var wb = new XLWorkbook(path))
+            return LoadSource(path, sheetName, 0);
+        }
+
+        // maxRows <= 0 loads everything; a positive value keeps the UI preview small.
+        public static TemplateSourceResult LoadSource(string path, string sheetName, int maxRows)
+        {
+            try
             {
-                var sheets = new string[wb.Worksheets.Count];
-                var i = 0;
-                foreach (var w in wb.Worksheets)
-                    sheets[i++] = w.Name;
-
-                var ws = string.IsNullOrEmpty(sheetName)
-                    ? wb.Worksheet(1)
-                    : wb.Worksheet(sheetName);
-
-                return new TemplateSourceResult
+                // Shared read: succeeds even while Excel has the file open.
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (var wb = new XLWorkbook(stream))
                 {
-                    Table = ToTable(ws),
-                    Sheets = sheets,
-                    Sheet = ws.Name
-                };
+                    if (wb.Worksheets.Count == 0)
+                        throw new InvalidOperationException("The workbook has no sheets.");
+
+                    var sheets = new string[wb.Worksheets.Count];
+                    var i = 0;
+                    foreach (var w in wb.Worksheets)
+                        sheets[i++] = w.Name;
+
+                    var ws = string.IsNullOrEmpty(sheetName)
+                        ? wb.Worksheet(1)
+                        : wb.Worksheet(sheetName);
+
+                    var range = ws.RangeUsed();
+                    var total = range == null ? 0 : range.RowCount() - 1;
+                    if (total < 0)
+                        total = 0;
+
+                    var table = ToTable(ws, maxRows);
+
+                    return new TemplateSourceResult
+                    {
+                        Table = table,
+                        Sheets = sheets,
+                        Sheet = ws.Name,
+                        TotalRows = total,
+                        Truncated = maxRows > 0 && total > table.Rows.Count
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new IOException("Could not read \"" + Path.GetFileName(path) + "\". " +
+                    "Make sure it is a valid .xlsx file (a .xls renamed to .xlsx will not open). " + ex.Message, ex);
             }
         }
 
@@ -603,9 +633,10 @@ namespace WorkAssistant.Features.Templates
             return null;
         }
 
-        static DataTable ToTable(IXLWorksheet ws)
+        static DataTable ToTable(IXLWorksheet ws, int maxRows)
         {
             var table = new DataTable();
+            table.Locale = CultureInfo.InvariantCulture;
             var range = ws.RangeUsed();
             if (range == null)
                 return table;
@@ -620,20 +651,37 @@ namespace WorkAssistant.Features.Templates
                 table.Columns.Add(UniqueName(table, name), typeof(object));
             }
 
+            var loaded = 0;
             foreach (var row in range.RowsUsed())
             {
                 if (row.RowNumber() == header.RowNumber())
                     continue;
+                if (maxRows > 0 && loaded >= maxRows)
+                    break;
                 var dr = table.NewRow();
                 for (var c = 1; c <= colCount; c++)
-                {
-                    var cell = row.Cell(c);
-                    dr[c - 1] = cell.IsEmpty() ? (object)DBNull.Value : cell.Value;
-                }
+                    dr[c - 1] = CellValue(row.Cell(c));
                 table.Rows.Add(dr);
+                loaded++;
             }
 
             return table;
+        }
+
+        // One odd cell must not kill the whole sheet.
+        static object CellValue(IXLCell cell)
+        {
+            if (cell == null || cell.IsEmpty())
+                return DBNull.Value;
+            try
+            {
+                return cell.Value;
+            }
+            catch
+            {
+                try { return cell.GetFormattedString(); }
+                catch { return DBNull.Value; }
+            }
         }
 
         static string UniqueName(DataTable table, string name)

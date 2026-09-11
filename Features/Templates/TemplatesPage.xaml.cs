@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
@@ -12,6 +13,9 @@ namespace WorkAssistant.Features.Templates
     public partial class TemplatesPage : Page
     {
         DataTable _source;
+        DataTable _fullSource;
+        bool _cutSource;
+        int _previewRows = 1000;
         List<TemplateColumn> _columns = new List<TemplateColumn>();
         List<SourceColumnPick> _sourcePicks;
         int _editingIndex = -1;
@@ -31,6 +35,10 @@ namespace WorkAssistant.Features.Templates
             {
                 _syncSource = false;
             }
+            PreviewBox.Items.Add(200);
+            PreviewBox.Items.Add(1000);
+            PreviewBox.Items.Add(5000);
+            PreviewBox.SelectedItem = 1000;
             ColKind.SelectedIndex = 0;
             RefreshColumnList();
             SyncSelectAll();
@@ -48,7 +56,7 @@ namespace WorkAssistant.Features.Templates
         {
             var dlg = new OpenFileDialog
             {
-                Filter = "Excel files (*.xlsx)|*.xlsx",
+                Filter = "Excel files (*.xlsx;*.xlsm)|*.xlsx;*.xlsm",
                 Title = "Open data file"
             };
             if (dlg.ShowDialog() != true)
@@ -56,7 +64,7 @@ namespace WorkAssistant.Features.Templates
 
             try
             {
-                ApplySource(TemplatesWork.LoadSource(dlg.FileName, null), dlg.FileName);
+                ApplySource(TemplatesWork.LoadSource(dlg.FileName, null, _previewRows), dlg.FileName);
             }
             catch (Exception ex)
             {
@@ -75,7 +83,35 @@ namespace WorkAssistant.Features.Templates
 
             try
             {
-                ApplySource(TemplatesWork.LoadSource(path, sheet), path);
+                ApplySource(TemplatesWork.LoadSource(path, sheet, _previewRows), path);
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not load sheet", MessageBoxImage.Error);
+            }
+        }
+
+        void PreviewBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (PreviewBox.SelectedItem == null)
+                return;
+            var rows = (int)PreviewBox.SelectedItem;
+            if (rows == _previewRows)
+                return;
+            _previewRows = rows;
+            ReloadSource();
+        }
+
+        void ReloadSource()
+        {
+            string path = SourcePath.Text;
+            string sheet = SourceSheet.SelectedItem as string;
+            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(sheet))
+                return;
+
+            try
+            {
+                ApplySource(TemplatesWork.LoadSource(path, sheet, _previewRows), path);
             }
             catch (Exception ex)
             {
@@ -89,10 +125,13 @@ namespace WorkAssistant.Features.Templates
             try
             {
                 _source = loaded.Table;
+                _fullSource = null;
+                _cutSource = loaded.Truncated;
                 SourcePath.Text = path;
                 SourceSheet.ItemsSource = loaded.Sheets;
                 SourceSheet.SelectedItem = loaded.Sheet;
                 GridSource.ItemsSource = loaded.Table.DefaultView;
+                InfoSource.Text = RowInfo(loaded);
             }
             finally
             {
@@ -101,6 +140,40 @@ namespace WorkAssistant.Features.Templates
 
             RebuildSourcePicks(null);
             RefreshSourceCombos();
+        }
+
+        static string RowInfo(TemplateSourceResult loaded)
+        {
+            var rows = loaded.Table.Rows.Count.ToString("N0", CultureInfo.InvariantCulture);
+            if (!loaded.Truncated)
+                return rows + " rows";
+            return "Showing " + rows + " of " + loaded.TotalRows.ToString("N0", CultureInfo.InvariantCulture) +
+                   " rows (all rows are used when you preview or save)";
+        }
+
+        // The grid shows a capped preview; generating output needs every row, so load it once and cache it.
+        DataTable FullSource()
+        {
+            if (_fullSource != null)
+                return _fullSource;
+            if (!_cutSource)
+                return _source;
+
+            string path = SourcePath.Text;
+            string sheet = SourceSheet.SelectedItem as string;
+            _fullSource = TemplatesWork.LoadSource(path, sheet, 0).Table;
+            return _fullSource;
+        }
+
+        // Keep the output grid light; Save writes the full table.
+        static DataTable Capped(DataTable table, int maxRows)
+        {
+            if (maxRows <= 0 || table.Rows.Count <= maxRows)
+                return table;
+            var copy = table.Clone();
+            for (var i = 0; i < maxRows; i++)
+                copy.ImportRow(table.Rows[i]);
+            return copy;
         }
 
         void RefreshSourceCombos()
@@ -351,7 +424,7 @@ namespace WorkAssistant.Features.Templates
             DataTable output;
             if (!TryBuildOutput(out output))
                 return;
-            GridOut.ItemsSource = output.DefaultView;
+            GridOut.ItemsSource = Capped(output, _previewRows).DefaultView;
         }
 
         void SaveExcel_Click(object sender, RoutedEventArgs e)
@@ -429,7 +502,7 @@ namespace WorkAssistant.Features.Templates
                 RebuildSourcePicks(template.SourceColumns);
                 DataTable output;
                 if (_source != null && TryBuildOutput(out output))
-                    GridOut.ItemsSource = output.DefaultView;
+                    GridOut.ItemsSource = Capped(output, _previewRows).DefaultView;
             }
             catch (Exception ex)
             {
@@ -454,7 +527,7 @@ namespace WorkAssistant.Features.Templates
             }
             try
             {
-                output = TemplatesWork.ApplyTemplate(_source, template);
+                output = TemplatesWork.ApplyTemplate(FullSource(), template);
                 return true;
             }
             catch (Exception ex)
