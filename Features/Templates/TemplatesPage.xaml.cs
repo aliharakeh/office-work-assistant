@@ -343,7 +343,7 @@ namespace WorkAssistant.Features.Templates
         void Variables_Click(object sender, RoutedEventArgs e)
         {
             ExpressionHelp.Show(Window.GetWindow(this),
-                "Type the Name exactly, e.g. {Today}. Works in Fixed, Combine, Math and Conditional. Week starts Monday. Dates have no time except {Now}. Use {A} {B} for columns (A = 1st, B = 2nd).");
+                "Type the Name exactly, e.g. $Today. Works in Fixed, Combine, Math and Conditional. Week starts Monday. Dates have no time except $Now. Use $A $B for columns (A = 1st, B = 2nd). FIRSTWORD() and LASTWORD() pick the first/last word of a text.");
         }
 
         void Preview_Click(object sender, RoutedEventArgs e)

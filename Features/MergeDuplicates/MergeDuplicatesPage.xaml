@@ -43,12 +43,12 @@
                         </ComboBox>
                         <TextBox x:Name="CustomSep" Width="40" MaxLength="1" IsEnabled="False" Margin="0,0,16,6" />
                         <TextBlock Text="Match" VerticalAlignment="Center" Margin="0,0,6,6"
-                                   ToolTip="Formula comparing two folders. {A} {B} are names, {A1} {B2} or $A1 $B2 are split parts." />
-                        <TextBox x:Name="ConditionBox" Width="260" Text="{}{A1} == {B1}" Margin="0,0,8,6"
-                                 ToolTip="Example: {A1} == {B1} &amp;&amp; CONTAINS({A}, &quot;2024&quot;). Same formula language as Copy Files." />
+                                   ToolTip="Formula comparing two folders. $A $B are names, $A1 $B2 are split parts." />
+                        <TextBox x:Name="ConditionBox" Width="260" Text="$A1 == $B1" Margin="0,0,8,6"
+                                 ToolTip="Example: $A1 == $B1 &amp;&amp; CONTAINS($A, &quot;2024&quot;). Same formula language as Copy Files." />
                         <Button Content="Variables..." Width="88" Margin="0,0,0,6" Click="Variables_Click" />
                     </WrapPanel>
-                    <TextBlock Text="Split each folder name by the separator. The match formula must be true for a pair. {A} is one folder name, {B} the other. Each group lists every folder that matches; pick which one to keep."
+                    <TextBlock Text="Split each folder name by the separator. The match formula must be true for a pair. $A is one folder name, $B the other. Each group lists every folder that matches; pick which one to keep."
                                Foreground="#666" TextWrapping="Wrap" />
                 </StackPanel>
             </GroupBox>

@@ -484,8 +484,8 @@ namespace WorkAssistant.Features.ExcelProcessing
                 SepB = NewSepBox(),
                 CustomA = NewCustomSep(),
                 CustomB = NewCustomSep(),
-                ExprA = new TextBox { Text = seed != null && seed.ExpressionA != null ? seed.ExpressionA : "{A}" },
-                ExprB = new TextBox { Text = seed != null && seed.ExpressionB != null ? seed.ExpressionB : "{A}" }
+                ExprA = new TextBox { Text = seed != null && seed.ExpressionA != null ? seed.ExpressionA : "$A" },
+                ExprB = new TextBox { Text = seed != null && seed.ExpressionB != null ? seed.ExpressionB : "$A" }
             };
             item.SplitRowA = MakeSplitRow(item.SepA, item.CustomA);
             item.SplitRowB = MakeSplitRow(item.SepB, item.CustomB);
@@ -708,7 +708,7 @@ namespace WorkAssistant.Features.ExcelProcessing
         void Variables_Click(object sender, RoutedEventArgs e)
         {
             ExpressionHelp.Show(Window.GetWindow(this),
-                "Type {Today} in a formula. {A} is the full value of the 1st column on that file, {B} the 2nd. After Split, $1 $2 are parts of the chosen column. IF() works inside the formula.");
+                "Type $Today in a formula. $A is the full value of the 1st column on that file, $B the 2nd. After Split, $1 $2 are parts of the chosen column. IF(), FIRSTWORD() and LASTWORD() work inside the formula.");
         }
 
         void Alert(string message, string title, MessageBoxImage icon)

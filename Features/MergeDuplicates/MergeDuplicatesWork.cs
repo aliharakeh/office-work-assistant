@@ -38,11 +38,11 @@ namespace WorkAssistant.Features.MergeDuplicates
         {
             var a = Entry("foo_bar", '_');
             var b = Entry("foo_zzz", '_');
-            if (!Matches(a, b, "{A1} == {B1}"))
+            if (!Matches(a, b, "$A1 == $B1"))
                 throw new InvalidOperationException("MergeDuplicatesWork match check failed.");
-            if (Matches(a, b, "{A2} == {B2}"))
+            if (Matches(a, b, "$A2 == $B2"))
                 throw new InvalidOperationException("MergeDuplicatesWork reject check failed.");
-            if (!Matches(a, b, "$A1 == $B1 && CONTAINS({A}, \"foo\")"))
+            if (!Matches(a, b, "$A1 == $B1 && CONTAINS($A, \"foo\")"))
                 throw new InvalidOperationException("MergeDuplicatesWork formula check failed.");
         }
 
@@ -87,7 +87,7 @@ namespace WorkAssistant.Features.MergeDuplicates
         public static void CheckCondition(string condition)
         {
             if (string.IsNullOrWhiteSpace(condition))
-                throw new InvalidOperationException("Enter a formula such as {A1} == {B1}.");
+                throw new InvalidOperationException("Enter a formula such as $A1 == $B1.");
             var err = ExpressionEngine.Validate(condition);
             if (err != null)
                 throw new InvalidOperationException(err);

@@ -59,15 +59,15 @@ namespace WorkAssistant.Features.CopyFiles
                 "File filter, folder filter, file pattern and folder pattern all use the same formulas. File boxes use file variables; folder boxes use folder variables. $1 $2 are split parts.",
                 new[]
                 {
-                    new VariableHelp { Name = "{Name}", Description = "File: full file name. Folder: folder name." },
-                    new VariableHelp { Name = "{Stem}", Description = "File name without extension." },
-                    new VariableHelp { Name = "{Ext}", Description = "File extension, including the dot." },
-                    new VariableHelp { Name = "{Path}", Description = "Full path of the file or folder." },
-                    new VariableHelp { Name = "{Folder}", Description = "Directory that holds the file." },
-                    new VariableHelp { Name = "{FolderName}", Description = "Name of that directory." },
-                    new VariableHelp { Name = "{Relative}", Description = "Folder path relative to Source." },
-                    new VariableHelp { Name = "{Size}", Description = "File size in bytes." },
-                    new VariableHelp { Name = "{Modified}", Description = "File last-write time." },
+                    new VariableHelp { Name = "$Name", Description = "File: full file name. Folder: folder name." },
+                    new VariableHelp { Name = "$Stem", Description = "File name without extension." },
+                    new VariableHelp { Name = "$Ext", Description = "File extension, including the dot." },
+                    new VariableHelp { Name = "$Path", Description = "Full path of the file or folder." },
+                    new VariableHelp { Name = "$Folder", Description = "Directory that holds the file." },
+                    new VariableHelp { Name = "$FolderName", Description = "Name of that directory." },
+                    new VariableHelp { Name = "$Relative", Description = "Folder path relative to Source." },
+                    new VariableHelp { Name = "$Size", Description = "File size in bytes." },
+                    new VariableHelp { Name = "$Modified", Description = "File last-write time." },
                     new VariableHelp { Name = "$1", Description = "First split part. $2 is the second." },
                 });
         }

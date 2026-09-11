@@ -259,13 +259,13 @@ namespace WorkAssistant.Features.Templates
             if (col.Kind == TemplateColumnKind.Concat)
             {
                 if (string.IsNullOrWhiteSpace(col.Pattern))
-                    return "Column '" + name + "': enter a pattern like {A} {B}.";
+                    return "Column '" + name + "': enter a pattern like $A $B.";
                 return null;
             }
             if (col.Kind == TemplateColumnKind.Conditional)
             {
                 if (string.IsNullOrWhiteSpace(col.Condition))
-                    return "Column '" + name + "': enter a condition like {A} > 10.";
+                    return "Column '" + name + "': enter a condition like $A > 10.";
                 string condErr = ValidateExpression(col.Condition);
                 if (condErr != null)
                     return "Column '" + name + "' condition: " + condErr;
@@ -282,7 +282,7 @@ namespace WorkAssistant.Features.Templates
             {
                 // Back-compat: old templates stored Left/Op/Right only.
                 if (string.IsNullOrWhiteSpace(col.Left) || string.IsNullOrWhiteSpace(col.Right))
-                    return "Column '" + name + "': enter a formula like {A} * {B}.";
+                    return "Column '" + name + "': enter a formula like $A * $B.";
                 expr = col.Left + " " + col.Operator + " " + col.Right;
             }
             string err = ValidateExpression(expr);
@@ -583,7 +583,7 @@ namespace WorkAssistant.Features.Templates
                 return null;
             if (source != null)
             {
-                // Excel letters win: {A} = first column, {B} = second, etc.
+                // Excel letters win: $A = first column, $B = second, etc.
                 int letterIndex;
                 if (TryParseColumnLetter(ExtractLetter(name), out letterIndex) &&
                     letterIndex >= 0 && letterIndex < source.Columns.Count)

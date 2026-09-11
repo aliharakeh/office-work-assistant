@@ -20,15 +20,16 @@ namespace WorkAssistant.Expressions
         public string Example { get; set; }
     }
 
-    // Generic {Name} + formula DSL. No DataTable, no WPF, no ClosedXML.
+    // Generic $Name + formula DSL. No DataTable, no WPF, no ClosedXML.
     // Lookup resolves a name: columns, built-ins, or anything else.
-    // A {letter} that fits the caller wins; otherwise a built-in wins.
-    // Examples: {A} * {B} | ({A} + {B}) / 2 | {A} & " " & {B}
-    // | {A} ^ 2 | {A} > 10 && {B} == "OK" | IF({A} > 10, "Big", "Small")
-    // | {Today} | ADDDAYS({Today}, 7) | FORMAT({Today}, "dd/MM/yyyy")
+    // A $letter that fits the caller wins; otherwise a built-in wins.
+    // Examples: $A * $B | ($A + $B) / 2 | $A & " " & $B
+    // | $A ^ 2 | $A > 10 && $B == "OK" | IF($A > 10, "Big", "Small")
+    // | $Today | ADDDAYS($Today, 7) | FORMAT($Today, "dd/MM/yyyy")
+    // | FIRSTWORD($Name) | LASTWORD($Name) | split parts: $1 $2, $A1 $B1
     public static class ExpressionEngine
     {
-        static readonly Regex Placeholder = new Regex(@"\{([^}]+)\}", RegexOptions.Compiled);
+        static readonly Regex Placeholder = new Regex(@"\$(\w+)", RegexOptions.Compiled);
 
         static readonly Dictionary<string, Func<object>> Builtins =
             new Dictionary<string, Func<object>>(StringComparer.OrdinalIgnoreCase);
@@ -114,7 +115,7 @@ namespace WorkAssistant.Expressions
             string example = "";
             if (TryGetVariable(name, out value))
                 example = FormatScalar(value);
-            rows.Add(new VariableHelp { Name = "{" + name + "}", Description = description, Example = example });
+            rows.Add(new VariableHelp { Name = "$" + name, Description = description, Example = example });
         }
 
         public static List<FunctionHelp> GetFunctionHelp()
@@ -124,21 +125,23 @@ namespace WorkAssistant.Expressions
                 new FunctionHelp { Signature = "TODAY()", Description = "Today's date, no time.", Example = "TODAY()" },
                 new FunctionHelp { Signature = "NOW()", Description = "Current date plus time.", Example = "NOW()" },
                 new FunctionHelp { Signature = "DATE(year, month, day)", Description = "Build a date.", Example = "DATE(2026, 1, 31)" },
-                new FunctionHelp { Signature = "YEAR(d) MONTH(d) DAY(d)", Description = "Parts of a date.", Example = "YEAR({Today})" },
-                new FunctionHelp { Signature = "WEEKDAY(d)", Description = "1=Monday .. 7=Sunday.", Example = "WEEKDAY({Today})" },
-                new FunctionHelp { Signature = "ADDDAYS(d, n)", Description = "Add n days (n may be negative).", Example = "ADDDAYS({Today}, 7)" },
-                new FunctionHelp { Signature = "ADDWEEKS(d, n)", Description = "Add n weeks.", Example = "ADDWEEKS({Today}, 1)" },
-                new FunctionHelp { Signature = "ADDMONTHS(d, n)", Description = "Add n months.", Example = "ADDMONTHS({Today}, 1)" },
-                new FunctionHelp { Signature = "ADDYEARS(d, n)", Description = "Add n years.", Example = "ADDYEARS({Today}, 1)" },
-                new FunctionHelp { Signature = "STARTOFWEEK(d) ENDOFWEEK(d)", Description = "Monday / Sunday of that week.", Example = "STARTOFWEEK({Today})" },
-                new FunctionHelp { Signature = "STARTOFMONTH(d) ENDOFMONTH(d)", Description = "First / last day of that month.", Example = "ENDOFMONTH({Today})" },
-                new FunctionHelp { Signature = "FORMAT(d, fmt)", Description = ".NET date format to text.", Example = "FORMAT({Today}, \"dd/MM/yyyy\")" },
-                new FunctionHelp { Signature = "REMOVEDIGITS(text)", Description = "Strip 0-9 from text.", Example = "REMOVEDIGITS({A})" },
-                new FunctionHelp { Signature = "CLEARSYMBOLS(text)", Description = "Keep letters, digits, and spaces only.", Example = "CLEARSYMBOLS({A})" },
-                new FunctionHelp { Signature = "TRIM(text)", Description = "Strip leading and trailing spaces.", Example = "TRIM({A})" },
-                new FunctionHelp { Signature = "CONTAINS(text, needle)", Description = "True if text contains needle (ignore case).", Example = "CONTAINS({Name}, \"report\")" },
-                new FunctionHelp { Signature = "STARTSWITH(text, prefix)", Description = "True if text starts with prefix (ignore case).", Example = "STARTSWITH({Name}, \"INV\")" },
-                new FunctionHelp { Signature = "ENDSWITH(text, suffix)", Description = "True if text ends with suffix (ignore case).", Example = "ENDSWITH({Name}, \".pdf\")" },
+                new FunctionHelp { Signature = "YEAR(d) MONTH(d) DAY(d)", Description = "Parts of a date.", Example = "YEAR($Today)" },
+                new FunctionHelp { Signature = "WEEKDAY(d)", Description = "1=Monday .. 7=Sunday.", Example = "WEEKDAY($Today)" },
+                new FunctionHelp { Signature = "ADDDAYS(d, n)", Description = "Add n days (n may be negative).", Example = "ADDDAYS($Today, 7)" },
+                new FunctionHelp { Signature = "ADDWEEKS(d, n)", Description = "Add n weeks.", Example = "ADDWEEKS($Today, 1)" },
+                new FunctionHelp { Signature = "ADDMONTHS(d, n)", Description = "Add n months.", Example = "ADDMONTHS($Today, 1)" },
+                new FunctionHelp { Signature = "ADDYEARS(d, n)", Description = "Add n years.", Example = "ADDYEARS($Today, 1)" },
+                new FunctionHelp { Signature = "STARTOFWEEK(d) ENDOFWEEK(d)", Description = "Monday / Sunday of that week.", Example = "STARTOFWEEK($Today)" },
+                new FunctionHelp { Signature = "STARTOFMONTH(d) ENDOFMONTH(d)", Description = "First / last day of that month.", Example = "ENDOFMONTH($Today)" },
+                new FunctionHelp { Signature = "FORMAT(d, fmt)", Description = ".NET date format to text.", Example = "FORMAT($Today, \"dd/MM/yyyy\")" },
+                new FunctionHelp { Signature = "REMOVEDIGITS(text)", Description = "Strip 0-9 from text.", Example = "REMOVEDIGITS($A)" },
+                new FunctionHelp { Signature = "CLEARSYMBOLS(text)", Description = "Keep letters, digits, and spaces only.", Example = "CLEARSYMBOLS($A)" },
+                new FunctionHelp { Signature = "TRIM(text)", Description = "Strip leading and trailing spaces.", Example = "TRIM($A)" },
+                new FunctionHelp { Signature = "FIRSTWORD(text)", Description = "First word of the text.", Example = "FIRSTWORD($Name)" },
+                new FunctionHelp { Signature = "LASTWORD(text)", Description = "Last word of the text.", Example = "LASTWORD($Name)" },
+                new FunctionHelp { Signature = "CONTAINS(text, needle)", Description = "True if text contains needle (ignore case).", Example = "CONTAINS($Name, \"report\")" },
+                new FunctionHelp { Signature = "STARTSWITH(text, prefix)", Description = "True if text starts with prefix (ignore case).", Example = "STARTSWITH($Name, \"INV\")" },
+                new FunctionHelp { Signature = "ENDSWITH(text, suffix)", Description = "True if text ends with suffix (ignore case).", Example = "ENDSWITH($Name, \".pdf\")" },
             };
         }
 
@@ -164,7 +167,7 @@ namespace WorkAssistant.Expressions
             return StartOfMonth(d).AddMonths(1).AddDays(-1);
         }
 
-        // Fixed text: only {BuiltIn} names expand, unknown stays as-is.
+        // Fixed text: only $BuiltIn names expand, unknown stays as-is.
         public static string ExpandVariables(string text)
         {
             if (text == null)
@@ -179,7 +182,7 @@ namespace WorkAssistant.Expressions
             });
         }
 
-        // Pattern text: every {name} goes through lookup, missing is "".
+        // Pattern text: every $name goes through lookup, missing is "".
         public static string ExpandPlaceholders(string pattern, Func<string, object> lookup)
         {
             if (pattern == null)
@@ -284,7 +287,7 @@ namespace WorkAssistant.Expressions
             return TryParseDateString(s, out dt);
         }
 
-        // One formula box that mixes {names}, numbers, quoted text
+        // One formula box that mixes $names, numbers, quoted text
         // and + - * / ^ with parentheses. Pure math returns a number;
         // any text part (or & operator) switches to a string.
         // Comparisons (== != > >= < <=), logic (! && ||) and IF(cond, a, b)
@@ -293,11 +296,12 @@ namespace WorkAssistant.Expressions
         // WEEKDAY(d) ADDDAYS(d,n) ADDWEEKS(d,n) ADDMONTHS(d,n) ADDYEARS(d,n)
         // STARTOFWEEK(d) ENDOFWEEK(d) STARTOFMONTH(d) ENDOFMONTH(d)
         // FORMAT(d, "dd/MM/yyyy"). Dates also support + / - days, e.g.
-        // {Today} + 1, and date comparisons, e.g. {Due} > {Today}.
+        // $Today + 1, and date comparisons, e.g. $Due > $Today.
+        // Text helpers: TRIM REMOVEDIGITS CLEARSYMBOLS FIRSTWORD LASTWORD.
         public static string Validate(string expression)
         {
             if (string.IsNullOrWhiteSpace(expression))
-                return "enter a formula like {A} * {B}.";
+                return "enter a formula like $A * $B.";
             try
             {
                 var parser = new ExpressionParser(expression);
@@ -529,6 +533,18 @@ namespace WorkAssistant.Expressions
                     throw new InvalidOperationException("TRIM needs (text).");
                 return ToText(args[0]).Trim();
             }
+            if (fn == "FIRSTWORD" || fn == "LASTWORD")
+            {
+                if (args.Length != 1)
+                    throw new InvalidOperationException(fn + " needs (text).");
+                string text = ToText(args[0]).Trim();
+                if (text.Length == 0)
+                    return "";
+                var words = text.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+                if (words.Length == 0)
+                    return "";
+                return fn == "FIRSTWORD" ? words[0] : words[words.Length - 1];
+            }
             if (fn == "CONTAINS" || fn == "STARTSWITH" || fn == "ENDSWITH")
             {
                 if (args.Length != 2)
@@ -561,7 +577,7 @@ namespace WorkAssistant.Expressions
             {
                 if (count != 1) need = "needs (date)";
             }
-            else if (fn == "REMOVEDIGITS" || fn == "CLEARSYMBOLS" || fn == "TRIM")
+            else if (fn == "REMOVEDIGITS" || fn == "CLEARSYMBOLS" || fn == "TRIM" || fn == "FIRSTWORD" || fn == "LASTWORD")
             {
                 if (count != 1) need = "needs (text)";
             }
@@ -661,7 +677,7 @@ namespace WorkAssistant.Expressions
                 double y;
                 if (!TryToNumber(a, out x) || !TryToNumber(b, out y))
                 {
-                    // + also concatenates text so "Vol: " + {Qty} works.
+                    // + also concatenates text so "Vol: " + $Qty works.
                     if (_op == '+')
                         return ToText(a) + ToText(b);
                     return DBNull.Value;
@@ -962,28 +978,20 @@ namespace WorkAssistant.Expressions
                     _pos++;
                     return inner;
                 }
-                if (c == '{')
+                if (c == '{' || c == '}')
                 {
-                    int end = _text.IndexOf('}', _pos + 1);
-                    if (end < 0)
-                        throw new InvalidOperationException("Missing '}' for column reference.");
-                    string name = _text.Substring(_pos + 1, end - _pos - 1).Trim();
-                    if (name.Length == 0)
-                        throw new InvalidOperationException("Empty {column} reference.");
-                    _pos = end + 1;
-                    return new ColumnNode(name);
+                    throw new InvalidOperationException(
+                        "Curly braces are no longer used. Write $Column for columns, $Today for built-ins, $1 $2 for split parts.");
                 }
                 if (c == '$')
                 {
                     _pos++;
                     int start = _pos;
-                    if (_pos < _text.Length && (_text[_pos] == 'A' || _text[_pos] == 'a' || _text[_pos] == 'B' || _text[_pos] == 'b'))
+                    while (_pos < _text.Length && (char.IsLetterOrDigit(_text[_pos]) || _text[_pos] == '_'))
                         _pos++;
-                    if (_pos >= _text.Length || !char.IsDigit(_text[_pos]))
-                        throw new InvalidOperationException("Use $1 $2 or $A1 $B1 for split parts.");
-                    while (_pos < _text.Length && char.IsDigit(_text[_pos]))
-                        _pos++;
-                    return new ColumnNode("$" + _text.Substring(start, _pos - start));
+                    if (_pos == start)
+                        throw new InvalidOperationException("Missing name after '$'. Write $Name, $A or $1.");
+                    return new ColumnNode(_text.Substring(start, _pos - start));
                 }
                 if (c == '"' || c == '\'')
                 {
@@ -1025,7 +1033,7 @@ namespace WorkAssistant.Expressions
                         _pos++;
                     string name = _text.Substring(start, _pos - start).Trim();
                     if (name.Length == 0)
-                        throw new InvalidOperationException("Unexpected '" + c + "'. Use {Column} for columns.");
+                        throw new InvalidOperationException("Unexpected '" + c + "'. Use $Column for columns.");
                     if (string.Equals(name, "TRUE", StringComparison.OrdinalIgnoreCase))
                         return new BoolNode(true);
                     if (string.Equals(name, "FALSE", StringComparison.OrdinalIgnoreCase))
@@ -1090,7 +1098,7 @@ namespace WorkAssistant.Expressions
                     }
                     return new ColumnNode(name);
                 }
-                throw new InvalidOperationException("Unexpected '" + c + "'. Use {Column}, $1, {Today}, numbers, quotes, + - * / ^, comparisons, && || ! and functions like TODAY().");
+                throw new InvalidOperationException("Unexpected '" + c + "'. Use $Column, $1, $Today, numbers, quotes, + - * / ^, comparisons, && || ! and functions like TODAY().");
             }
 
             void SkipSpaces()

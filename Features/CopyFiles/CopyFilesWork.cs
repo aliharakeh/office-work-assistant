@@ -25,12 +25,12 @@ namespace WorkAssistant.Features.CopyFiles
             var name = EvalName("$3 & \"-\" & $1", lookup);
             if (name != "final-report")
                 throw new InvalidOperationException("CopyFilesWork name check failed: " + name);
-            if (!MatchesFilter("CONTAINS({Name}, \"report\") && {Ext} == \".pdf\"", lookup))
+            if (!MatchesFilter("CONTAINS($Name, \"report\") && $Ext == \".pdf\"", lookup))
                 throw new InvalidOperationException("CopyFilesWork file filter check failed.");
-            if (MatchesFilter("STARTSWITH({Name}, \"inv\")", lookup))
+            if (MatchesFilter("STARTSWITH($Name, \"inv\")", lookup))
                 throw new InvalidOperationException("CopyFilesWork file filter reject check failed.");
             var folder = FolderLookup(@"C:\src\a-b\report.pdf", @"C:\src", '-');
-            if (!MatchesFilter("CONTAINS({Relative}, \"a-b\") && $1 == \"a\" && $2 == \"b\"", folder))
+            if (!MatchesFilter("CONTAINS($Relative, \"a-b\") && $1 == \"a\" && $2 == \"b\"", folder))
                 throw new InvalidOperationException("CopyFilesWork folder filter check failed.");
             var wrap = EvalName("$2 & \"-\" & $1", folder);
             if (wrap != "b-a")

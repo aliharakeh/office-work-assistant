@@ -53,7 +53,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="File filter" VerticalAlignment="Center" />
                         <TextBox x:Name="FileFilterBox" Grid.Column="1"
-                                 ToolTip="Blank = all files. Formula must be true. {Name} {Stem} {Ext} {Path} {Folder} {FolderName} {Relative} {Size} {Modified} $1 from the file split. Example: CONTAINS({Name}, &quot;report&quot;) &amp;&amp; {Ext} == &quot;.pdf&quot;" />
+                                 ToolTip="Blank = all files. Formula must be true. $Name $Stem $Ext $Path $Folder $FolderName $Relative $Size $Modified $1 from the file split. Example: CONTAINS($Name, &quot;report&quot;) &amp;&amp; $Ext == &quot;.pdf&quot;" />
                     </Grid>
                     <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
@@ -62,7 +62,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="Folder filter" VerticalAlignment="Center" />
                         <TextBox x:Name="FolderFilterBox" Grid.Column="1"
-                                 ToolTip="Blank = all folders. Formula must be true for the file's folder. {Name} {Path} {Relative} $1 from the folder split. Combined with File filter. Example: CONTAINS({Relative}, &quot;2024&quot;)" />
+                                 ToolTip="Blank = all folders. Formula must be true for the file's folder. $Name $Path $Relative $1 from the folder split. Combined with File filter. Example: CONTAINS($Relative, &quot;2024&quot;)" />
                     </Grid>
                     <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
@@ -82,7 +82,7 @@
                         <TextBox x:Name="FileCustomSep" Grid.Column="2" Width="40" MaxLength="1" IsEnabled="False" Margin="0,0,16,0" />
                         <TextBlock Grid.Column="3" Text="File pattern" VerticalAlignment="Center" />
                         <TextBox x:Name="FilePatternBox" Grid.Column="4" Text="$1"
-                                 ToolTip="Formula for the new file name (extension is kept). $1 $2 split the file stem with File split. {Stem} {Name} TRIM() FORMAT() IF() &amp; for text." />
+                                 ToolTip="Formula for the new file name (extension is kept). $1 $2 split the file stem with File split. $Stem $Name TRIM() FORMAT() IF() &amp; for text." />
                     </Grid>
                     <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
@@ -102,7 +102,7 @@
                         <TextBox x:Name="FolderCustomSep" Grid.Column="2" Width="40" MaxLength="1" IsEnabled="False" Margin="0,0,16,0" />
                         <TextBlock Grid.Column="3" Text="Folder pattern" VerticalAlignment="Center" />
                         <TextBox x:Name="FolderPatternBox" Grid.Column="4" IsEnabled="False" Text="$1"
-                                 ToolTip="Used when Create wrapper folder is on. $1 $2 split the source folder name with Folder split. {Name} {Path} {Relative}." />
+                                 ToolTip="Used when Create wrapper folder is on. $1 $2 split the source folder name with Folder split. $Name $Path $Relative." />
                     </Grid>
                     <TextBlock Margin="88,0,0,6" Foreground="#666" TextWrapping="Wrap"
                                Text="File $1 splits the file name. Folder $1 splits the source folder name. Glue text with &amp;. $1-$2 subtracts." />

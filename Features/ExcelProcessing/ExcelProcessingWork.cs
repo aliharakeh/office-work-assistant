@@ -452,6 +452,19 @@ namespace WorkAssistant.Features.ExcelProcessing
             return parts.ToArray();
         }
 
+        // $1 $2 reference split parts; the parser hands over the name without the $.
+        static bool IsPartName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return false;
+            for (var i = 0; i < name.Length; i++)
+            {
+                if (!char.IsDigit(name[i]))
+                    return false;
+            }
+            return true;
+        }
+
         static object LookupPart(string[] parts, string token)
         {
             if (parts == null || string.IsNullOrWhiteSpace(token))
@@ -476,7 +489,7 @@ namespace WorkAssistant.Features.ExcelProcessing
         {
             if (string.IsNullOrEmpty(name))
                 return null;
-            if (name[0] == '$')
+            if (IsPartName(name))
                 return LookupPart(parts, name);
             object builtin;
             if (ExpressionEngine.TryGetVariable(name, out builtin))

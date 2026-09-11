@@ -88,7 +88,7 @@
                                 <TextBlock Text="Value" VerticalAlignment="Center" />
                                 <TextBox x:Name="FixedValue" Grid.Column="1" />
                             </Grid>
-                            <TextBlock Text="Plain text, or a built-in like {Today}. See Variables below." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
+                            <TextBlock Text="Plain text, or a built-in like $Today. See Variables below." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel x:Name="PanelCopy" Margin="0,0,0,6" Visibility="Collapsed">
                             <Grid>
@@ -109,7 +109,7 @@
                                 <TextBlock Text="Pattern" VerticalAlignment="Center" />
                                 <TextBox x:Name="ConcatPattern" Grid.Column="1" />
                             </Grid>
-                            <TextBlock Text="Use {A} {B} for columns (A = 1st, B = 2nd, ...). E.g. {A} {B}. Built-ins like {Today} work too." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
+                            <TextBlock Text="Use $A $B for columns (A = 1st, B = 2nd, ...). E.g. $A $B. Built-ins like $Today work too." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel x:Name="PanelMath" Margin="0,0,0,6" Visibility="Collapsed">
                             <Grid>
@@ -120,7 +120,7 @@
                                 <TextBlock Text="Formula" VerticalAlignment="Center" />
                                 <TextBox x:Name="MathExpression" Grid.Column="1" />
                             </Grid>
-                            <TextBlock Text="Mix {A} {B} columns, {Today}-style variables, numbers, text in quotes and + - * / ^ with ( ). E.g. {A} * {B}, {Today} + 1, ADDDAYS({Today}, 7), FORMAT({Today}, &quot;dd/MM/yyyy&quot;). Comparisons and IF also work, e.g. IF({A} > 10, &quot;Big&quot;, &quot;Small&quot;)." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
+                            <TextBlock Text="Mix $A $B columns, $Today-style variables, numbers, text in quotes and + - * / ^ with ( ). E.g. $A * $B, $Today + 1, ADDDAYS($Today, 7), FORMAT($Today, &quot;dd/MM/yyyy&quot;). Comparisons and IF also work, e.g. IF($A > 10, &quot;Big&quot;, &quot;Small&quot;). FIRSTWORD() and LASTWORD() pick words from a text." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel x:Name="PanelConditional" Margin="0,0,0,6" Visibility="Collapsed">
                             <Grid Margin="0,0,0,4">
@@ -147,11 +147,11 @@
                                 <TextBlock Text="Else value" VerticalAlignment="Center" />
                                 <TextBox x:Name="CondFalse" Grid.Column="1" />
                             </Grid>
-                            <TextBlock Text="Condition uses &gt; &gt;= == &lt; &lt;= != with &amp;&amp; || !, e.g. {A} &gt; 10 &amp;&amp; {B} == &quot;OK&quot; or {C} &gt; {Today}. Then/Else are formulas like {B} * 2 or text in quotes." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
+                            <TextBlock Text="Condition uses &gt; &gt;= == &lt; &lt;= != with &amp;&amp; || !, e.g. $A &gt; 10 &amp;&amp; $B == &quot;OK&quot; or $C &gt; $Today. Then/Else are formulas like $B * 2 or text in quotes." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                         <DockPanel Margin="0,0,0,6" LastChildFill="False">
                             <Button Content="Built-in variables..." Width="140" DockPanel.Dock="Left" Click="Variables_Click" />
-                            <TextBlock Text="Dates like {Today} work in every kind." Foreground="#666" VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap" />
+                            <TextBlock Text="Dates like $Today work in every kind." Foreground="#666" VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap" />
                         </DockPanel>
                     </StackPanel>
                 </GroupBox>
