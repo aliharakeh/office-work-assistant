@@ -5,6 +5,7 @@ using WorkAssistant.Features.CopyFiles;
 using WorkAssistant.Features.MergeDuplicates;
 using WorkAssistant.Features.Templates;
 using WorkAssistant.Features.FilterSort;
+using WorkAssistant.Features.FormulaGuide;
 
 namespace WorkAssistant.Views
 {
@@ -38,6 +39,11 @@ namespace WorkAssistant.Views
         void FilterSortCard_Click(object sender, RoutedEventArgs e)
         {
             NavigationService.Navigate(new FilterSortPage());
+        }
+
+        void FormulaGuideCard_Click(object sender, RoutedEventArgs e)
+        {
+            NavigationService.Navigate(new FormulaGuidePage());
         }
     }
 }

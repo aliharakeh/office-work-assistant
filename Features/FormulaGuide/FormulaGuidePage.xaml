@@ -1,0 +1,90 @@
+<Page x:Class="WorkAssistant.Features.FormulaGuide.FormulaGuidePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Formula Guide"
+      Background="White">
+    <DockPanel Margin="10">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
+            <Button DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Variables..." Width="96" Click="Variables_Click" />
+            </StackPanel>
+            <TextBlock Text="Formula guide" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </DockPanel>
+
+        <GroupBox DockPanel.Dock="Bottom" Header="Test a formula" Margin="0,8,0,0" Padding="6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="290" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <DockPanel Grid.Column="0" Margin="0,0,12,0">
+                    <TextBlock DockPanel.Dock="Top" Text="Sample values" Foreground="#555" Margin="0,0,0,4" />
+                    <DataGrid x:Name="SampleGrid" AutoGenerateColumns="False" HeadersVisibility="Column"
+                              CanUserReorderColumns="False" CanUserSortColumns="False" MaxHeight="200"
+                              CellEditEnding="SampleGrid_CellEditEnding">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="90" />
+                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+                <DockPanel Grid.Column="1">
+                    <DockPanel DockPanel.Dock="Top" LastChildFill="True">
+                        <Button DockPanel.Dock="Right" Content="Test" Width="72" Margin="6,0,0,0" Click="Test_Click" />
+                        <TextBox x:Name="FormulaBox" Text="$A * $B" FontFamily="Consolas" FontSize="13"
+                                 Padding="3,2" VerticalContentAlignment="Center" KeyDown="FormulaBox_KeyDown" />
+                    </DockPanel>
+                    <Border DockPanel.Dock="Bottom" Margin="0,6,0,0" Background="#F7F7F7" BorderBrush="#DDD"
+                            BorderThickness="1" Padding="8" MinHeight="34">
+                        <TextBlock x:Name="TestResult" FontFamily="Consolas" FontSize="13" TextWrapping="Wrap" />
+                    </Border>
+                    <TextBlock Foreground="#777" TextWrapping="Wrap" Margin="0,6,6,0" VerticalAlignment="Top"
+                               Text="Type a formula and press Enter or Test. Examples: $A * $B | IF($A &gt; 10, &quot;Bulk&quot;, &quot;Single&quot;) | FORMAT($Today, &quot;ddd&quot;). Any name you add to Sample values becomes a $name." />
+                </DockPanel>
+            </Grid>
+        </GroupBox>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,0,6,0">
+                <TextBlock TextWrapping="Wrap" Foreground="#555" Margin="0,0,0,10"
+                           Text="Formulas are short lines of text the tools read to work out a value. The same engine runs inside Templates, Filter &amp; Sort, Copy Files and Excel Processing. On those pages a name like $A points at a column or field the page offers; here it points at the sample values below, and you can change them. Every example is evaluated by the engine, so the results are real output. Press Try to load one into the tester at the bottom, or edit a sample value and the examples refresh." />
+                <ItemsControl x:Name="LessonList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#FBFBFB" BorderBrush="#E3E3E3" BorderThickness="1" Padding="10" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Intro}" TextWrapping="Wrap" Foreground="#555" Margin="0,3,0,6" />
+                                    <ItemsControl ItemsSource="{Binding Steps}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,2,0,2">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="26" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Number}" Foreground="#999" VerticalAlignment="Center" />
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="{Binding Formula}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding Note}" Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="0,1,10,0" />
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Result}" FontFamily="Consolas" FontSize="12"
+                                                               Foreground="#006B3C" VerticalAlignment="Center" MinWidth="70" Margin="10,0,10,0" />
+                                                    <Button Grid.Column="3" Content="Try" Width="40" Padding="0" Click="TryStep_Click" Tag="{Binding Formula}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="{Binding Tip}" TextWrapping="Wrap" Foreground="#777" FontSize="11" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Page>

@@ -1,6 +1,6 @@
 # Work Assistant
 
-A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. It bundles five tools for everyday file and Excel chores. Everything runs locally, and each tool previews what it will do before it changes anything.
+A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. It bundles six tools for everyday file and Excel chores. Everything runs locally, and each tool previews what it will do before it changes anything.
 
 ## Tools
 
@@ -48,8 +48,15 @@ Filter rows and reorder columns into a new workbook.
 - Add any number of sort keys, each ascending or descending, and move them up or down to set priority. Ties keep the original row order.
 - Preview the result and save it as a new `.xlsx` file.
 
+### Formula guide
+Learn the formula language without touching a file.
+
+- Eight lessons walk from plain numbers through text, dates, decisions and finished multi-part formulas. Each step shows the formula and the result the engine gives on the sample values.
+- The tester at the bottom runs anything you type. Edit the sample values, or add rows, to stand in for your own columns and fields.
+- Try on any example loads it into the tester, ready to tweak, and the lesson results refresh whenever you edit a sample value.
+
 ## Formulas
-All five tools share one formula language.
+All six tools share one formula language.
 
 Columns are `$A`, `$B`, `$C`, the first, second and third column of the sheet. Split values add `$1`, `$2` for the parts.
 
