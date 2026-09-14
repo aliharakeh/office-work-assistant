@@ -121,7 +121,8 @@
                         <TextBlock x:Name="InfoSource" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777"
                                    FontSize="11" Text="No file loaded." />
                         <DataGrid x:Name="GridSource" AutoGenerateColumns="True" IsReadOnly="True"
-                                  CanUserAddRows="False" HeadersVisibility="Column" />
+                                  CanUserAddRows="False" HeadersVisibility="Column" MaxHeight="240"
+                                  VerticalScrollBarVisibility="Auto" />
                     </DockPanel>
                 </GroupBox>
             </Grid>

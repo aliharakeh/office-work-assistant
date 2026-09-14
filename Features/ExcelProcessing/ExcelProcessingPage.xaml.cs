@@ -504,15 +504,15 @@ namespace WorkAssistant.Features.ExcelProcessing
 
         void AddCond(ExcelProcessingMatch seed)
         {
-            var root = new StackPanel { Margin = new Thickness(0, 0, 8, 8) };
+            var root = new StackPanel { Margin = new Thickness(0, 0, 8, 12) };
             var line = new Grid();
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            var panelA = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
-            var opBox = new ComboBox { Margin = new Thickness(0, 0, 6, 0) };
+            var panelA = new StackPanel { Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Bottom };
+            var opBox = new ComboBox { Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Bottom };
             opBox.Items.Add("==");
             opBox.Items.Add("!=");
             opBox.Items.Add(">");
@@ -524,8 +524,8 @@ namespace WorkAssistant.Features.ExcelProcessing
             if (opBox.SelectedIndex < 0)
                 opBox.SelectedIndex = 0;
 
-            var panelB = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
-            var del = new Button { Content = "Remove", Width = 72, VerticalAlignment = VerticalAlignment.Top };
+            var panelB = new StackPanel { Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Bottom };
+            var del = new Button { Content = "Remove", Width = 64, VerticalAlignment = VerticalAlignment.Bottom };
 
             Grid.SetColumn(opBox, 1);
             Grid.SetColumn(panelB, 2);
@@ -542,17 +542,15 @@ namespace WorkAssistant.Features.ExcelProcessing
                 Op = opBox,
                 PanelA = panelA,
                 PanelB = panelB,
-                ColA = new ComboBox(),
-                ColB = new ComboBox(),
+                ColA = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Bottom, ToolTip = "Column for $Value and Split" },
+                ColB = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Bottom, ToolTip = "Column for $Value and Split" },
                 SepA = NewSepBox(),
                 SepB = NewSepBox(),
                 CustomA = NewCustomSep(),
                 CustomB = NewCustomSep(),
-                ExprA = new TextBox { Text = seed != null && seed.ExpressionA != null ? seed.ExpressionA : "$A" },
-                ExprB = new TextBox { Text = seed != null && seed.ExpressionB != null ? seed.ExpressionB : "$A" }
+                ExprA = new TextBox { Margin = new Thickness(0, 2, 0, 0), Text = seed != null && seed.ExpressionA != null ? seed.ExpressionA : "$Value", ToolTip = "Formula. $Value is the column." },
+                ExprB = new TextBox { Margin = new Thickness(0, 2, 0, 0), Text = seed != null && seed.ExpressionB != null ? seed.ExpressionB : "$Value", ToolTip = "Formula. $Value is the column." }
             };
-            item.SplitRowA = MakeSplitRow(item.SepA, item.CustomA);
-            item.SplitRowB = MakeSplitRow(item.SepB, item.CustomB);
             if (seed != null)
             {
                 ApplySep(item.SepA, item.CustomA, seed.SplitA);
@@ -597,7 +595,7 @@ namespace WorkAssistant.Features.ExcelProcessing
 
         static ComboBox NewSepBox()
         {
-            var sep = new ComboBox { Width = 110, Margin = new Thickness(0, 0, 8, 2) };
+            var sep = new ComboBox { Width = 92, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Bottom, ToolTip = "Split $Value into $1 $2" };
             sep.Items.Add("None");
             sep.Items.Add("Space");
             sep.Items.Add("Underscore");
@@ -609,21 +607,7 @@ namespace WorkAssistant.Features.ExcelProcessing
 
         static TextBox NewCustomSep()
         {
-            return new TextBox { Width = 40, MaxLength = 1, IsEnabled = false, Margin = new Thickness(0, 0, 0, 2) };
-        }
-
-        static WrapPanel MakeSplitRow(ComboBox sep, TextBox custom)
-        {
-            var row = new WrapPanel();
-            row.Children.Add(new TextBlock
-            {
-                Text = "Split",
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 6, 2)
-            });
-            row.Children.Add(sep);
-            row.Children.Add(custom);
-            return row;
+            return new TextBox { Width = 28, MaxLength = 1, IsEnabled = false, VerticalAlignment = VerticalAlignment.Bottom };
         }
 
         static void ApplySep(ComboBox sep, TextBox custom, string stored)
@@ -660,28 +644,19 @@ namespace WorkAssistant.Features.ExcelProcessing
         {
             item.PanelA.Children.Clear();
             item.PanelB.Children.Clear();
-            item.PanelA.Children.Add(Hint("Column to split"));
-            item.PanelA.Children.Add(item.ColA);
-            item.PanelA.Children.Add(item.SplitRowA);
-            item.PanelA.Children.Add(Hint("Formula"));
+            item.PanelA.Children.Add(SideRow(item.ColA, item.SepA, item.CustomA));
             item.PanelA.Children.Add(item.ExprA);
-            item.PanelB.Children.Add(Hint("Column to split"));
-            item.PanelB.Children.Add(item.ColB);
-            item.PanelB.Children.Add(item.SplitRowB);
-            item.PanelB.Children.Add(Hint("Formula"));
+            item.PanelB.Children.Add(SideRow(item.ColB, item.SepB, item.CustomB));
             item.PanelB.Children.Add(item.ExprB);
         }
 
-        static TextBlock Hint(string text)
+        static StackPanel SideRow(ComboBox col, ComboBox sep, TextBox custom)
         {
-            return new TextBlock
-            {
-                Text = text,
-                Foreground = System.Windows.Media.Brushes.Gray,
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 2)
-            };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Bottom };
+            row.Children.Add(col);
+            row.Children.Add(sep);
+            row.Children.Add(custom);
+            return row;
         }
 
         void FillCondCombo(ComboBox box, DataTable table, string keep)
@@ -784,7 +759,7 @@ namespace WorkAssistant.Features.ExcelProcessing
         void Variables_Click(object sender, RoutedEventArgs e)
         {
             ExpressionHelp.Show(Window.GetWindow(this),
-                "Type $Today in a formula. $A is the full value of the 1st column on that file, $B the 2nd. After Split, $1 $2 are parts of the chosen column. IF(), FIRSTWORD() and LASTWORD() work inside the formula.");
+                "Type $Today in a formula. $Value is the chosen column on that side. After Split, $1 $2 are parts of it. IF(), FIRSTWORD() and LASTWORD() work inside the formula.");
         }
 
         void Alert(string message, string title, MessageBoxImage icon)
@@ -813,8 +788,6 @@ namespace WorkAssistant.Features.ExcelProcessing
             public ComboBox SepB;
             public TextBox CustomA;
             public TextBox CustomB;
-            public WrapPanel SplitRowA;
-            public WrapPanel SplitRowB;
             public TextBox ExprA;
             public TextBox ExprB;
         }

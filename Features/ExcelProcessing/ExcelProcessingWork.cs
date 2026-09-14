@@ -483,7 +483,7 @@ namespace WorkAssistant.Features.ExcelProcessing
 
         static object SideValue(DataTable table, DataRow row, ExcelProcessingMatch m, bool isA)
         {
-            return EvalExpr(table, row, isA ? m.ExpressionA : m.ExpressionB, PartsFor(table, row, m, isA));
+            return EvalExpr(table, row, isA ? m.ExpressionA : m.ExpressionB, isA ? m.ColumnA : m.ColumnB, PartsFor(table, row, m, isA));
         }
 
         static string[] PartsFor(DataTable table, DataRow row, ExcelProcessingMatch m, bool isA)
@@ -538,12 +538,12 @@ namespace WorkAssistant.Features.ExcelProcessing
             return parts[n - 1];
         }
 
-        static object EvalExpr(DataTable table, DataRow row, string expression, string[] parts)
+        static object EvalExpr(DataTable table, DataRow row, string expression, string selected, string[] parts)
         {
-            return ExpressionEngine.Evaluate(expression, delegate(string name) { return FindValue(table, row, parts, name); });
+            return ExpressionEngine.Evaluate(expression, delegate(string name) { return FindValue(table, row, selected, parts, name); });
         }
 
-        static object FindValue(DataTable table, DataRow row, string[] parts, string name)
+        static object FindValue(DataTable table, DataRow row, string selected, string[] parts, string name)
         {
             if (string.IsNullOrEmpty(name))
                 return null;
@@ -554,6 +554,9 @@ namespace WorkAssistant.Features.ExcelProcessing
                 return builtin;
             if (table == null)
                 return null;
+            if (string.Equals(name, "Value", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrEmpty(selected) && table.Columns.Contains(selected))
+                return row[selected];
             int letter;
             if (TryParseColumnLetter(name, out letter) && letter >= 0 && letter < table.Columns.Count)
                 return row[letter];

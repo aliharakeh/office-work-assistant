@@ -77,25 +77,16 @@
             </Grid>
 
             <GroupBox Header="Match rules" Grid.Row="1" Margin="0,0,0,8">
-                <DockPanel LastChildFill="True" Margin="6">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                        <Button Content="Variables..." Width="88" Margin="0,0,8,0" Click="Variables_Click" />
-                        <Button Content="Add" Width="72" Click="AddCond_Click" />
-                    </StackPanel>
-                    <TextBlock DockPanel.Dock="Top" Margin="0,0,80,6" TextWrapping="Wrap" Foreground="#555"
-                               Text="Each side is a formula. $A is the full first-column value, $B the second, or use $Header. Split that file's chosen column (space, underscore, dash, custom) then use $1 $2. IF() still works inside the formula. Operators: == != &gt; &gt;= &lt; &lt;=." />
-                    <Grid DockPanel.Dock="Top" Margin="0,0,80,4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="56" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="72" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="A" Foreground="#555" />
-                        <TextBlock Grid.Column="1" Text="Op" Foreground="#555" />
-                        <TextBlock Grid.Column="2" Text="B" Foreground="#555" />
-                    </Grid>
-                    <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
+                <DockPanel LastChildFill="True" Margin="4">
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="True">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                            <Button Content="Variables..." Width="88" Margin="0,0,6,0" Click="Variables_Click" />
+                            <Button Content="Add" Width="56" Click="AddCond_Click" />
+                        </StackPanel>
+                        <TextBlock VerticalAlignment="Center" FontSize="11" Foreground="#555"
+                                   Text="$Value is the chosen column. Split it, then $1 $2 in the formula." />
+                    </DockPanel>
+                    <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="CondPanel" />
                     </ScrollViewer>
                 </DockPanel>
