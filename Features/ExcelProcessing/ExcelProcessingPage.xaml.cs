@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
+using WorkAssistant.Excel;
 using WorkAssistant.Expressions;
 using WorkAssistant.Views;
 
@@ -33,6 +34,7 @@ namespace WorkAssistant.Features.ExcelProcessing
             PreviewBox.Items.Add(5000);
             PreviewBox.SelectedItem = 1000;
             AddCond(null);
+            ExcelGrid.Hook(GridA, GridB, GridOut);
         }
 
         void Home_Click(object sender, RoutedEventArgs e)
@@ -241,7 +243,7 @@ namespace WorkAssistant.Features.ExcelProcessing
         {
             var names = new string[table.Columns.Count];
             for (var i = 0; i < table.Columns.Count; i++)
-                names[i] = table.Columns[i].ColumnName;
+                names[i] = ExcelFile.Header(table.Columns[i]);
             return names;
         }
 

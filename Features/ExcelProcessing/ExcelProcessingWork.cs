@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
-using System.IO;
-using ClosedXML.Excel;
+using WorkAssistant.Excel;
 using WorkAssistant.Expressions;
 
 namespace WorkAssistant.Features.ExcelProcessing
@@ -45,68 +44,20 @@ namespace WorkAssistant.Features.ExcelProcessing
         // maxRows <= 0 loads everything; a positive value keeps the UI preview small.
         public static ExcelProcessingLoadResult Load(string path, string sheetName, int maxRows)
         {
-            try
+            var loaded = ExcelFile.Load(path, sheetName, maxRows);
+            return new ExcelProcessingLoadResult
             {
-                // Shared read: succeeds even while Excel has the file open.
-                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                using (var wb = new XLWorkbook(stream))
-                {
-                    if (wb.Worksheets.Count == 0)
-                        throw new InvalidOperationException("The workbook has no sheets.");
-
-                    var sheets = new string[wb.Worksheets.Count];
-                    var i = 0;
-                    foreach (var w in wb.Worksheets)
-                        sheets[i++] = w.Name;
-
-                    var ws = string.IsNullOrEmpty(sheetName)
-                        ? wb.Worksheet(1)
-                        : wb.Worksheet(sheetName);
-
-                    var range = ws.RangeUsed();
-                    var total = range == null ? 0 : range.RowCount() - 1;
-                    if (total < 0)
-                        total = 0;
-
-                    var table = ToTable(ws, maxRows);
-
-                    return new ExcelProcessingLoadResult
-                    {
-                        Table = table,
-                        Sheets = sheets,
-                        Sheet = ws.Name,
-                        TotalRows = total,
-                        Truncated = maxRows > 0 && total > table.Rows.Count
-                    };
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new IOException("Could not read \"" + Path.GetFileName(path) + "\". " +
-                    "Make sure it is a valid .xlsx file (a .xls renamed to .xlsx will not open). " + ex.Message, ex);
-            }
+                Table = loaded.Table,
+                Sheets = loaded.Sheets,
+                Sheet = loaded.Sheet,
+                TotalRows = loaded.TotalRows,
+                Truncated = loaded.Truncated
+            };
         }
 
         public static void Save(DataTable table, string path)
         {
-            using (var wb = new XLWorkbook())
-            {
-                var ws = wb.Worksheets.Add("Result");
-                for (var c = 0; c < table.Columns.Count; c++)
-                    ws.Cell(1, c + 1).Value = table.Columns[c].ColumnName;
-
-                for (var r = 0; r < table.Rows.Count; r++)
-                {
-                    for (var c = 0; c < table.Columns.Count; c++)
-                    {
-                        var v = table.Rows[r][c];
-                        if (v != null && v != DBNull.Value)
-                            ws.Cell(r + 2, c + 1).Value = Convert.ToString(v, CultureInfo.InvariantCulture);
-                    }
-                }
-
-                wb.SaveAs(path);
-            }
+            ExcelFile.Save(table, path);
         }
 
         public static ExcelProcessingCompareResult OnlyInA(DataTable a, DataTable b, IList<ExcelProcessingMatch> extra)
@@ -158,7 +109,7 @@ namespace WorkAssistant.Features.ExcelProcessing
             if (outputs != null)
             {
                 for (var i = 0; i < outputs.Count; i++)
-                    table.Columns.Add(UniqueName(table, outputs[i]), typeof(object));
+                    ExcelFile.AddColumn(table, outputs[i]);
             }
 
             if (internals == null || internals.Count == 0)
@@ -218,70 +169,9 @@ namespace WorkAssistant.Features.ExcelProcessing
             for (var i = 0; i < sources.Length; i++)
             {
                 sources[i] = source;
-                originals[i] = table.Columns[i].ColumnName;
+                originals[i] = ExcelFile.Header(table.Columns[i]);
             }
             return new ExcelProcessingCompareResult { Table = table, Sources = sources, Originals = originals };
-        }
-
-        static DataTable ToTable(IXLWorksheet ws, int maxRows)
-        {
-            var table = new DataTable();
-            table.Locale = CultureInfo.InvariantCulture;
-            var range = ws.RangeUsed();
-            if (range == null)
-                return table;
-
-            var header = range.FirstRow();
-            var colCount = range.ColumnCount();
-            for (var c = 1; c <= colCount; c++)
-            {
-                var name = header.Cell(c).GetString();
-                if (string.IsNullOrWhiteSpace(name))
-                    name = "Column" + c;
-                table.Columns.Add(UniqueName(table, name), typeof(object));
-            }
-
-            var loaded = 0;
-            foreach (var row in range.RowsUsed())
-            {
-                if (row.RowNumber() == header.RowNumber())
-                    continue;
-                if (maxRows > 0 && loaded >= maxRows)
-                    break;
-                var dr = table.NewRow();
-                for (var c = 1; c <= colCount; c++)
-                    dr[c - 1] = CellValue(row.Cell(c));
-                table.Rows.Add(dr);
-                loaded++;
-            }
-
-            return table;
-        }
-
-        // One odd cell must not kill the whole sheet.
-        static object CellValue(IXLCell cell)
-        {
-            if (cell == null || cell.IsEmpty())
-                return DBNull.Value;
-            try
-            {
-                return cell.Value;
-            }
-            catch
-            {
-                try { return cell.GetFormattedString(); }
-                catch { return DBNull.Value; }
-            }
-        }
-
-        static string UniqueName(DataTable table, string name)
-        {
-            if (!table.Columns.Contains(name))
-                return name;
-            var n = 2;
-            while (table.Columns.Contains(name + "_" + n))
-                n++;
-            return name + "_" + n;
         }
 
         static string NormKey(object value)
@@ -376,14 +266,14 @@ namespace WorkAssistant.Features.ExcelProcessing
             foreach (DataColumn col in a.Columns)
             {
                 result.Columns.Add("c" + result.Columns.Count, typeof(object));
-                orig.Add(col.ColumnName);
+                orig.Add(ExcelFile.Header(col));
                 src.Add('A');
             }
 
             foreach (DataColumn col in b.Columns)
             {
                 result.Columns.Add("c" + result.Columns.Count, typeof(object));
-                orig.Add(col.ColumnName);
+                orig.Add(ExcelFile.Header(col));
                 src.Add('B');
             }
 
@@ -490,9 +380,10 @@ namespace WorkAssistant.Features.ExcelProcessing
         {
             var sep = isA ? m.SplitA : m.SplitB;
             var col = isA ? m.ColumnA : m.ColumnB;
-            if (string.IsNullOrEmpty(sep) || string.IsNullOrEmpty(col) || table == null || !table.Columns.Contains(col))
+            var column = ExcelFile.FindColumn(table, col);
+            if (string.IsNullOrEmpty(sep) || column == null)
                 return new string[0];
-            return SplitParts(ExpressionEngine.ToText(row[col]), sep[0]);
+            return SplitParts(ExpressionEngine.ToText(row[column]), sep[0]);
         }
 
         static string[] SplitParts(string text, char separator)
@@ -554,19 +445,15 @@ namespace WorkAssistant.Features.ExcelProcessing
                 return builtin;
             if (table == null)
                 return null;
-            if (string.Equals(name, "Value", StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrEmpty(selected) && table.Columns.Contains(selected))
-                return row[selected];
+            var selectedCol = ExcelFile.FindColumn(table, selected);
+            if (string.Equals(name, "Value", StringComparison.OrdinalIgnoreCase) && selectedCol != null)
+                return row[selectedCol];
             int letter;
             if (TryParseColumnLetter(name, out letter) && letter >= 0 && letter < table.Columns.Count)
                 return row[letter];
-            if (table.Columns.Contains(name))
-                return row[name];
-            foreach (DataColumn c in table.Columns)
-            {
-                if (string.Equals(c.ColumnName, name, StringComparison.OrdinalIgnoreCase))
-                    return row[c.ColumnName];
-            }
+            var col = ExcelFile.FindColumn(table, name);
+            if (col != null)
+                return row[col];
             return null;
         }
 

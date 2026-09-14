@@ -141,6 +141,8 @@
     <Compile Include="Features\FormulaGuide\FormulaGuideWork.cs" />
             <Compile Include="Expressions\ExpressionEngine.cs" />
     <Compile Include="Expressions\ExpressionHelp.cs" />
+    <Compile Include="Excel\ExcelFile.cs" />
+    <Compile Include="Excel\ExcelGrid.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">

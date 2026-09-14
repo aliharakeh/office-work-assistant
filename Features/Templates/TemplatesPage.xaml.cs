@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
+using WorkAssistant.Excel;
 using WorkAssistant.Expressions;
 using WorkAssistant.Views;
 
@@ -42,6 +43,7 @@ namespace WorkAssistant.Features.Templates
             ColKind.SelectedIndex = 0;
             RefreshColumnList();
             SyncSelectAll();
+            ExcelGrid.Hook(GridSource, GridOut);
         }
 
         void Home_Click(object sender, RoutedEventArgs e)
@@ -210,6 +212,7 @@ namespace WorkAssistant.Features.Templates
                         DataColumn col = _source.Columns[c];
                         bool include = wantedNames == null ||
                             wantedNames.Contains(col.ColumnName) ||
+                            wantedNames.Contains(ExcelFile.Header(col)) ||
                             (wantedLetters != null && wantedLetters.Contains(c));
                         _sourcePicks.Add(new SourceColumnPick
                         {

@@ -6,6 +6,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
+using WorkAssistant.Excel;
 using WorkAssistant.Expressions;
 using WorkAssistant.Views;
 
@@ -49,6 +50,7 @@ namespace WorkAssistant.Features.FilterSort
             SortDirection.SelectedIndex = 0;
             RefreshConditionList();
             RefreshSortList();
+            ExcelGrid.Hook(GridSource, GridOut);
         }
 
         void Home_Click(object sender, RoutedEventArgs e)

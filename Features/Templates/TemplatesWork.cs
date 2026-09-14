@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Globalization;
 using System.IO;
 using System.Xml.Serialization;
-using ClosedXML.Excel;
+using WorkAssistant.Excel;
 using WorkAssistant.Expressions;
 
 namespace WorkAssistant.Features.Templates
@@ -130,89 +129,20 @@ namespace WorkAssistant.Features.Templates
         // maxRows <= 0 loads everything; a positive value keeps the UI preview small.
         public static TemplateSourceResult LoadSource(string path, string sheetName, int maxRows)
         {
-            try
+            var loaded = ExcelFile.Load(path, sheetName, maxRows);
+            return new TemplateSourceResult
             {
-                // Shared read: succeeds even while Excel has the file open.
-                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                using (var wb = new XLWorkbook(stream))
-                {
-                    if (wb.Worksheets.Count == 0)
-                        throw new InvalidOperationException("The workbook has no sheets.");
-
-                    var sheets = new string[wb.Worksheets.Count];
-                    var i = 0;
-                    foreach (var w in wb.Worksheets)
-                        sheets[i++] = w.Name;
-
-                    var ws = string.IsNullOrEmpty(sheetName)
-                        ? wb.Worksheet(1)
-                        : wb.Worksheet(sheetName);
-
-                    var range = ws.RangeUsed();
-                    var total = range == null ? 0 : range.RowCount() - 1;
-                    if (total < 0)
-                        total = 0;
-
-                    var table = ToTable(ws, maxRows);
-
-                    return new TemplateSourceResult
-                    {
-                        Table = table,
-                        Sheets = sheets,
-                        Sheet = ws.Name,
-                        TotalRows = total,
-                        Truncated = maxRows > 0 && total > table.Rows.Count
-                    };
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new IOException("Could not read \"" + Path.GetFileName(path) + "\". " +
-                    "Make sure it is a valid .xlsx file (a .xls renamed to .xlsx will not open). " + ex.Message, ex);
-            }
+                Table = loaded.Table,
+                Sheets = loaded.Sheets,
+                Sheet = loaded.Sheet,
+                TotalRows = loaded.TotalRows,
+                Truncated = loaded.Truncated
+            };
         }
 
         public static void SaveTable(DataTable table, string path)
         {
-            using (var wb = new XLWorkbook())
-            {
-                var ws = wb.Worksheets.Add("Result");
-                for (var c = 0; c < table.Columns.Count; c++)
-                    ws.Cell(1, c + 1).Value = table.Columns[c].ColumnName;
-
-                for (var r = 0; r < table.Rows.Count; r++)
-                {
-                    for (var c = 0; c < table.Columns.Count; c++)
-                    {
-                        var v = table.Rows[r][c];
-                        if (v == null || v == DBNull.Value)
-                            continue;
-                        if (v is DateTime)
-                        {
-                            DateTime dt = (DateTime)v;
-                            ws.Cell(r + 2, c + 1).Value = dt;
-                            ws.Cell(r + 2, c + 1).Style.DateFormat.Format =
-                                dt.TimeOfDay == TimeSpan.Zero ? "dd/MM/yyyy" : "dd/MM/yyyy HH:mm:ss";
-                        }
-                        else if (v is bool)
-                            ws.Cell(r + 2, c + 1).Value = (bool)v;
-                        else if (v is double)
-                            ws.Cell(r + 2, c + 1).Value = (double)v;
-                        else if (v is float)
-                            ws.Cell(r + 2, c + 1).Value = (double)(float)v;
-                        else if (v is int)
-                            ws.Cell(r + 2, c + 1).Value = (double)(int)v;
-                        else if (v is long)
-                            ws.Cell(r + 2, c + 1).Value = (double)(long)v;
-                        else if (v is decimal)
-                            ws.Cell(r + 2, c + 1).Value = (double)(decimal)v;
-                        else
-                            ws.Cell(r + 2, c + 1).Value = Convert.ToString(v, CultureInfo.InvariantCulture);
-                    }
-                }
-
-                wb.SaveAs(path);
-            }
+            ExcelFile.Save(table, path);
         }
 
         public static void SaveTemplate(TemplateDefinition template, string path)
@@ -340,14 +270,10 @@ namespace WorkAssistant.Features.Templates
 
             var output = new DataTable();
             foreach (string name in kept)
-                output.Columns.Add(UniqueName(output, name), typeof(object));
+                ExcelFile.AddColumn(output, ExcelFile.Header(source.Columns[name]));
 
-            var added = new List<string>();
             for (var i = 0; i < template.Columns.Count; i++)
-                added.Add(UniqueName(output, template.Columns[i].Name.Trim()));
-
-            for (var i = 0; i < added.Count; i++)
-                output.Columns.Add(added[i], typeof(object));
+                ExcelFile.AddColumn(output, template.Columns[i].Name.Trim());
 
             foreach (DataRow row in source.Rows)
             {
@@ -410,7 +336,9 @@ namespace WorkAssistant.Features.Templates
             for (var c = 0; c < source.Columns.Count; c++)
             {
                 DataColumn col = source.Columns[c];
-                if (wantedLetters.Contains(c) || wantedNames.Contains(col.ColumnName))
+                if (wantedLetters.Contains(c) ||
+                    wantedNames.Contains(col.ColumnName) ||
+                    wantedNames.Contains(ExcelFile.Header(col)))
                     kept.Add(col.ColumnName);
             }
             return kept;
@@ -422,7 +350,7 @@ namespace WorkAssistant.Features.Templates
                 return new string[0];
             var names = new string[table.Columns.Count];
             for (var i = 0; i < table.Columns.Count; i++)
-                names[i] = table.Columns[i].ColumnName;
+                names[i] = ExcelFile.Header(table.Columns[i]);
             return names;
         }
 
@@ -468,7 +396,7 @@ namespace WorkAssistant.Features.Templates
         // "A - Qty" style labels so users see the letter plus the real header.
         public static string SourceLabel(DataTable table, int index)
         {
-            return ColumnLetter(index) + " - " + table.Columns[index].ColumnName;
+            return ColumnLetter(index) + " - " + ExcelFile.Header(table.Columns[index]);
         }
 
         public static string[] SourceLabels(DataTable table)
@@ -549,14 +477,9 @@ namespace WorkAssistant.Features.Templates
             if (TryParseColumnLetter(ExtractLetter(name), out letterIndex) &&
                 letterIndex >= 0 && letterIndex < source.Columns.Count)
                 return row[letterIndex];
-            if (source.Columns.Contains(name))
-                return row[name];
-            // Case-insensitive fallback so old templates survive casing changes.
-            foreach (DataColumn c in source.Columns)
-            {
-                if (string.Equals(c.ColumnName, name, StringComparison.OrdinalIgnoreCase))
-                    return row[c.ColumnName];
-            }
+            var named = ExcelFile.FindColumn(source, name);
+            if (named != null)
+                return row[named];
             return DBNull.Value;
         }
 
@@ -618,81 +541,14 @@ namespace WorkAssistant.Features.Templates
                 if (TryParseColumnLetter(ExtractLetter(name), out letterIndex) &&
                     letterIndex >= 0 && letterIndex < source.Columns.Count)
                     return row[letterIndex];
-                // Back-compat: old templates used real header names.
-                if (source.Columns.Contains(name))
-                    return row[name];
-                foreach (DataColumn c in source.Columns)
-                {
-                    if (string.Equals(c.ColumnName, name, StringComparison.OrdinalIgnoreCase))
-                        return row[c.ColumnName];
-                }
+                var named = ExcelFile.FindColumn(source, name);
+                if (named != null)
+                    return row[named];
             }
             object v;
             if (TryGetVariable(name, out v))
                 return v;
             return null;
-        }
-
-        static DataTable ToTable(IXLWorksheet ws, int maxRows)
-        {
-            var table = new DataTable();
-            table.Locale = CultureInfo.InvariantCulture;
-            var range = ws.RangeUsed();
-            if (range == null)
-                return table;
-
-            var header = range.FirstRow();
-            var colCount = range.ColumnCount();
-            for (var c = 1; c <= colCount; c++)
-            {
-                var name = header.Cell(c).GetString();
-                if (string.IsNullOrWhiteSpace(name))
-                    name = "Column" + c;
-                table.Columns.Add(UniqueName(table, name), typeof(object));
-            }
-
-            var loaded = 0;
-            foreach (var row in range.RowsUsed())
-            {
-                if (row.RowNumber() == header.RowNumber())
-                    continue;
-                if (maxRows > 0 && loaded >= maxRows)
-                    break;
-                var dr = table.NewRow();
-                for (var c = 1; c <= colCount; c++)
-                    dr[c - 1] = CellValue(row.Cell(c));
-                table.Rows.Add(dr);
-                loaded++;
-            }
-
-            return table;
-        }
-
-        // One odd cell must not kill the whole sheet.
-        static object CellValue(IXLCell cell)
-        {
-            if (cell == null || cell.IsEmpty())
-                return DBNull.Value;
-            try
-            {
-                return cell.Value;
-            }
-            catch
-            {
-                try { return cell.GetFormattedString(); }
-                catch { return DBNull.Value; }
-            }
-        }
-
-        static string UniqueName(DataTable table, string name)
-        {
-            string clean = string.IsNullOrWhiteSpace(name) ? "Column" : name.Trim();
-            if (!table.Columns.Contains(clean))
-                return clean;
-            var n = 2;
-            while (table.Columns.Contains(clean + "_" + n))
-                n++;
-            return clean + "_" + n;
         }
     }
 }
