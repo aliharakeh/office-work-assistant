@@ -22,6 +22,7 @@ namespace WorkAssistant.Features.FormulaGuide
             InitializeComponent();
             SampleGrid.ItemsSource = _samples;
             LessonList.ItemsSource = FormulaGuideWork.BuildLessons(_samples);
+            FormulaField.Watch(FormulaBox);
             RunTest();
         }
 

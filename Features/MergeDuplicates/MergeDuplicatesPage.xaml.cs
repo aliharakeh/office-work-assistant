@@ -28,6 +28,7 @@ namespace WorkAssistant.Features.MergeDuplicates
         public MergeDuplicatesPage()
         {
             InitializeComponent();
+            FormulaField.Watch(ConditionBox);
         }
 
         void Home_Click(object sender, RoutedEventArgs e)
@@ -309,20 +310,8 @@ namespace WorkAssistant.Features.MergeDuplicates
                 Alert("Enter a custom separator.", "Missing separator", MessageBoxImage.Warning);
                 return false;
             }
-                if (string.IsNullOrWhiteSpace(ConditionBox.Text))
-            {
-                Alert("Enter a match formula such as $A1 == $B1.", "Missing match", MessageBoxImage.Warning);
+            if (!FormulaField.Check(ConditionBox))
                 return false;
-            }
-            try
-            {
-                MergeDuplicatesWork.CheckCondition(ConditionBox.Text);
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Bad condition", MessageBoxImage.Warning);
-                return false;
-            }
             return true;
         }
 

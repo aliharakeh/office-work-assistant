@@ -267,6 +267,9 @@ namespace WorkAssistant.Features.ExcelProcessing
                 return;
             }
 
+            if (!FormulasOk())
+                return;
+
             try
             {
                 var extra = CollectedConds();
@@ -297,8 +300,19 @@ namespace WorkAssistant.Features.ExcelProcessing
             catch (Exception ex)
             {
                 ClearPreview();
-                Alert(ex.Message, "Could not build preview", MessageBoxImage.Error);
+                if (alert)
+                    Alert(ex.Message, "Could not build preview", MessageBoxImage.Error);
             }
+        }
+
+        bool FormulasOk()
+        {
+            for (var i = 0; i < _conds.Count; i++)
+            {
+                if (!FormulaField.Ok(_conds[i].ExprA) || !FormulaField.Ok(_conds[i].ExprB))
+                    return false;
+            }
+            return true;
         }
 
         void ClearPreview()
@@ -561,6 +575,8 @@ namespace WorkAssistant.Features.ExcelProcessing
 
             FillCondCombo(item.ColA, _tableA, seed != null ? seed.ColumnA : null);
             FillCondCombo(item.ColB, _tableB, seed != null ? seed.ColumnB : null);
+            FormulaField.Watch(item.ExprA);
+            FormulaField.Watch(item.ExprB);
             WireCond(item.ColA, item.ColB, item.Op, item.SepA, item.SepB, item.CustomA, item.CustomB,
                 item.ExprA, item.ExprB);
             item.SepA.SelectionChanged += (s, e) => item.CustomA.IsEnabled = item.SepA.SelectedIndex == 4;

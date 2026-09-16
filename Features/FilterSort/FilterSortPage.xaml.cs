@@ -45,6 +45,7 @@ namespace WorkAssistant.Features.FilterSort
             PreviewBox.Items.Add(5000);
             PreviewBox.SelectedItem = 1000;
             MatchMode.SelectedIndex = 0;
+            FormulaField.Watch(CondFormula, FormulaRequired);
             CondKind.SelectedIndex = 0;
             CondOp.SelectedIndex = 0;
             SortDirection.SelectedIndex = 0;
@@ -187,6 +188,82 @@ namespace WorkAssistant.Features.FilterSort
 
         // ---------- conditions ----------
 
+        void UniqueValues_Click(object sender, RoutedEventArgs e)
+        {
+            if (_source == null)
+            {
+                Alert("Choose a data file first.", "Unique values", MessageBoxImage.Warning);
+                return;
+            }
+            int col = CondColumn.SelectedIndex;
+            if (col < 0)
+            {
+                Alert("Choose a column first.", "Unique values", MessageBoxImage.Warning);
+                return;
+            }
+
+            string[] values;
+            try
+            {
+                values = ExcelFile.UniqueValues(FullSource(), col);
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Unique values", MessageBoxImage.Error);
+                return;
+            }
+            if (values.Length == 0)
+            {
+                Alert("That column has no values to pick.", "Unique values", MessageBoxImage.Information);
+                return;
+            }
+
+            string picked = PickUnique(values);
+            if (picked != null)
+                CondValue.Text = picked;
+        }
+
+        string PickUnique(string[] values)
+        {
+            var list = new ListBox { ItemsSource = values };
+            if (values.Length > 0)
+                list.SelectedIndex = 0;
+            var win = new Window
+            {
+                Title = "Unique values",
+                Width = 360,
+                Height = 420,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = Window.GetWindow(this)
+            };
+            string picked = null;
+            var use = new Button { Content = "Use", Width = 80, IsDefault = true };
+            use.Click += delegate
+            {
+                picked = list.SelectedItem as string;
+                if (picked == null)
+                    return;
+                win.DialogResult = true;
+            };
+            list.MouseDoubleClick += delegate
+            {
+                picked = list.SelectedItem as string;
+                if (picked != null)
+                    win.DialogResult = true;
+            };
+            var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+            buttons.Children.Add(use);
+            buttons.Children.Add(cancel);
+            var root = new DockPanel { Margin = new Thickness(10) };
+            DockPanel.SetDock(buttons, Dock.Bottom);
+            root.Children.Add(buttons);
+            root.Children.Add(list);
+            win.Content = root;
+            win.ShowDialog();
+            return picked;
+        }
+
         void CondKind_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (PanelCondColumn == null || PanelCondFormula == null)
@@ -194,6 +271,12 @@ namespace WorkAssistant.Features.FilterSort
             bool formula = CondKind.SelectedIndex == 1;
             PanelCondColumn.Visibility = formula ? Visibility.Collapsed : Visibility.Visible;
             PanelCondFormula.Visibility = formula ? Visibility.Visible : Visibility.Collapsed;
+            FormulaField.Refresh(CondFormula);
+        }
+
+        bool FormulaRequired()
+        {
+            return CondKind.SelectedIndex == 1;
         }
 
         void Conds_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -208,6 +291,9 @@ namespace WorkAssistant.Features.FilterSort
 
         void AddCond_Click(object sender, RoutedEventArgs e)
         {
+            if (CondKind.SelectedIndex == 1 && !FormulaField.Check(CondFormula))
+                return;
+
             FilterCondition cond;
             try
             {

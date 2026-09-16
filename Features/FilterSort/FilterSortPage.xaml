@@ -67,6 +67,7 @@
                                     <ColumnDefinition Width="90" />
                                     <ColumnDefinition Width="130" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Op" VerticalAlignment="Center" />
                                 <ComboBox x:Name="CondOp" Grid.Column="1" Margin="0,0,8,0">
@@ -82,7 +83,8 @@
                                     <ComboBoxItem Content="is empty" />
                                     <ComboBoxItem Content="is not empty" />
                                 </ComboBox>
-                                <TextBox x:Name="CondValue" Grid.Column="2" />
+                                <TextBox x:Name="CondValue" Grid.Column="2" Margin="0,0,8,0" />
+                                <Button Grid.Column="3" Content="Unique..." Width="80" Click="UniqueValues_Click" />
                             </Grid>
                             <TextBlock Text="Keeps rows where the column passes. The value may use a built-in like $Today. Text checks ignore case." Foreground="#666" Margin="90,4,0,0" TextWrapping="Wrap" />
                         </StackPanel>

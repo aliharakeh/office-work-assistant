@@ -29,11 +29,10 @@ namespace WorkAssistant.Features.CopyFiles
                 throw new InvalidOperationException("CopyFilesWork file filter check failed.");
             if (MatchesFilter("STARTSWITH($Name, \"inv\")", lookup))
                 throw new InvalidOperationException("CopyFilesWork file filter reject check failed.");
-            var folder = FolderLookup(@"C:\src\a-b\report.pdf", @"C:\src", '-');
-            if (!MatchesFilter("CONTAINS($Relative, \"a-b\") && $1 == \"a\" && $2 == \"b\"", folder))
+            if (!MatchesFilter("CONTAINS($FolderName, \"docs\") && $1 == \"report\"", lookup))
                 throw new InvalidOperationException("CopyFilesWork folder filter check failed.");
-            var wrap = EvalName("$2 & \"-\" & $1", folder);
-            if (wrap != "b-a")
+            var wrap = EvalName("$1 & \"-\" & $2", lookup);
+            if (wrap != "report-2024")
                 throw new InvalidOperationException("CopyFilesWork folder name check failed: " + wrap);
         }
 
@@ -45,7 +44,7 @@ namespace WorkAssistant.Features.CopyFiles
         }
 
         public static List<CopyFilesPlan> PlanMoves(
-            string sourceDir, string destDir, char fileSep, char folderSep, string filePattern, bool recursive, bool wrapFolder,
+            string sourceDir, string destDir, char fileSep, string filePattern, bool recursive, bool wrapFolder,
             string folderPattern = null, string fileFilter = null, string folderFilter = null)
         {
             var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
@@ -55,16 +54,15 @@ namespace WorkAssistant.Features.CopyFiles
 
             foreach (var source in files)
             {
-                var fileLookup = FileLookup(source, sourceDir, fileSep);
-                var folderLookup = FolderLookup(source, sourceDir, folderSep);
-                if (!MatchesFilter(fileFilter, fileLookup))
+                var lookup = FileLookup(source, sourceDir, fileSep);
+                if (!MatchesFilter(fileFilter, lookup))
                     continue;
-                if (!MatchesFilter(folderFilter, folderLookup))
+                if (!MatchesFilter(folderFilter, lookup))
                     continue;
 
                 var ext = Path.GetExtension(source);
-                var newName = EvalName(filePattern, fileLookup);
-                var wrapName = wrapFolder ? EvalName(folderPattern, folderLookup) : "";
+                var newName = EvalName(filePattern, lookup);
+                var wrapName = wrapFolder ? EvalName(folderPattern, lookup) : "";
                 var destPath = "";
                 var status = "Ready";
 
@@ -185,33 +183,6 @@ namespace WorkAssistant.Features.CopyFiles
                     try { return File.GetLastWriteTime(source); }
                     catch { return null; }
                 }
-                return null;
-            };
-        }
-
-        static Func<string, object> FolderLookup(string source, string sourceDir, char separator)
-        {
-            return delegate(string name)
-            {
-                object builtin;
-                if (ExpressionEngine.TryGetVariable(name, out builtin))
-                    return builtin;
-
-                var dir = Path.GetDirectoryName(source);
-                var folderName = FolderNameOf(source);
-                var part = LookupPart(folderName, separator, name);
-                if (part != null)
-                    return part;
-
-                var key = name != null ? name.Trim() : "";
-                if (key.Equals("Name", StringComparison.OrdinalIgnoreCase) ||
-                    key.Equals("FolderName", StringComparison.OrdinalIgnoreCase))
-                    return folderName;
-                if (key.Equals("Path", StringComparison.OrdinalIgnoreCase) ||
-                    key.Equals("Folder", StringComparison.OrdinalIgnoreCase))
-                    return dir;
-                if (key.Equals("Relative", StringComparison.OrdinalIgnoreCase))
-                    return RelativeFolder(source, sourceDir);
                 return null;
             };
         }

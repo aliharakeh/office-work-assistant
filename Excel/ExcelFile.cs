@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.IO;
@@ -31,6 +32,18 @@ namespace WorkAssistant.Excel
                 throw new InvalidOperationException("ExcelFile safe-name check failed.");
             if (FindColumn(table, "Amount (USD)") != a || FindColumn(table, "Cost/Unit") != b)
                 throw new InvalidOperationException("ExcelFile find-header check failed.");
+
+            var uniq = new DataTable();
+            AddColumn(uniq, "Status");
+            uniq.Rows.Add("Open");
+            uniq.Rows.Add("open");
+            uniq.Rows.Add("Closed");
+            uniq.Rows.Add("");
+            uniq.Rows.Add(DBNull.Value);
+            string[] values = UniqueValues(uniq, 0);
+            if (values.Length != 2 || values[0] != "Closed" ||
+                !string.Equals(values[1], "Open", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("ExcelFile unique-values check failed.");
         }
 
         public static ExcelLoadResult Load(string path, string sheetName)
@@ -145,6 +158,28 @@ namespace WorkAssistant.Excel
             return col.ColumnName ?? "";
         }
 
+        // Distinct non-blank display texts, case-insensitive, sorted. Dates match Save.
+        public static string[] UniqueValues(DataTable table, int columnIndex)
+        {
+            if (table == null)
+                throw new InvalidOperationException("Choose a data file first.");
+            if (columnIndex < 0 || columnIndex >= table.Columns.Count)
+                throw new InvalidOperationException("Column is not in the file.");
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var list = new List<string>();
+            for (var r = 0; r < table.Rows.Count; r++)
+            {
+                string text = CellText(table.Rows[r][columnIndex]);
+                if (text.Length == 0)
+                    continue;
+                if (seen.Add(text))
+                    list.Add(text);
+            }
+            list.Sort(StringComparer.OrdinalIgnoreCase);
+            return list.ToArray();
+        }
+
         public static DataColumn FindColumn(DataTable table, string name)
         {
             if (table == null || string.IsNullOrEmpty(name))
@@ -194,6 +229,21 @@ namespace WorkAssistant.Excel
             }
 
             return table;
+        }
+
+        static string CellText(object value)
+        {
+            if (value == null || value == DBNull.Value)
+                return "";
+            if (value is DateTime)
+            {
+                DateTime dt = (DateTime)value;
+                return dt.TimeOfDay == TimeSpan.Zero
+                    ? dt.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
+                    : dt.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+            }
+            string text = Convert.ToString(value, CultureInfo.InvariantCulture);
+            return text != null ? text.Trim() : "";
         }
 
         static object CellValue(IXLCell cell)

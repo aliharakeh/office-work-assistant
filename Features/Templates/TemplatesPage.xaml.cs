@@ -41,6 +41,10 @@ namespace WorkAssistant.Features.Templates
             PreviewBox.Items.Add(5000);
             PreviewBox.SelectedItem = 1000;
             ColKind.SelectedIndex = 0;
+            FormulaField.Watch(MathExpression, MathRequired);
+            FormulaField.Watch(CondCondition, CondRequired);
+            FormulaField.WatchOptional(CondTrue);
+            FormulaField.WatchOptional(CondFalse);
             RefreshColumnList();
             SyncSelectAll();
             ExcelGrid.Hook(GridSource, GridOut);
@@ -335,6 +339,20 @@ namespace WorkAssistant.Features.Templates
             PanelConcat.Visibility = kind == 2 ? Visibility.Visible : Visibility.Collapsed;
             PanelMath.Visibility = kind == 3 ? Visibility.Visible : Visibility.Collapsed;
             PanelConditional.Visibility = kind == 4 ? Visibility.Visible : Visibility.Collapsed;
+            FormulaField.Refresh(MathExpression);
+            FormulaField.Refresh(CondCondition);
+            FormulaField.Refresh(CondTrue);
+            FormulaField.Refresh(CondFalse);
+        }
+
+        bool MathRequired()
+        {
+            return ColKind.SelectedIndex == 3;
+        }
+
+        bool CondRequired()
+        {
+            return ColKind.SelectedIndex == 4;
         }
 
         void Columns_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -349,6 +367,12 @@ namespace WorkAssistant.Features.Templates
 
         void AddUpdate_Click(object sender, RoutedEventArgs e)
         {
+            if (ColKind.SelectedIndex == 3 && !FormulaField.Check(MathExpression))
+                return;
+            if (ColKind.SelectedIndex == 4 &&
+                (!FormulaField.Check(CondCondition) || !FormulaField.Check(CondTrue) || !FormulaField.Check(CondFalse)))
+                return;
+
             TemplateColumn col;
             try
             {
