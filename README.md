@@ -19,7 +19,9 @@ Copy files into a destination folder under new names, leaving the originals alon
 
 - File filter and folder filter are formulas. Leave them blank to take everything, or narrow the list with something like `CONTAINS($Name, "report") && $Ext == ".pdf"`.
 - File pattern renames each file. Split the name on a separator and rebuild it from the parts. `$2-$1` turns `report_2024.pdf` into `2024-report.pdf`. `$Stem`, `$Name`, `$Ext`, `$Size` and `$Modified` are available too.
-- Create wrapper folder puts each file in a subfolder named by the folder pattern, for example `$1` to group by the first part of the source folder name.
+- All filters and patterns have explicit source variables: `$FileName` includes the extension, `$FileStem` omits it, `$RootFolderName` is the selected Source folder's name, and `$ParentFolderName` is the file's immediate containing folder name. With Source `C:\Reports`, the file `C:\Reports\Invoices\bill.pdf` gives `bill.pdf`, `bill`, `Reports`, and `Invoices`. For files directly in Source, both folder variables give `Reports`; for deeper files, the parent is always the immediate folder, not the first subfolder. Existing `$Name`, `$Stem`, and `$FolderName` remain aliases.
+- File pattern automatically appends the original extension, so use `$FileStem`, not `$FileName`, to keep the original name. `$RootFolderName & "-" & $ParentFolderName & "-" & $FileStem` produces `Reports-Invoices-bill.pdf` in the example above.
+- Create wrapper folder puts each file in a subfolder named by the folder pattern, for example `$ParentFolderName` to group by the immediate source folder or `$RootFolderName & "-" & $ParentFolderName` to combine the two names. `$1` still means the first split part of the file stem.
 - Preview lists every file with its new path and a status: Ready, Exists, Same path or Bad name. Only Ready rows are copied, and an existing destination is never overwritten.
 
 ### Merge duplicates

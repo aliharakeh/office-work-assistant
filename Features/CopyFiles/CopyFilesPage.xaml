@@ -87,7 +87,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="File pattern" VerticalAlignment="Center" />
                         <TextBox x:Name="FilePatternBox" Grid.Column="1" Text="$1"
-                                 ToolTip="New file name (extension is kept). Same variables as filters. $1 $2 from Split. Glue with &amp;." />
+                                 ToolTip="New file name (extension is kept). Use $FileStem to keep the original name. Example: $RootFolderName &amp; &quot;-&quot; &amp; $ParentFolderName &amp; &quot;-&quot; &amp; $FileStem. $1 $2 from Split." />
                     </Grid>
                     <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
@@ -96,10 +96,10 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="Folder pattern" VerticalAlignment="Center" />
                         <TextBox x:Name="FolderPatternBox" Grid.Column="1" IsEnabled="False" Text="$1"
-                                 ToolTip="Wrapper folder name when Create wrapper folder is on. Same variables as filters. Example: $1" />
+                                 ToolTip="Wrapper folder name when Create wrapper folder is on. Same variables as filters. Example: $RootFolderName &amp; &quot;-&quot; &amp; $ParentFolderName" />
                     </Grid>
                     <TextBlock Margin="88,0,0,6" Foreground="#666" TextWrapping="Wrap"
-                               Text="Filters and patterns share one variable set from the file. Glue text with &amp;. $1-$2 subtracts." />
+                               Text="Filters and patterns share $FileName, $FileStem, $RootFolderName and $ParentFolderName. $1 $2 split the file stem. Glue text with &amp;. $1-$2 subtracts." />
                     <Button Content="Variables..." Width="88" HorizontalAlignment="Left" Click="Variables_Click" />
                 </StackPanel>
             </GroupBox>

@@ -31,6 +31,19 @@ namespace WorkAssistant.Features.CopyFiles
                 throw new InvalidOperationException("CopyFilesWork file filter reject check failed.");
             if (!MatchesFilter("CONTAINS($FolderName, \"docs\") && $1 == \"report\"", lookup))
                 throw new InvalidOperationException("CopyFilesWork folder filter check failed.");
+            if (!MatchesFilter("$FileName == $Name && $FileStem == $Stem && $RootFolderName == \"src\" && $ParentFolderName == \"docs\" && $ParentFolderName == $FolderName", lookup))
+                throw new InvalidOperationException("CopyFilesWork explicit variables check failed.");
+            var rootFile = FileLookup(@"C:\src\report.pdf", @"C:\src\", '_');
+            if (!MatchesFilter("$RootFolderName == \"src\" && $ParentFolderName == $RootFolderName", rootFile))
+                throw new InvalidOperationException("CopyFilesWork root file variables check failed.");
+            var nestedFile = FileLookup(@"C:\src\docs\archive\report.pdf", @"C:\src", '_');
+            if (!MatchesFilter("$rootfoldername == \"src\" && $parentfoldername == \"archive\"", nestedFile))
+                throw new InvalidOperationException("CopyFilesWork nested file variables check failed.");
+            var driveFile = FileLookup(@"C:\report.pdf", @"C:\", '_');
+            if (!MatchesFilter("$RootFolderName == $ParentFolderName", driveFile))
+                throw new InvalidOperationException("CopyFilesWork drive root variables check failed.");
+            if (EvalName("$RootFolderName & \"-\" & $ParentFolderName & \"-\" & $FileStem", lookup) != "src-docs-report_2024_final")
+                throw new InvalidOperationException("CopyFilesWork explicit variable pattern check failed.");
             var wrap = EvalName("$1 & \"-\" & $2", lookup);
             if (wrap != "report-2024")
                 throw new InvalidOperationException("CopyFilesWork folder name check failed: " + wrap);
@@ -159,9 +172,9 @@ namespace WorkAssistant.Features.CopyFiles
                     return part;
 
                 var key = name != null ? name.Trim() : "";
-                if (key.Equals("Name", StringComparison.OrdinalIgnoreCase))
+                if (key.Equals("Name", StringComparison.OrdinalIgnoreCase) || key.Equals("FileName", StringComparison.OrdinalIgnoreCase))
                     return fileName;
-                if (key.Equals("Stem", StringComparison.OrdinalIgnoreCase))
+                if (key.Equals("Stem", StringComparison.OrdinalIgnoreCase) || key.Equals("FileStem", StringComparison.OrdinalIgnoreCase))
                     return stem;
                 if (key.Equals("Ext", StringComparison.OrdinalIgnoreCase))
                     return Path.GetExtension(fileName);
@@ -169,8 +182,10 @@ namespace WorkAssistant.Features.CopyFiles
                     return source;
                 if (key.Equals("Folder", StringComparison.OrdinalIgnoreCase))
                     return Path.GetDirectoryName(source);
-                if (key.Equals("FolderName", StringComparison.OrdinalIgnoreCase))
+                if (key.Equals("FolderName", StringComparison.OrdinalIgnoreCase) || key.Equals("ParentFolderName", StringComparison.OrdinalIgnoreCase))
                     return FolderNameOf(source);
+                if (key.Equals("RootFolderName", StringComparison.OrdinalIgnoreCase))
+                    return new DirectoryInfo(sourceDir).Name;
                 if (key.Equals("Relative", StringComparison.OrdinalIgnoreCase))
                     return RelativeFolder(source, sourceDir);
                 if (key.Equals("Size", StringComparison.OrdinalIgnoreCase))
