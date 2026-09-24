@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using WorkAssistant.Expressions;
+using OfficeWorkAssistant.Expressions;
 
-namespace WorkAssistant.Features.CopyFiles
+namespace OfficeWorkAssistant.Features.CopyFiles
 {
     public sealed class CopyFilesPlan
     {

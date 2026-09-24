@@ -1,4 +1,4 @@
-<Page x:Class="WorkAssistant.Features.CopyFiles.CopyFilesPage"
+<Page x:Class="OfficeWorkAssistant.Features.CopyFiles.CopyFilesPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       Title="Copy Files"

@@ -5,10 +5,10 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using WorkAssistant.Expressions;
-using WorkAssistant.Views;
+using OfficeWorkAssistant.Expressions;
+using OfficeWorkAssistant.Views;
 
-namespace WorkAssistant.Features.FormulaGuide
+namespace OfficeWorkAssistant.Features.FormulaGuide
 {
     public partial class FormulaGuidePage : Page
     {

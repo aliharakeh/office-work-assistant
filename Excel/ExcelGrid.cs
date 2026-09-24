@@ -1,7 +1,7 @@
 using System.Data;
 using System.Windows.Controls;
 
-namespace WorkAssistant.Excel
+namespace OfficeWorkAssistant.Excel
 {
     public static class ExcelGrid
     {

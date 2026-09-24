@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using Forms = System.Windows.Forms;
-using WorkAssistant.Expressions;
-using WorkAssistant.Views;
+using OfficeWorkAssistant.Expressions;
+using OfficeWorkAssistant.Views;
 
-namespace WorkAssistant.Features.CopyFiles
+namespace OfficeWorkAssistant.Features.CopyFiles
 {
     public partial class CopyFilesPage : Page
     {

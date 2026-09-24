@@ -1,4 +1,4 @@
-# Work Assistant
+# Office Work Assistant
 
 A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. It bundles six tools for everyday file and Excel chores. Everything runs locally, and each tool previews what it will do before it changes anything.
 
@@ -81,8 +81,8 @@ Each page has a Variables button that lists every variable with the value it has
 Use Visual Studio or Framework MSBuild. No modern .NET SDK is required.
 
 ```
-%WINDIR%\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe WorkAssistant.csproj /p:Configuration=Release /v:minimal
-bin\Release\WorkAssistant.exe
+%WINDIR%\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe OfficeWorkAssistant.csproj /p:Configuration=Release /v:minimal
+bin\Release\OfficeWorkAssistant.exe
 ```
 
 Close a running instance before rebuilding, otherwise MSBuild cannot overwrite the exe.

@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace WorkAssistant.Views
+namespace OfficeWorkAssistant.Views
 {
     public partial class MainWindow : Window
     {

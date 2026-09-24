@@ -1,13 +1,13 @@
 using System.Windows;
 using System.Windows.Controls;
-using WorkAssistant.Features.ExcelProcessing;
-using WorkAssistant.Features.CopyFiles;
-using WorkAssistant.Features.MergeDuplicates;
-using WorkAssistant.Features.Templates;
-using WorkAssistant.Features.FilterSort;
-using WorkAssistant.Features.FormulaGuide;
+using OfficeWorkAssistant.Features.ExcelProcessing;
+using OfficeWorkAssistant.Features.CopyFiles;
+using OfficeWorkAssistant.Features.MergeDuplicates;
+using OfficeWorkAssistant.Features.Templates;
+using OfficeWorkAssistant.Features.FilterSort;
+using OfficeWorkAssistant.Features.FormulaGuide;
 
-namespace WorkAssistant.Views
+namespace OfficeWorkAssistant.Views
 {
     public partial class HomePage : Page
     {

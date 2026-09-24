@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace WorkAssistant
+namespace OfficeWorkAssistant
 {
     public partial class App : Application
     {

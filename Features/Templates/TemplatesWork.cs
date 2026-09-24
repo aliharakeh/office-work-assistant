@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Xml.Serialization;
-using WorkAssistant.Excel;
-using WorkAssistant.Expressions;
+using OfficeWorkAssistant.Excel;
+using OfficeWorkAssistant.Expressions;
 
-namespace WorkAssistant.Features.Templates
+namespace OfficeWorkAssistant.Features.Templates
 {
     public enum TemplateColumnKind
     {

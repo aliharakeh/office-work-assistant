@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace WorkAssistant.Expressions
+namespace OfficeWorkAssistant.Expressions
 {
     public sealed class VariableHelp
     {

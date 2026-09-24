@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using WorkAssistant.Expressions;
+using OfficeWorkAssistant.Expressions;
 
-namespace WorkAssistant.Features.MergeDuplicates
+namespace OfficeWorkAssistant.Features.MergeDuplicates
 {
     public sealed class MergeDuplicatesEntry
     {

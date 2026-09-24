@@ -6,7 +6,7 @@ using System.IO;
 using System.Text;
 using ClosedXML.Excel;
 
-namespace WorkAssistant.Excel
+namespace OfficeWorkAssistant.Excel
 {
     public sealed class ExcelLoadResult
     {

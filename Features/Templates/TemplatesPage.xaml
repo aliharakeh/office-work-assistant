@@ -1,4 +1,4 @@
-<Page x:Class="WorkAssistant.Features.Templates.TemplatesPage"
+<Page x:Class="OfficeWorkAssistant.Features.Templates.TemplatesPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       Title="Templates"

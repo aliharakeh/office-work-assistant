@@ -5,11 +5,11 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
-using WorkAssistant.Excel;
-using WorkAssistant.Expressions;
-using WorkAssistant.Views;
+using OfficeWorkAssistant.Excel;
+using OfficeWorkAssistant.Expressions;
+using OfficeWorkAssistant.Views;
 
-namespace WorkAssistant.Features.ExcelProcessing
+namespace OfficeWorkAssistant.Features.ExcelProcessing
 {
     public partial class ExcelProcessingPage : Page
     {

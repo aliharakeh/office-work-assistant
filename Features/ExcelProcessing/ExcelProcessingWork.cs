@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
-using WorkAssistant.Excel;
-using WorkAssistant.Expressions;
+using OfficeWorkAssistant.Excel;
+using OfficeWorkAssistant.Expressions;
 
-namespace WorkAssistant.Features.ExcelProcessing
+namespace OfficeWorkAssistant.Features.ExcelProcessing
 {
     public sealed class ExcelProcessingLoadResult
     {

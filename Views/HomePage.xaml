@@ -1,11 +1,11 @@
-<Page x:Class="WorkAssistant.Views.HomePage"
+<Page x:Class="OfficeWorkAssistant.Views.HomePage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       Title="Home"
       Background="#F3F3F3">
     <DockPanel Margin="28">
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,20">
-            <TextBlock Text="Work Assistant" FontSize="28" FontWeight="SemiBold" />
+            <TextBlock Text="Office Work Assistant" FontSize="28" FontWeight="SemiBold" />
             <TextBlock Text="Pick a tool." FontSize="14" Foreground="#666" Margin="0,6,0,0" />
         </StackPanel>
         <WrapPanel>

@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 
-namespace WorkAssistant.Expressions
+namespace OfficeWorkAssistant.Expressions
 {
     public static class ExpressionHelp
     {

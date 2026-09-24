@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using WorkAssistant.Expressions;
+using OfficeWorkAssistant.Expressions;
 
-namespace WorkAssistant.Features.FormulaGuide
+namespace OfficeWorkAssistant.Features.FormulaGuide
 {
     public sealed class SampleValue
     {

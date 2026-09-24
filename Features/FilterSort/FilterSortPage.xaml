@@ -1,4 +1,4 @@
-<Page x:Class="WorkAssistant.Features.FilterSort.FilterSortPage"
+<Page x:Class="OfficeWorkAssistant.Features.FilterSort.FilterSortPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       Title="Filter and Sort"
