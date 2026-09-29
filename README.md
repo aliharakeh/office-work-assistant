@@ -12,7 +12,7 @@ Compare two `.xlsx` workbooks and pull out the rows you need.
 3. Pick the output: rows found in A but not B, rows found in B but not A, or rows common to both.
 4. Tick the columns to keep and save. When both files have a column with the same name, the saved sheet keeps both, with `_A` and `_B` suffixes.
 
-Workbooks are read with a shared file handle, so a file that is open in Excel still loads. The grid previews 200, 1000 or 5000 rows; saving always runs on the full sheet.
+Workbooks are read with a shared file handle, so a file that is open in Excel still loads. The grid previews 200, 1000 or 5000 rows; saving always runs on the full sheet. Saving (Excel processing, Filter & sort, Templates) asks whether to write a new `.xlsx` file or add a new sheet to a loaded `.xlsx` file; `.xlsm` files are not offered because saving would drop their macros.
 
 ### Copy files
 Copy files into a destination folder under new names, leaving the originals alone.

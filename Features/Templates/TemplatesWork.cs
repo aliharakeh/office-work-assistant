@@ -140,11 +140,6 @@ namespace OfficeWorkAssistant.Features.Templates
             };
         }
 
-        public static void SaveTable(DataTable table, string path)
-        {
-            ExcelFile.Save(table, path);
-        }
-
         public static void SaveTemplate(TemplateDefinition template, string path)
         {
             string error = Validate(template, false);

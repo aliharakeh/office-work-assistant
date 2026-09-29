@@ -460,18 +460,13 @@ namespace OfficeWorkAssistant.Features.Templates
             if (!TryBuildOutput(out output))
                 return;
 
-            var dlg = new SaveFileDialog
-            {
-                Filter = "Excel files (*.xlsx)|*.xlsx",
-                FileName = "result.xlsx"
-            };
-            if (dlg.ShowDialog() != true)
-                return;
-
             try
             {
-                TemplatesWork.SaveTable(output, dlg.FileName);
-                Alert("Saved " + output.Rows.Count + " rows.", "Done", MessageBoxImage.Information);
+                var loaded = new List<KeyValuePair<string, string>>();
+                loaded.Add(new KeyValuePair<string, string>("Data file", SourcePath.Text));
+                var done = ExcelSaveDialog.Show(Window.GetWindow(this), output, "result.xlsx", loaded);
+                if (done != null)
+                    Alert(done, "Done", MessageBoxImage.Information);
             }
             catch (Exception ex)
             {

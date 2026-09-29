@@ -656,18 +656,13 @@ namespace OfficeWorkAssistant.Features.FilterSort
             if (!TryBuildOutput(out output))
                 return;
 
-            var dlg = new SaveFileDialog
-            {
-                Filter = "Excel files (*.xlsx)|*.xlsx",
-                FileName = DefaultFileName()
-            };
-            if (dlg.ShowDialog() != true)
-                return;
-
             try
             {
-                FilterSortWork.Save(output, dlg.FileName);
-                Alert("Saved " + output.Rows.Count + " rows.", "Done", MessageBoxImage.Information);
+                var loaded = new List<KeyValuePair<string, string>>();
+                loaded.Add(new KeyValuePair<string, string>("Data file", SourcePath.Text));
+                var done = ExcelSaveDialog.Show(Window.GetWindow(this), output, DefaultFileName(), loaded);
+                if (done != null)
+                    Alert(done, "Done", MessageBoxImage.Information);
             }
             catch (Exception ex)
             {

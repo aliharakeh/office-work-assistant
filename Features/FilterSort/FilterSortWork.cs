@@ -97,11 +97,6 @@ namespace OfficeWorkAssistant.Features.FilterSort
             };
         }
 
-        public static void Save(DataTable table, string path)
-        {
-            ExcelFile.Save(table, path);
-        }
-
         public static string Validate(IList<FilterCondition> conditions)
         {
             if (conditions == null)

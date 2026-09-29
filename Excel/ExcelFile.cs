@@ -96,46 +96,126 @@ namespace OfficeWorkAssistant.Excel
             }
         }
 
+        // Writes the table to a brand-new workbook with one sheet.
         public static void Save(DataTable table, string path)
         {
-            using (var wb = new XLWorkbook())
+            Save(table, path, "Result", false);
+        }
+
+        // append = false: create/overwrite the file with one sheet.
+        // append = true: add a new sheet to the existing workbook, leaving its other sheets alone.
+        public static void Save(DataTable table, string path, string sheetName, bool append)
+        {
+            string error = CheckSheetName(sheetName);
+            if (error != null)
+                throw new InvalidOperationException(error);
+
+            if (!append)
             {
-                var ws = wb.Worksheets.Add("Result");
-                for (var c = 0; c < table.Columns.Count; c++)
-                    ws.Cell(1, c + 1).Value = Header(table.Columns[c]);
-
-                for (var r = 0; r < table.Rows.Count; r++)
+                using (var wb = new XLWorkbook())
                 {
-                    for (var c = 0; c < table.Columns.Count; c++)
-                    {
-                        var v = table.Rows[r][c];
-                        if (v == null || v == DBNull.Value)
-                            continue;
-                        if (v is DateTime)
-                        {
-                            DateTime dt = (DateTime)v;
-                            ws.Cell(r + 2, c + 1).Value = dt;
-                            ws.Cell(r + 2, c + 1).Style.DateFormat.Format =
-                                dt.TimeOfDay == TimeSpan.Zero ? "dd/MM/yyyy" : "dd/MM/yyyy HH:mm:ss";
-                        }
-                        else if (v is bool)
-                            ws.Cell(r + 2, c + 1).Value = (bool)v;
-                        else if (v is double)
-                            ws.Cell(r + 2, c + 1).Value = (double)v;
-                        else if (v is float)
-                            ws.Cell(r + 2, c + 1).Value = (double)(float)v;
-                        else if (v is int)
-                            ws.Cell(r + 2, c + 1).Value = (double)(int)v;
-                        else if (v is long)
-                            ws.Cell(r + 2, c + 1).Value = (double)(long)v;
-                        else if (v is decimal)
-                            ws.Cell(r + 2, c + 1).Value = (double)(decimal)v;
-                        else
-                            ws.Cell(r + 2, c + 1).Value = Convert.ToString(v, CultureInfo.InvariantCulture);
-                    }
+                    WriteSheet(wb.Worksheets.Add(sheetName.Trim()), table);
+                    wb.SaveAs(path);
                 }
+                return;
+            }
 
-                wb.SaveAs(path);
+            // Copy into memory first: ClosedXML keeps reading from the stream while the workbook is open.
+            var copy = new MemoryStream();
+            try
+            {
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    stream.CopyTo(copy);
+                copy.Position = 0;
+            }
+            catch (Exception ex)
+            {
+                copy.Dispose();
+                throw new IOException("Could not read \"" + Path.GetFileName(path) + "\". " + ex.Message, ex);
+            }
+
+            // Save beside the original, then swap, so a failed save never damages the workbook.
+            string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                using (copy)
+                using (var book = new XLWorkbook(copy))
+                {
+                    foreach (var w in book.Worksheets)
+                    {
+                        if (string.Equals(w.Name, sheetName.Trim(), StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidOperationException("\"" + Path.GetFileName(path) +
+                                "\" already has a sheet named \"" + w.Name + "\". Pick another sheet name.");
+                    }
+                    WriteSheet(book.Worksheets.Add(sheetName.Trim()), table);
+                    book.SaveAs(temp);
+                }
+                File.Replace(temp, path, null);
+            }
+            catch (IOException ex)
+            {
+                throw new IOException("Could not update \"" + Path.GetFileName(path) +
+                    "\". Close it in Excel and try again. " + ex.Message, ex);
+            }
+            finally
+            {
+                if (File.Exists(temp))
+                {
+                    try { File.Delete(temp); }
+                    catch { }
+                }
+            }
+        }
+
+        // Null when the name works as an Excel sheet name; otherwise the reason it does not.
+        public static string CheckSheetName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return "Enter a sheet name.";
+            name = name.Trim();
+            if (name.Length > 31)
+                return "A sheet name can have at most 31 characters.";
+            if (name.IndexOfAny(new[] { '[', ']', ':', '*', '?', '/', '\\' }) >= 0)
+                return "A sheet name cannot contain [ ] : * ? / \\";
+            if (name[0] == '\'' || name[name.Length - 1] == '\'')
+                return "A sheet name cannot start or end with an apostrophe.";
+            return null;
+        }
+
+        static void WriteSheet(IXLWorksheet ws, DataTable table)
+        {
+            for (var c = 0; c < table.Columns.Count; c++)
+                ws.Cell(1, c + 1).Value = Header(table.Columns[c]);
+
+            for (var r = 0; r < table.Rows.Count; r++)
+            {
+                for (var c = 0; c < table.Columns.Count; c++)
+                {
+                    var v = table.Rows[r][c];
+                    if (v == null || v == DBNull.Value)
+                        continue;
+                    if (v is DateTime)
+                    {
+                        DateTime dt = (DateTime)v;
+                        ws.Cell(r + 2, c + 1).Value = dt;
+                        ws.Cell(r + 2, c + 1).Style.DateFormat.Format =
+                            dt.TimeOfDay == TimeSpan.Zero ? "dd/MM/yyyy" : "dd/MM/yyyy HH:mm:ss";
+                    }
+                    else if (v is bool)
+                        ws.Cell(r + 2, c + 1).Value = (bool)v;
+                    else if (v is double)
+                        ws.Cell(r + 2, c + 1).Value = (double)v;
+                    else if (v is float)
+                        ws.Cell(r + 2, c + 1).Value = (double)(float)v;
+                    else if (v is int)
+                        ws.Cell(r + 2, c + 1).Value = (double)(int)v;
+                    else if (v is long)
+                        ws.Cell(r + 2, c + 1).Value = (double)(long)v;
+                    else if (v is decimal)
+                        ws.Cell(r + 2, c + 1).Value = (double)(decimal)v;
+                    else
+                        ws.Cell(r + 2, c + 1).Value = Convert.ToString(v, CultureInfo.InvariantCulture);
+                }
             }
         }
 

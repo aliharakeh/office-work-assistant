@@ -55,11 +55,6 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             };
         }
 
-        public static void Save(DataTable table, string path)
-        {
-            ExcelFile.Save(table, path);
-        }
-
         public static ExcelProcessingCompareResult OnlyInA(DataTable a, DataTable b, IList<ExcelProcessingMatch> extra)
         {
             return FromOne(CopyUnmatched(a, b, extra, true), 'A');

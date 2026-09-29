@@ -114,19 +114,15 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
                 return;
             }
 
-            var dlg = new SaveFileDialog
-            {
-                Filter = "Excel files (*.xlsx)|*.xlsx",
-                FileName = "result.xlsx"
-            };
-            if (dlg.ShowDialog() != true)
-                return;
-
             try
             {
                 var table = Projected(selected, 0);
-                ExcelProcessingWork.Save(table, dlg.FileName);
-                Alert("Saved " + table.Rows.Count + " rows.", "Done", MessageBoxImage.Information);
+                var loaded = new List<KeyValuePair<string, string>>();
+                loaded.Add(new KeyValuePair<string, string>("File A", PathA.Text));
+                loaded.Add(new KeyValuePair<string, string>("File B", PathB.Text));
+                var done = ExcelSaveDialog.Show(Window.GetWindow(this), table, "result.xlsx", loaded);
+                if (done != null)
+                    Alert(done, "Done", MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
