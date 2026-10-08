@@ -7,6 +7,7 @@ using OfficeWorkAssistant.Features.Templates;
 using OfficeWorkAssistant.Features.FilterSort;
 using OfficeWorkAssistant.Features.FormulaGuide;
 using OfficeWorkAssistant.Features.MergeColumns;
+using OfficeWorkAssistant.Features.Pipeline;
 
 namespace OfficeWorkAssistant.Views
 {
@@ -50,6 +51,11 @@ namespace OfficeWorkAssistant.Views
         void MergeColumnsCard_Click(object sender, RoutedEventArgs e)
         {
             NavigationService.Navigate(new MergeColumnsPage());
+        }
+
+        void PipelineCard_Click(object sender, RoutedEventArgs e)
+        {
+            NavigationService.Navigate(new PipelinePage());
         }
     }
 }

@@ -25,6 +25,59 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
         readonly List<CondRow> _conds = new List<CondRow>();
         bool _loadingSheet;
         bool _syncPicks;
+        bool _restoring;
+        // Pipeline mode: inputs come from earlier steps instead of files,
+        // and "Use in pipeline" hands the settings back instead of saving.
+        DataTable _pipeA;
+        DataTable _pipeB;
+        string _pipeLabelA;
+        string _pipeLabelB;
+        Action<ExcelProcessingSettings> _use;
+
+        public ExcelProcessingPage(DataTable a, string labelA, DataTable b, string labelB,
+            ExcelProcessingSettings settings, Action<ExcelProcessingSettings> use)
+            : this()
+        {
+            _pipeA = a;
+            _pipeB = b;
+            _pipeLabelA = labelA;
+            _pipeLabelB = labelB;
+            _use = use;
+            HomeBtn.Content = "Back";
+            BrowseABtn.Visibility = Visibility.Collapsed;
+            BrowseBBtn.Visibility = Visibility.Collapsed;
+            SheetRowA.Visibility = Visibility.Collapsed;
+            SheetRowB.Visibility = Visibility.Collapsed;
+            SaveBtn.Visibility = Visibility.Collapsed;
+            UseBtn.Visibility = Visibility.Visible;
+            InjectInputs();
+            if (settings != null)
+                ApplySettings(settings);
+        }
+
+        void InjectInputs()
+        {
+            ApplyLoad(true, PipeLoad(_pipeA), _pipeLabelA);
+            ApplyLoad(false, PipeLoad(_pipeB), _pipeLabelB);
+        }
+
+        ExcelProcessingLoadResult PipeLoad(DataTable full)
+        {
+            var preview = full;
+            if (full.Rows.Count > _previewRows)
+            {
+                preview = full.Clone();
+                for (var i = 0; i < _previewRows; i++)
+                    preview.ImportRow(full.Rows[i]);
+            }
+            return new ExcelProcessingLoadResult
+            {
+                Table = preview,
+                Sheets = new string[0],
+                TotalRows = full.Rows.Count,
+                Truncated = full.Rows.Count > _previewRows
+            };
+        }
 
         public ExcelProcessingPage()
         {
@@ -82,6 +135,11 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
 
         void ReloadAll()
         {
+            if (_pipeA != null)
+            {
+                InjectInputs();
+                return;
+            }
             if (!string.IsNullOrEmpty(PathA.Text) && SheetA.SelectedItem != null)
                 ReloadSheet(true);
             if (!string.IsNullOrEmpty(PathB.Text) && SheetB.SelectedItem != null)
@@ -128,6 +186,86 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             {
                 Alert(ex.Message, "Could not save", MessageBoxImage.Error);
             }
+        }
+
+        void UseInPipeline_Click(object sender, RoutedEventArgs e)
+        {
+            if (_preview == null)
+            {
+                // Not built yet: rebuild with alerts so the user sees what is missing.
+                if (SelectedOp() == null)
+                    Alert("Choose an output operation first.", "Not ready", MessageBoxImage.Warning);
+                else
+                    RefreshPreview(true);
+                return;
+            }
+            var selected = SelectedPicks();
+            if (selected.Count == 0)
+            {
+                Alert("Select at least one column.", "No columns", MessageBoxImage.Warning);
+                return;
+            }
+
+            var s = new ExcelProcessingSettings();
+            s.Operation = SelectedOp();
+            s.Matches = CollectedConds();
+            s.AllColumns = BothState() == true;
+            if (!s.AllColumns)
+            {
+                for (var i = 0; i < selected.Count; i++)
+                    s.Columns.Add(new ExcelProcessingColumn { Side = selected[i].Source.ToString(), Header = selected[i].OriginalName });
+            }
+            _use(s);
+            if (NavigationService != null && NavigationService.CanGoBack)
+                NavigationService.GoBack();
+        }
+
+        void ApplySettings(ExcelProcessingSettings s)
+        {
+            _restoring = true;
+            try
+            {
+                _conds.Clear();
+                CondPanel.Children.Clear();
+                if (s.Matches == null || s.Matches.Count == 0)
+                    AddCond(null);
+                else
+                {
+                    foreach (var m in s.Matches)
+                        AddCond(m);
+                }
+                foreach (var item in OpList.Items)
+                {
+                    var op = item as ListBoxItem;
+                    if (op != null && (op.Tag as string) == s.Operation)
+                        OpList.SelectedItem = op;
+                }
+            }
+            finally
+            {
+                _restoring = false;
+            }
+            RefreshPreview(false);
+
+            if (s.AllColumns || _picks == null || s.Columns == null)
+                return;
+            var used = new HashSet<ColumnPick>();
+            foreach (var p in _picks)
+                p.Include = false;
+            foreach (var want in s.Columns)
+            {
+                foreach (var p in _picks)
+                {
+                    if (!used.Contains(p) && p.Source.ToString() == want.Side &&
+                        string.Equals(p.OriginalName, want.Header, StringComparison.OrdinalIgnoreCase))
+                    {
+                        p.Include = true;
+                        used.Add(p);
+                        break;
+                    }
+                }
+            }
+            AfterUtility();
         }
 
         void LoadFile(bool isA)
@@ -219,6 +357,8 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
         // The grids show a capped preview; operations need every row, so load it once and cache it.
         DataTable FullTable(bool isA)
         {
+            if (_pipeA != null)
+                return isA ? _pipeA : _pipeB;
             var cached = isA ? _fullA : _fullB;
             if (cached != null)
                 return cached;
@@ -245,7 +385,7 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
 
         void RefreshPreview(bool alert)
         {
-            if (_loadingSheet)
+            if (_loadingSheet || _restoring)
                 return;
 
             var tag = SelectedOp();
@@ -268,13 +408,7 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
 
             try
             {
-                var extra = CollectedConds();
-                if (tag == "AOnly")
-                    _preview = ExcelProcessingWork.OnlyInA(a, b, extra);
-                else if (tag == "BOnly")
-                    _preview = ExcelProcessingWork.OnlyInB(a, b, extra);
-                else
-                    _preview = ExcelProcessingWork.Common(a, b, extra);
+                _preview = ExcelProcessingWork.Compare(a, b, tag, CollectedConds());
 
                 _picks = new List<ColumnPick>();
                 for (var i = 0; i < _preview.Table.Columns.Count; i++)
@@ -339,23 +473,13 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             return list;
         }
 
+        // _picks lines up with the preview's columns, so a pick's index is its column.
         DataTable Projected(List<ColumnPick> selected, int maxRows)
         {
-            var internals = new string[selected.Count];
-            var originals = new string[selected.Count];
-            var sources = new char[selected.Count];
+            var columns = new List<int>();
             for (var i = 0; i < selected.Count; i++)
-            {
-                internals[i] = selected[i].InternalName;
-                originals[i] = selected[i].OriginalName;
-                sources[i] = selected[i].Source;
-            }
-
-            var outputs = new string[selected.Count];
-            for (var i = 0; i < selected.Count; i++)
-                outputs[i] = ExcelProcessingWork.OutputName(originals[i], sources[i], originals, sources);
-
-            return ExcelProcessingWork.Project(_preview.Table, internals, outputs, maxRows);
+                columns.Add(_picks.IndexOf(selected[i]));
+            return ExcelProcessingWork.ProjectColumns(_preview, columns, maxRows);
         }
 
         void ApplyPickLabels()
@@ -677,8 +801,15 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
         {
             var names = table == null ? new string[0] : ColumnNames(table);
             box.ItemsSource = names;
-            if (keep != null && table != null && table.Columns.Contains(keep))
-                box.SelectedItem = keep;
+            // keep is a header (Caption), so look it up in names, not in Columns (ColumnName ids).
+            var at = -1;
+            for (var i = 0; keep != null && i < names.Length && at < 0; i++)
+            {
+                if (string.Equals(names[i], keep, StringComparison.OrdinalIgnoreCase))
+                    at = i;
+            }
+            if (at >= 0)
+                box.SelectedIndex = at;
             else if (names.Length > 0)
                 box.SelectedIndex = 0;
             else

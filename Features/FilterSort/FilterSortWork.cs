@@ -60,6 +60,26 @@ namespace OfficeWorkAssistant.Features.FilterSort
         }
     }
 
+    // Everything one Filter & Sort run needs, so it can be stored (XML) and run again.
+    // Column references are Excel letters, the same as the page uses.
+    public sealed class FilterSortSettings
+    {
+        public bool KeepAll { get; set; }
+        public List<string> Keep { get; set; }
+        public List<FilterCondition> Conditions { get; set; }
+        public bool MatchAll { get; set; }
+        public List<SortKey> Sorts { get; set; }
+
+        public FilterSortSettings()
+        {
+            KeepAll = true;
+            Keep = new List<string>();
+            Conditions = new List<FilterCondition>();
+            MatchAll = true;
+            Sorts = new List<SortKey>();
+        }
+    }
+
     public sealed class FilterSortSourceResult
     {
         public DataTable Table { get; set; }
@@ -175,6 +195,13 @@ namespace OfficeWorkAssistant.Features.FilterSort
                 output.Rows.Add(dest);
             }
             return output;
+        }
+
+        public static DataTable Run(DataTable source, FilterSortSettings settings)
+        {
+            if (settings == null)
+                throw new InvalidOperationException("Set up the filter first.");
+            return Apply(source, settings.KeepAll ? null : settings.Keep, settings.Conditions, settings.MatchAll, settings.Sorts);
         }
 
         static bool Passes(DataTable source, DataRow row, IList<FilterCondition> conditions, bool matchAll)

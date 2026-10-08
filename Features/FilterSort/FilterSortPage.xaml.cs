@@ -26,6 +26,38 @@ namespace OfficeWorkAssistant.Features.FilterSort
         int _editingSort = -1;
         bool _loadingSheet;
         bool _syncPicks;
+        // Pipeline mode: the input comes from an earlier step instead of a file,
+        // and "Use in pipeline" hands the settings back instead of saving.
+        DataTable _pipeInput;
+        string _pipeLabel;
+        Action<FilterSortSettings> _use;
+
+        public FilterSortPage(DataTable input, string label, FilterSortSettings settings, Action<FilterSortSettings> use)
+            : this()
+        {
+            _pipeInput = input;
+            _pipeLabel = label;
+            _use = use;
+            HomeBtn.Content = "Back";
+            BrowseBtn.Visibility = Visibility.Collapsed;
+            SheetRow.Visibility = Visibility.Collapsed;
+            SaveBtn.Visibility = Visibility.Collapsed;
+            UseBtn.Visibility = Visibility.Visible;
+            InjectInput();
+            if (settings != null)
+                ApplySettings(settings);
+        }
+
+        void InjectInput()
+        {
+            ApplySource(new FilterSortSourceResult
+            {
+                Table = Capped(_pipeInput, _previewRows),
+                Sheets = new string[0],
+                TotalRows = _pipeInput.Rows.Count,
+                Truncated = _pipeInput.Rows.Count > _previewRows
+            }, _pipeLabel);
+        }
 
         public FilterSortPage()
         {
@@ -102,6 +134,11 @@ namespace OfficeWorkAssistant.Features.FilterSort
 
         void ReloadSource()
         {
+            if (_pipeInput != null)
+            {
+                InjectInput();
+                return;
+            }
             string path = SourcePath.Text;
             string sheet = SourceSheet.SelectedItem as string;
             if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(sheet))
@@ -153,6 +190,8 @@ namespace OfficeWorkAssistant.Features.FilterSort
         // The grid shows a capped preview; building the result needs every row, so load it once and cache it.
         DataTable FullSource()
         {
+            if (_pipeInput != null)
+                return _pipeInput;
             if (_fullSource != null)
                 return _fullSource;
             if (!_cutSource)
@@ -668,6 +707,55 @@ namespace OfficeWorkAssistant.Features.FilterSort
             {
                 Alert(ex.Message, "Could not save", MessageBoxImage.Error);
             }
+        }
+
+        void UseInPipeline_Click(object sender, RoutedEventArgs e)
+        {
+            DataTable output;
+            if (!TryBuildOutput(out output))
+                return;
+            _use(CurrentSettings());
+            if (NavigationService != null && NavigationService.CanGoBack)
+                NavigationService.GoBack();
+        }
+
+        FilterSortSettings CurrentSettings()
+        {
+            var s = new FilterSortSettings();
+            s.KeepAll = SelectAllKeep.IsChecked == true;
+            s.Keep = s.KeepAll ? new List<string>() : SelectedKeepColumns();
+            s.Conditions = new List<FilterCondition>(_conditions);
+            s.MatchAll = MatchMode.SelectedIndex != 1;
+            s.Sorts = new List<SortKey>(_sorts);
+            return s;
+        }
+
+        void ApplySettings(FilterSortSettings s)
+        {
+            _conditions = s.Conditions != null ? new List<FilterCondition>(s.Conditions) : new List<FilterCondition>();
+            _sorts = s.Sorts != null ? new List<SortKey>(s.Sorts) : new List<SortKey>();
+            MatchMode.SelectedIndex = s.MatchAll ? 0 : 1;
+            if (!s.KeepAll && _picks != null)
+            {
+                var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string column in s.Keep ?? new List<string>())
+                    keep.Add(FilterSortWork.ExtractLetter(column));
+                _syncPicks = true;
+                try
+                {
+                    for (var i = 0; i < _picks.Count; i++)
+                        _picks[i].Include = keep.Contains(FilterSortWork.ColumnLetter(i));
+                    KeepColumnList.ItemsSource = null;
+                    KeepColumnList.ItemsSource = _picks;
+                }
+                finally
+                {
+                    _syncPicks = false;
+                }
+                SyncSelectAll();
+            }
+            RefreshConditionList();
+            RefreshSortList();
         }
 
         string DefaultFileName()

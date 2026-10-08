@@ -1,6 +1,6 @@
 # Office Work Assistant
 
-A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. It bundles seven tools for everyday file and Excel chores. Everything runs locally, and each tool previews what it will do before it changes anything.
+A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. It bundles seven tools for everyday file and Excel chores, plus a pipeline that chains the Excel tools together. Everything runs locally, and each tool previews what it will do before it changes anything.
 
 ## Tools
 
@@ -67,6 +67,17 @@ Learn the formula language without touching a file.
 - Eight lessons walk from plain numbers through text, dates, decisions and finished multi-part formulas. Each step shows the formula and the result the engine gives on the sample values.
 - The tester at the bottom runs anything you type. Edit the sample values, or add rows, to stand in for your own columns and fields.
 - Try on any example loads it into the tester, ready to tweak, and the lesson results refresh whenever you edit a sample value.
+
+### Pipeline
+Chain the Excel tools on a canvas, so one step's result feeds the next, and rerun the whole chain later on new files.
+
+- Add steps from the toolbar: Load file, Filter & Sort, Template, Compare A/B, Merge columns and Save file. When a step is selected, the new step is placed next to it and linked to it.
+- Link steps by dragging from a step's right dot to another step's left dot. Compare A/B and Merge columns have two inputs, A and B, so two branches can join. A step's result can feed several later steps. Links that would make a loop are refused. Select a link or step and press Delete to remove it.
+- Double-click a step (or click Edit step) to set it up. This opens the normal tool page with the earlier step's result already loaded in place of a file. Set it up as usual and click Use in pipeline. Back cancels the edit. Load and Save steps are set up in the panel on the right.
+- Run preview runs the selected step and the steps it needs, and shows its result below the canvas. Nothing is written. A step that worked turns green. A step that failed turns red and shows why.
+- Run and save files reads every file again and runs every step. Only when every step has worked does it write the Save steps' files: each one either replaces a file or adds a new sheet to a workbook.
+- Save... writes the pipeline to an XML file, and Open... loads it back. To rerun the chain on next month's files, open the pipeline, point the Load steps at the new files, and click Run and save files.
+- Steps remember columns by header name, not by position. A step therefore keeps working when an earlier step adds, removes or reorders columns. If a column it needs disappears, the step fails and names the missing column. Formulas such as `$A` still mean "first column", so prefer header names (`$Qty`) in pipelines.
 
 ## Formulas
 All seven tools share one formula language.

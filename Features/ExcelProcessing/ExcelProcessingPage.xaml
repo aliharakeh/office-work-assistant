@@ -5,7 +5,7 @@
       Background="White">
     <DockPanel Margin="10">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
-            <Button DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <Button x:Name="HomeBtn" DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
                 <ComboBox x:Name="PreviewBox" Width="96" SelectionChanged="PreviewBox_SelectionChanged" />
@@ -33,9 +33,9 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="PathA" IsReadOnly="True" Margin="0,0,6,6" />
-                            <Button Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="BrowseA_Click" />
+                            <Button x:Name="BrowseABtn" Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="BrowseA_Click" />
                         </Grid>
-                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Grid x:Name="SheetRowA" DockPanel.Dock="Top" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -58,9 +58,9 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="PathB" IsReadOnly="True" Margin="0,0,6,6" />
-                            <Button Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="BrowseB_Click" />
+                            <Button x:Name="BrowseBBtn" Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="BrowseB_Click" />
                         </Grid>
-                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Grid x:Name="SheetRowB" DockPanel.Dock="Top" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -113,7 +113,8 @@
                                       IsThreeState="True" Click="PickB_Click" />
                             <CheckBox x:Name="PickBoth" Content="All" Margin="0,0,12,0" VerticalAlignment="Center"
                                       IsThreeState="True" Click="PickBoth_Click" />
-                            <Button DockPanel.Dock="Right" Content="Save..." Width="88" Click="Save_Click" />
+                            <Button x:Name="SaveBtn" DockPanel.Dock="Right" Content="Save..." Width="88" Click="Save_Click" />
+                            <Button x:Name="UseBtn" DockPanel.Dock="Right" Content="Use in pipeline" Width="120" Visibility="Collapsed" Click="UseInPipeline_Click" />
                         </DockPanel>
                         <ScrollViewer DockPanel.Dock="Top" MaxHeight="72" Margin="0,0,0,6"
                                       HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">

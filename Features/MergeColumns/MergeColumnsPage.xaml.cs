@@ -25,6 +25,113 @@ namespace OfficeWorkAssistant.Features.MergeColumns
         bool _loadingSheet;
         readonly List<KeyRow> _keys = new List<KeyRow>();
         readonly List<RuleRow> _rules = new List<RuleRow>();
+        bool _restoring;
+        // Pipeline mode: inputs come from earlier steps instead of files,
+        // and "Use in pipeline" hands the settings back instead of saving.
+        DataTable _pipeA;
+        DataTable _pipeB;
+        string _pipeLabelA;
+        string _pipeLabelB;
+        Action<MergeColumnsSettings> _use;
+
+        public MergeColumnsPage(DataTable a, string labelA, DataTable b, string labelB,
+            MergeColumnsSettings settings, Action<MergeColumnsSettings> use)
+            : this()
+        {
+            _pipeA = a;
+            _pipeB = b;
+            _pipeLabelA = labelA;
+            _pipeLabelB = labelB;
+            _use = use;
+            HomeBtn.Content = "Back";
+            BrowseABtn.Visibility = Visibility.Collapsed;
+            BrowseBBtn.Visibility = Visibility.Collapsed;
+            SheetRowA.Visibility = Visibility.Collapsed;
+            SheetRowB.Visibility = Visibility.Collapsed;
+            SaveBtn.Visibility = Visibility.Collapsed;
+            UseBtn.Visibility = Visibility.Visible;
+            InjectInputs();
+            if (settings != null)
+                ApplySettings(settings);
+        }
+
+        void InjectInputs()
+        {
+            ApplyLoad(true, PipeLoad(_pipeA), _pipeLabelA);
+            ApplyLoad(false, PipeLoad(_pipeB), _pipeLabelB);
+        }
+
+        ExcelLoadResult PipeLoad(DataTable full)
+        {
+            var preview = full;
+            if (full.Rows.Count > _previewRows)
+            {
+                preview = full.Clone();
+                for (var i = 0; i < _previewRows; i++)
+                    preview.ImportRow(full.Rows[i]);
+            }
+            return new ExcelLoadResult
+            {
+                Table = preview,
+                Sheets = new string[0],
+                TotalRows = full.Rows.Count,
+                Truncated = full.Rows.Count > _previewRows
+            };
+        }
+
+        void ApplySettings(MergeColumnsSettings s)
+        {
+            _restoring = true;
+            try
+            {
+                _keys.Clear();
+                KeyPanel.Children.Clear();
+                _rules.Clear();
+                RulePanel.Children.Clear();
+                if (s.Keys == null || s.Keys.Count == 0)
+                    AddKey();
+                else
+                {
+                    foreach (var k in s.Keys)
+                        AddKey(k);
+                }
+                if (s.Rules == null || s.Rules.Count == 0)
+                    AddRule();
+                else
+                {
+                    foreach (var r in s.Rules)
+                        AddRule(r);
+                }
+            }
+            finally
+            {
+                _restoring = false;
+            }
+            RefreshPreview();
+        }
+
+        void UseInPipeline_Click(object sender, RoutedEventArgs e)
+        {
+            if (!FormulasOk())
+            {
+                Alert("Fix the formulas marked in red first.", "Formula error", MessageBoxImage.Warning);
+                return;
+            }
+            var s = new MergeColumnsSettings { Keys = Keys(), Rules = Rules() };
+            try
+            {
+                // Run it once on every row so a broken rule shows up here, not later in the pipeline.
+                MergeColumnsWork.Run(FullTable(true), FullTable(false), s);
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not merge", MessageBoxImage.Error);
+                return;
+            }
+            _use(s);
+            if (NavigationService != null && NavigationService.CanGoBack)
+                NavigationService.GoBack();
+        }
 
         public MergeColumnsPage()
         {
@@ -76,6 +183,11 @@ namespace OfficeWorkAssistant.Features.MergeColumns
             if (rows == _previewRows)
                 return;
             _previewRows = rows;
+            if (_pipeA != null)
+            {
+                InjectInputs();
+                return;
+            }
             if (!string.IsNullOrEmpty(PathA.Text))
                 ReloadSheet(true);
             if (!string.IsNullOrEmpty(PathB.Text))
@@ -217,6 +329,8 @@ namespace OfficeWorkAssistant.Features.MergeColumns
         // The grids show a capped preview; matching needs every A row, so load it once and cache it.
         DataTable FullTable(bool isA)
         {
+            if (_pipeA != null)
+                return isA ? _pipeA : _pipeB;
             var cached = isA ? _fullA : _fullB;
             if (cached != null)
                 return cached;
@@ -235,7 +349,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
 
         void RefreshPreview()
         {
-            if (_loadingSheet)
+            if (_loadingSheet || _restoring)
                 return;
             GridOut.ItemsSource = null;
             if (_tableA == null || _tableB == null)
@@ -310,6 +424,11 @@ namespace OfficeWorkAssistant.Features.MergeColumns
 
         void AddKey()
         {
+            AddKey(null);
+        }
+
+        void AddKey(MergeColumnsKey seed)
+        {
             var line = new Grid { Margin = new Thickness(0, 0, 8, 4) };
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
@@ -318,8 +437,8 @@ namespace OfficeWorkAssistant.Features.MergeColumns
 
             var item = new KeyRow
             {
-                ExprA = new TextBox { Text = "$A", ToolTip = "Formula on the A row, e.g. $ID or TRIM($Code)." },
-                ExprB = new TextBox { Text = "$A", ToolTip = "Formula on the B row, e.g. $ID or TRIM($Code)." }
+                ExprA = new TextBox { Text = seed != null ? seed.FormulaA ?? "" : "$A", ToolTip = "Formula on the A row, e.g. $ID or TRIM($Code)." },
+                ExprB = new TextBox { Text = seed != null ? seed.FormulaB ?? "" : "$A", ToolTip = "Formula on the B row, e.g. $ID or TRIM($Code)." }
             };
             var eq = new TextBlock { Text = "==", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var del = new Button { Content = "Remove", Width = 64, Margin = new Thickness(4, 0, 0, 0) };
@@ -352,6 +471,11 @@ namespace OfficeWorkAssistant.Features.MergeColumns
 
         void AddRule()
         {
+            AddRule(null);
+        }
+
+        void AddRule(MergeColumnsRule seed)
+        {
             var line = new Grid { Margin = new Thickness(0, 0, 8, 4) };
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -361,8 +485,8 @@ namespace OfficeWorkAssistant.Features.MergeColumns
             var item = new RuleRow
             {
                 Target = new ComboBox { IsEditable = true, Margin = new Thickness(0, 0, 4, 0), ToolTip = "Pick a B column to fill, or type a new column name." },
-                When = new TextBox { Text = "$Matched", Margin = new Thickness(0, 0, 4, 0), ToolTip = "Optional condition, e.g. $Matched && $Value == \"\". Blank = always." },
-                Value = new TextBox { Text = "$Value", Margin = new Thickness(0, 0, 4, 0), ToolTip = "Value formula, e.g. $A_Price or IF($A_Qty > 0, $A_Price, $Value)." }
+                When = new TextBox { Text = seed != null ? seed.When ?? "" : "$Matched", Margin = new Thickness(0, 0, 4, 0), ToolTip = "Optional condition, e.g. $Matched && $Value == \"\". Blank = always." },
+                Value = new TextBox { Text = seed != null ? seed.Value ?? "" : "$Value", Margin = new Thickness(0, 0, 4, 0), ToolTip = "Value formula, e.g. $A_Price or IF($A_Qty > 0, $A_Price, $Value)." }
             };
             var buttons = new StackPanel { Orientation = Orientation.Horizontal };
             var up = new Button { Content = "Up", Width = 52, Margin = new Thickness(0, 0, 4, 0), ToolTip = "Run this rule earlier." };
@@ -378,6 +502,8 @@ namespace OfficeWorkAssistant.Features.MergeColumns
             line.Children.Add(buttons);
 
             FillTargets(item.Target);
+            if (seed != null)
+                item.Target.Text = seed.Target ?? "";
             FormulaField.WatchOptional(item.When);
             FormulaField.Watch(item.Value);
             item.Target.SelectionChanged += delegate { Dispatcher.BeginInvoke(new Action(RefreshPreview)); };

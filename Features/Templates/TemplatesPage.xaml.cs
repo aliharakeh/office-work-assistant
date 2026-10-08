@@ -22,6 +22,38 @@ namespace OfficeWorkAssistant.Features.Templates
         int _editingIndex = -1;
         bool _loadingSheet;
         bool _syncSource;
+        // Pipeline mode: the input comes from an earlier step instead of a file,
+        // and "Use in pipeline" hands the template back instead of saving.
+        DataTable _pipeInput;
+        string _pipeLabel;
+        Action<TemplateDefinition> _use;
+
+        public TemplatesPage(DataTable input, string label, TemplateDefinition template, Action<TemplateDefinition> use)
+            : this()
+        {
+            _pipeInput = input;
+            _pipeLabel = label;
+            _use = use;
+            HomeBtn.Content = "Back";
+            BrowseBtn.Visibility = Visibility.Collapsed;
+            SheetRow.Visibility = Visibility.Collapsed;
+            SaveBtn.Visibility = Visibility.Collapsed;
+            UseBtn.Visibility = Visibility.Visible;
+            InjectInput();
+            if (template != null)
+                ApplyTemplateDefinition(template);
+        }
+
+        void InjectInput()
+        {
+            ApplySource(new TemplateSourceResult
+            {
+                Table = Capped(_pipeInput, _previewRows),
+                Sheets = new string[0],
+                TotalRows = _pipeInput.Rows.Count,
+                Truncated = _pipeInput.Rows.Count > _previewRows
+            }, _pipeLabel);
+        }
 
         public TemplatesPage()
         {
@@ -110,6 +142,11 @@ namespace OfficeWorkAssistant.Features.Templates
 
         void ReloadSource()
         {
+            if (_pipeInput != null)
+            {
+                InjectInput();
+                return;
+            }
             string path = SourcePath.Text;
             string sheet = SourceSheet.SelectedItem as string;
             if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(sheet))
@@ -160,6 +197,8 @@ namespace OfficeWorkAssistant.Features.Templates
         // The grid shows a capped preview; generating output needs every row, so load it once and cache it.
         DataTable FullSource()
         {
+            if (_pipeInput != null)
+                return _pipeInput;
             if (_fullSource != null)
                 return _fullSource;
             if (!_cutSource)
@@ -515,13 +554,7 @@ namespace OfficeWorkAssistant.Features.Templates
 
             try
             {
-                TemplateDefinition template = TemplatesWork.LoadTemplate(dlg.FileName);
-                TemplateName.Text = template.Name;
-                KeepSource.IsChecked = template.KeepSourceColumns;
-                _columns = new List<TemplateColumn>(template.Columns);
-                ClearEditor();
-                RefreshColumnList();
-                RebuildSourcePicks(template.SourceColumns);
+                ApplyTemplateDefinition(TemplatesWork.LoadTemplate(dlg.FileName));
                 DataTable output;
                 if (_source != null && TryBuildOutput(out output))
                     GridOut.ItemsSource = Capped(output, _previewRows).DefaultView;
@@ -530,6 +563,31 @@ namespace OfficeWorkAssistant.Features.Templates
             {
                 Alert(ex.Message, "Could not load template", MessageBoxImage.Error);
             }
+        }
+
+        void ApplyTemplateDefinition(TemplateDefinition template)
+        {
+            TemplateName.Text = template.Name;
+            KeepSource.IsChecked = template.KeepSourceColumns;
+            _columns = new List<TemplateColumn>(template.Columns ?? new List<TemplateColumn>());
+            ClearEditor();
+            RefreshColumnList();
+            RebuildSourcePicks(template.SourceColumns);
+        }
+
+        void UseInPipeline_Click(object sender, RoutedEventArgs e)
+        {
+            DataTable output;
+            if (!TryBuildOutput(out output))
+                return;
+            TemplateDefinition template = BuildTemplate();
+            // All source columns ticked: store none, which means "all", so columns
+            // that an earlier step adds later still come through.
+            if (template.KeepSourceColumns && _sourcePicks != null && template.SourceColumns.Count == _sourcePicks.Count)
+                template.SourceColumns = new List<string>();
+            _use(template);
+            if (NavigationService != null && NavigationService.CanGoBack)
+                NavigationService.GoBack();
         }
 
         bool TryBuildOutput(out DataTable output)

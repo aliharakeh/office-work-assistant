@@ -1,0 +1,109 @@
+<Page x:Class="OfficeWorkAssistant.Features.Pipeline.PipelinePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Pipeline"
+      Background="White">
+    <DockPanel Margin="10">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
+            <Button DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <TextBlock x:Name="HeaderTitle" Text="Pipeline" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </DockPanel>
+
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Button Content="New" Width="60" Margin="0,0,6,0" Click="New_Click" />
+            <Button Content="Open..." Width="70" Margin="0,0,6,0" Click="Open_Click" />
+            <Button Content="Save..." Width="70" Margin="0,0,18,0" Click="Save_Click" />
+            <Button Content="Run preview" Width="96" Margin="0,0,6,0" Click="RunPreview_Click"
+                    ToolTip="Run the selected step and the steps it needs (or every step when none is selected). Nothing is written." />
+            <Button Content="Run and save files" Width="130" Margin="0,0,18,0" Click="RunAll_Click"
+                    ToolTip="Read every file again, run every step, and write every Save step's file." />
+            <TextBlock Text="Add step:" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
+            <Button Content="Load file" Margin="0,0,4,0" Padding="8,1" Tag="Load" Click="AddStep_Click" />
+            <Button Content="Filter &amp; Sort" Margin="0,0,4,0" Padding="8,1" Tag="FilterSort" Click="AddStep_Click" />
+            <Button Content="Template" Margin="0,0,4,0" Padding="8,1" Tag="Templates" Click="AddStep_Click" />
+            <Button Content="Compare A/B" Margin="0,0,4,0" Padding="8,1" Tag="Compare" Click="AddStep_Click" />
+            <Button Content="Merge columns" Margin="0,0,4,0" Padding="8,1" Tag="MergeColumns" Click="AddStep_Click" />
+            <Button Content="Save file" Padding="8,1" Tag="Save" Click="AddStep_Click" />
+        </WrapPanel>
+
+        <TextBlock x:Name="Status" DockPanel.Dock="Bottom" Margin="0,6,0,0" Foreground="#555" TextWrapping="Wrap"
+                   Text="Add steps, then drag from a step's right dot to the next step's left dot to connect them. A new step is linked to the selected step automatically." />
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" MinHeight="160" />
+                <RowDefinition Height="6" />
+                <RowDefinition Height="220" MinHeight="80" />
+            </Grid.RowDefinitions>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="280" />
+                </Grid.ColumnDefinitions>
+
+                <Border BorderBrush="#CCC" BorderThickness="1">
+                    <ScrollViewer x:Name="BoardScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <Canvas x:Name="Board" Width="2400" Height="1600" Background="#FAFAFA" ClipToBounds="True" Focusable="True" />
+                    </ScrollViewer>
+                </Border>
+
+                <GroupBox Header="Step" Grid.Column="1" Margin="8,0,0,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="6">
+                            <TextBlock x:Name="NoSelection" Foreground="#777" TextWrapping="Wrap"
+                                       Text="Select a step to see its settings and result. Double-click a step to edit it. Click a link and press Delete to remove it." />
+                            <StackPanel x:Name="StepPanel" Visibility="Collapsed">
+                                <TextBlock x:Name="StepKind" Foreground="#777" FontSize="11" Margin="0,0,0,2" />
+                                <TextBlock Text="Name" Margin="0,0,0,2" />
+                                <TextBox x:Name="StepTitle" Margin="0,0,0,8" TextChanged="StepTitle_TextChanged" />
+
+                                <StackPanel x:Name="LoadPanel">
+                                    <TextBlock Text="File" Margin="0,0,0,2" />
+                                    <DockPanel Margin="0,0,0,6">
+                                        <Button DockPanel.Dock="Right" Content="Browse..." Width="72" Margin="6,0,0,0" Click="LoadBrowse_Click" />
+                                        <TextBox x:Name="LoadPath" IsReadOnly="True" />
+                                    </DockPanel>
+                                    <TextBlock Text="Sheet" Margin="0,0,0,2" />
+                                    <ComboBox x:Name="LoadSheet" Margin="0,0,0,8" SelectionChanged="LoadSheet_SelectionChanged" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="SavePanel">
+                                    <RadioButton x:Name="SaveNewFile" Content="New file (replaces it)" Margin="0,0,0,2" Checked="SaveMode_Changed" />
+                                    <RadioButton x:Name="SaveNewSheet" Content="New sheet in a workbook" Margin="0,0,0,6" Checked="SaveMode_Changed" />
+                                    <TextBlock Text="File (.xlsx)" Margin="0,0,0,2" />
+                                    <DockPanel Margin="0,0,0,6">
+                                        <Button DockPanel.Dock="Right" Content="Browse..." Width="72" Margin="6,0,0,0" Click="SaveBrowse_Click" />
+                                        <TextBox x:Name="SavePath" IsReadOnly="True" />
+                                    </DockPanel>
+                                    <TextBlock Text="Sheet name" Margin="0,0,0,2" />
+                                    <TextBox x:Name="SaveSheet" Margin="0,0,0,4" TextChanged="SaveSheet_TextChanged" />
+                                    <TextBlock Text="Files are written only by Run and save files. A new sheet must not exist yet." Foreground="#777"
+                                               FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                </StackPanel>
+
+                                <Button x:Name="EditBtn" Content="Edit step..." Margin="0,0,0,6" Click="EditStep_Click" />
+                                <Button Content="Delete step" Margin="0,0,0,8" Click="Delete_Click" />
+                                <TextBlock x:Name="StepError" Foreground="#C62828" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel x:Name="LinkPanel" Visibility="Collapsed">
+                                <TextBlock x:Name="LinkText" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <Button Content="Delete link" Click="Delete_Click" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </GroupBox>
+            </Grid>
+
+            <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#EEE" />
+
+            <GroupBox Header="Result of the selected step" Grid.Row="2">
+                <DockPanel Margin="6">
+                    <TextBlock x:Name="InfoOut" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777" FontSize="11"
+                               Text="Select a step and click Run preview." />
+                    <DataGrid x:Name="GridOut" AutoGenerateColumns="True" IsReadOnly="True"
+                              CanUserAddRows="False" HeadersVisibility="Column" />
+                </DockPanel>
+            </GroupBox>
+        </Grid>
+    </DockPanel>
+</Page>

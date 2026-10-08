@@ -5,7 +5,7 @@
       Background="White">
     <DockPanel Margin="10">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
-            <Button DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <Button x:Name="HomeBtn" DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
                 <ComboBox x:Name="PreviewBox" Width="96" SelectionChanged="PreviewBox_SelectionChanged" />
@@ -168,9 +168,9 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="SourcePath" IsReadOnly="True" Margin="0,0,6,6" />
-                            <Button Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="Browse_Click" />
+                            <Button x:Name="BrowseBtn" Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="Browse_Click" />
                         </Grid>
-                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Grid x:Name="SheetRow" DockPanel.Dock="Top" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
@@ -190,7 +190,8 @@
                 <DockPanel Margin="6" LastChildFill="True">
                     <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                         <Button Content="Preview" Width="90" Margin="0,0,8,0" Click="Preview_Click" />
-                        <Button Content="Save Excel..." Width="100" Margin="0,0,8,0" Click="SaveExcel_Click" />
+                        <Button x:Name="SaveBtn" Content="Save Excel..." Width="100" Margin="0,0,8,0" Click="SaveExcel_Click" />
+                        <Button x:Name="UseBtn" Content="Use in pipeline" Width="120" Margin="0,0,8,0" Visibility="Collapsed" Click="UseInPipeline_Click" />
                         <Button Content="Save template..." Width="120" Margin="0,0,8,0" Click="SaveTemplate_Click" />
                         <Button Content="Load template..." Width="120" Click="LoadTemplate_Click" />
                     </WrapPanel>

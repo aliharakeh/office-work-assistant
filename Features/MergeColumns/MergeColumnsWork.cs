@@ -23,6 +23,19 @@ namespace OfficeWorkAssistant.Features.MergeColumns
         public string Value { get; set; }
     }
 
+    // Everything one merge needs, so it can be stored (XML) and run again.
+    public sealed class MergeColumnsSettings
+    {
+        public List<MergeColumnsKey> Keys { get; set; }
+        public List<MergeColumnsRule> Rules { get; set; }
+
+        public MergeColumnsSettings()
+        {
+            Keys = new List<MergeColumnsKey>();
+            Rules = new List<MergeColumnsRule>();
+        }
+    }
+
     public sealed class MergeColumnsResult
     {
         public DataTable Table { get; set; }
@@ -127,6 +140,13 @@ namespace OfficeWorkAssistant.Features.MergeColumns
                 table.Rows.Add(dest);
             }
             return result;
+        }
+
+        public static DataTable Run(DataTable a, DataTable b, MergeColumnsSettings settings)
+        {
+            if (settings == null)
+                throw new InvalidOperationException("Set up the merge first.");
+            return Merge(a, b, settings.Keys, settings.Rules, 0).Table;
         }
 
         // $names that no column or built-in answers. They evaluate as blank, which is usually a typo.

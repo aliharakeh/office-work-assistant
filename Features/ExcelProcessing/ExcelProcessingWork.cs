@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
+using System.Xml.Serialization;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Expressions;
 
@@ -32,6 +33,33 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
         public string Operator { get; set; }
         public string SplitA { get; set; }
         public string SplitB { get; set; }
+    }
+
+    // One output column: which file it came from ("A" or "B") and its header there.
+    public sealed class ExcelProcessingColumn
+    {
+        [XmlAttribute]
+        public string Side { get; set; }
+        [XmlAttribute]
+        public string Header { get; set; }
+    }
+
+    // Everything one compare needs, so it can be stored (XML) and run again.
+    public sealed class ExcelProcessingSettings
+    {
+        // "AOnly", "BOnly" or "Common", the same tags as the page's output list.
+        public string Operation { get; set; }
+        public List<ExcelProcessingMatch> Matches { get; set; }
+        public bool AllColumns { get; set; }
+        public List<ExcelProcessingColumn> Columns { get; set; }
+
+        public ExcelProcessingSettings()
+        {
+            Operation = "Common";
+            Matches = new List<ExcelProcessingMatch>();
+            AllColumns = true;
+            Columns = new List<ExcelProcessingColumn>();
+        }
     }
 
     public static class ExcelProcessingWork
@@ -89,6 +117,89 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             }
 
             return new ExcelProcessingCompareResult { Table = result, Sources = sources, Originals = originals };
+        }
+
+        public static ExcelProcessingCompareResult Compare(DataTable a, DataTable b, string operation, IList<ExcelProcessingMatch> extra)
+        {
+            if (operation == "AOnly")
+                return OnlyInA(a, b, extra);
+            if (operation == "BOnly")
+                return OnlyInB(a, b, extra);
+            if (operation == "Common")
+                return Common(a, b, extra);
+            throw new InvalidOperationException("Choose an output operation first.");
+        }
+
+        // Keeps the result columns at these positions, named the way the page labels them
+        // (a header both files share gets _A / _B when both copies are kept).
+        public static DataTable ProjectColumns(ExcelProcessingCompareResult result, IList<int> columns, int maxRows)
+        {
+            var internals = new string[columns.Count];
+            var originals = new string[columns.Count];
+            var sources = new char[columns.Count];
+            for (var i = 0; i < columns.Count; i++)
+            {
+                internals[i] = result.Table.Columns[columns[i]].ColumnName;
+                originals[i] = result.Originals[columns[i]];
+                sources[i] = result.Sources[columns[i]];
+            }
+
+            var outputs = new string[columns.Count];
+            for (var i = 0; i < columns.Count; i++)
+                outputs[i] = OutputName(originals[i], sources[i], originals, sources);
+
+            return Project(result.Table, internals, outputs, maxRows);
+        }
+
+        public static DataTable Run(DataTable a, DataTable b, ExcelProcessingSettings settings)
+        {
+            if (settings == null)
+                throw new InvalidOperationException("Set up the compare first.");
+            if (!HasJoin(settings.Matches))
+                throw new InvalidOperationException("Set a match rule that uses both A and B.");
+
+            var result = Compare(a, b, settings.Operation, settings.Matches);
+            var columns = new List<int>();
+            if (settings.AllColumns)
+            {
+                for (var i = 0; i < result.Table.Columns.Count; i++)
+                    columns.Add(i);
+            }
+            else
+            {
+                // Columns are stored by file and header, so they still match after the inputs change shape.
+                var used = new HashSet<int>();
+                foreach (var want in settings.Columns ?? new List<ExcelProcessingColumn>())
+                {
+                    var side = string.IsNullOrEmpty(want.Side) ? 'A' : char.ToUpperInvariant(want.Side[0]);
+                    var at = -1;
+                    for (var i = 0; i < result.Originals.Length && at < 0; i++)
+                    {
+                        if (!used.Contains(i) && result.Sources[i] == side &&
+                            string.Equals(result.Originals[i], want.Header, StringComparison.OrdinalIgnoreCase))
+                            at = i;
+                    }
+                    if (at < 0)
+                        throw new InvalidOperationException("Column '" + want.Header + "' is not in input " + side + ".");
+                    used.Add(at);
+                    columns.Add(at);
+                }
+                if (columns.Count == 0)
+                    throw new InvalidOperationException("Select at least one column.");
+            }
+            return ProjectColumns(result, columns, 0);
+        }
+
+        static bool HasJoin(IList<ExcelProcessingMatch> extra)
+        {
+            if (extra == null)
+                return false;
+            for (var i = 0; i < extra.Count; i++)
+            {
+                if (IsJoin(extra[i]))
+                    return true;
+            }
+            return false;
         }
 
         public static DataTable Project(DataTable source, IList<string> internals, IList<string> outputs)
