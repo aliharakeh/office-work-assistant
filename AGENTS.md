@@ -37,7 +37,7 @@ Features/
   <Name>/                -> namespace OfficeWorkAssistant.Features.<Name>
     <Name>Page.xaml(.cs)
     <Name>Work.cs
-  (ExcelProcessing, MergeColumns, FilterSort, Templates, CopyFiles,
+  (ExcelProcessing, FillColumns, FilterSort, Templates, CopyFiles,
    MergeDuplicates, FormulaGuide, Pipeline)
 Excel/                   -> namespace OfficeWorkAssistant.Excel        (shared .xlsx read/write, save dialog)
 Expressions/             -> namespace OfficeWorkAssistant.Expressions  (shared formula engine)

@@ -22,7 +22,7 @@
             <Button Content="Filter &amp; Sort" Margin="0,0,4,0" Padding="8,1" Tag="FilterSort" Click="AddStep_Click" />
             <Button Content="Template" Margin="0,0,4,0" Padding="8,1" Tag="Templates" Click="AddStep_Click" />
             <Button Content="Compare A/B" Margin="0,0,4,0" Padding="8,1" Tag="Compare" Click="AddStep_Click" />
-            <Button Content="Merge columns" Margin="0,0,4,0" Padding="8,1" Tag="MergeColumns" Click="AddStep_Click" />
+            <Button Content="Fill columns" Margin="0,0,4,0" Padding="8,1" Tag="FillColumns" Click="AddStep_Click" />
             <Button Content="Save file" Padding="8,1" Tag="Save" Click="AddStep_Click" />
         </WrapPanel>
 

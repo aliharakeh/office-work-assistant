@@ -6,7 +6,7 @@ using OfficeWorkAssistant.Features.MergeDuplicates;
 using OfficeWorkAssistant.Features.Templates;
 using OfficeWorkAssistant.Features.FilterSort;
 using OfficeWorkAssistant.Features.FormulaGuide;
-using OfficeWorkAssistant.Features.MergeColumns;
+using OfficeWorkAssistant.Features.FillColumns;
 using OfficeWorkAssistant.Features.Pipeline;
 
 namespace OfficeWorkAssistant.Views
@@ -48,9 +48,9 @@ namespace OfficeWorkAssistant.Views
             NavigationService.Navigate(new FormulaGuidePage());
         }
 
-        void MergeColumnsCard_Click(object sender, RoutedEventArgs e)
+        void FillColumnsCard_Click(object sender, RoutedEventArgs e)
         {
-            NavigationService.Navigate(new MergeColumnsPage());
+            NavigationService.Navigate(new FillColumnsPage());
         }
 
         void PipelineCard_Click(object sender, RoutedEventArgs e)

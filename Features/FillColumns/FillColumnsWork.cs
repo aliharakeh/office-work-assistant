@@ -5,10 +5,10 @@ using System.Text.RegularExpressions;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Expressions;
 
-namespace OfficeWorkAssistant.Features.MergeColumns
+namespace OfficeWorkAssistant.Features.FillColumns
 {
     // One match rule: the A formula on an A row must equal the B formula on a B row.
-    public sealed class MergeColumnsKey
+    public sealed class FillColumnsKey
     {
         public string FormulaA { get; set; }
         public string FormulaB { get; set; }
@@ -16,7 +16,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
 
     // One fill rule: when When is true (blank = always), Target gets Value.
     // Rules run top to bottom; the first rule that fires for a column wins that cell.
-    public sealed class MergeColumnsRule
+    public sealed class FillColumnsRule
     {
         public string Target { get; set; }
         public string When { get; set; }
@@ -24,19 +24,19 @@ namespace OfficeWorkAssistant.Features.MergeColumns
     }
 
     // Everything one merge needs, so it can be stored (XML) and run again.
-    public sealed class MergeColumnsSettings
+    public sealed class FillColumnsSettings
     {
-        public List<MergeColumnsKey> Keys { get; set; }
-        public List<MergeColumnsRule> Rules { get; set; }
+        public List<FillColumnsKey> Keys { get; set; }
+        public List<FillColumnsRule> Rules { get; set; }
 
-        public MergeColumnsSettings()
+        public FillColumnsSettings()
         {
-            Keys = new List<MergeColumnsKey>();
-            Rules = new List<MergeColumnsRule>();
+            Keys = new List<FillColumnsKey>();
+            Rules = new List<FillColumnsRule>();
         }
     }
 
-    public sealed class MergeColumnsResult
+    public sealed class FillColumnsResult
     {
         public DataTable Table { get; set; }
         public int Matched { get; set; }
@@ -51,7 +51,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
     //   $Name / $C       B first; a name B lacks falls back to A
     //   $Value           the target cell's current value
     //   $Matched         true when an A row matched
-    public static class MergeColumnsWork
+    public static class FillColumnsWork
     {
         static readonly Regex Names = new Regex(@"\$(\w+)", RegexOptions.Compiled);
 
@@ -61,8 +61,8 @@ namespace OfficeWorkAssistant.Features.MergeColumns
         }
 
         // maxRows <= 0 fills every B row (used for saving); a positive value keeps the preview small.
-        public static MergeColumnsResult Merge(DataTable a, DataTable b, IList<MergeColumnsKey> keys,
-            IList<MergeColumnsRule> rules, int maxRows)
+        public static FillColumnsResult Fill(DataTable a, DataTable b, IList<FillColumnsKey> keys,
+            IList<FillColumnsRule> rules, int maxRows)
         {
             if (a == null || b == null)
                 throw new InvalidOperationException("Open both Excel files first.");
@@ -95,7 +95,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
                 targets[i] = ExcelFile.FindColumn(table, name.Trim()) ?? ExcelFile.AddColumn(table, name);
             }
 
-            var result = new MergeColumnsResult { Table = table, SharedKeys = shared.Count };
+            var result = new FillColumnsResult { Table = table, SharedKeys = shared.Count };
             var done = new HashSet<DataColumn>();
             for (var r = 0; r < b.Rows.Count; r++)
             {
@@ -142,16 +142,16 @@ namespace OfficeWorkAssistant.Features.MergeColumns
             return result;
         }
 
-        public static DataTable Run(DataTable a, DataTable b, MergeColumnsSettings settings)
+        public static DataTable Run(DataTable a, DataTable b, FillColumnsSettings settings)
         {
             if (settings == null)
                 throw new InvalidOperationException("Set up the merge first.");
-            return Merge(a, b, settings.Keys, settings.Rules, 0).Table;
+            return Fill(a, b, settings.Keys, settings.Rules, 0).Table;
         }
 
         // $names that no column or built-in answers. They evaluate as blank, which is usually a typo.
         // b should be Merge's result table so new target columns count as known.
-        public static string[] UnknownNames(DataTable a, DataTable b, IList<MergeColumnsKey> keys, IList<MergeColumnsRule> rules)
+        public static string[] UnknownNames(DataTable a, DataTable b, IList<FillColumnsKey> keys, IList<FillColumnsRule> rules)
         {
             var missing = new List<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -187,7 +187,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
                 yield return m.Groups[1].Value;
         }
 
-        static string Key(DataTable table, DataRow row, IList<MergeColumnsKey> keys, bool isA)
+        static string Key(DataTable table, DataRow row, IList<FillColumnsKey> keys, bool isA)
         {
             var k = "";
             for (var i = 0; i < keys.Count; i++)

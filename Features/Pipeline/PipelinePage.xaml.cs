@@ -11,7 +11,7 @@ using Microsoft.Win32;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Features.ExcelProcessing;
 using OfficeWorkAssistant.Features.FilterSort;
-using OfficeWorkAssistant.Features.MergeColumns;
+using OfficeWorkAssistant.Features.FillColumns;
 using OfficeWorkAssistant.Features.Templates;
 using OfficeWorkAssistant.Views;
 
@@ -786,8 +786,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
                         PipelineWork.Clone(node.Settings as ExcelProcessingSettings), r => UseSettings(node, r));
                     break;
                 default:
-                    page = new MergeColumnsPage(inputs[0], labels[0], inputs[1], labels[1],
-                        PipelineWork.Clone(node.Settings as MergeColumnsSettings), r => UseSettings(node, r));
+                    page = new FillColumnsPage(inputs[0], labels[0], inputs[1], labels[1],
+                        PipelineWork.Clone(node.Settings as FillColumnsSettings), r => UseSettings(node, r));
                     break;
             }
             NavigationService.Navigate(page);

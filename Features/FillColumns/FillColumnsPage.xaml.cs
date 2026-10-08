@@ -11,9 +11,9 @@ using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Expressions;
 using OfficeWorkAssistant.Views;
 
-namespace OfficeWorkAssistant.Features.MergeColumns
+namespace OfficeWorkAssistant.Features.FillColumns
 {
-    public partial class MergeColumnsPage : Page
+    public partial class FillColumnsPage : Page
     {
         DataTable _tableA;
         DataTable _tableB;
@@ -32,10 +32,10 @@ namespace OfficeWorkAssistant.Features.MergeColumns
         DataTable _pipeB;
         string _pipeLabelA;
         string _pipeLabelB;
-        Action<MergeColumnsSettings> _use;
+        Action<FillColumnsSettings> _use;
 
-        public MergeColumnsPage(DataTable a, string labelA, DataTable b, string labelB,
-            MergeColumnsSettings settings, Action<MergeColumnsSettings> use)
+        public FillColumnsPage(DataTable a, string labelA, DataTable b, string labelB,
+            FillColumnsSettings settings, Action<FillColumnsSettings> use)
             : this()
         {
             _pipeA = a;
@@ -79,7 +79,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
             };
         }
 
-        void ApplySettings(MergeColumnsSettings s)
+        void ApplySettings(FillColumnsSettings s)
         {
             _restoring = true;
             try
@@ -117,11 +117,11 @@ namespace OfficeWorkAssistant.Features.MergeColumns
                 Alert("Fix the formulas marked in red first.", "Formula error", MessageBoxImage.Warning);
                 return;
             }
-            var s = new MergeColumnsSettings { Keys = Keys(), Rules = Rules() };
+            var s = new FillColumnsSettings { Keys = Keys(), Rules = Rules() };
             try
             {
                 // Run it once on every row so a broken rule shows up here, not later in the pipeline.
-                MergeColumnsWork.Run(FullTable(true), FullTable(false), s);
+                FillColumnsWork.Run(FullTable(true), FullTable(false), s);
             }
             catch (Exception ex)
             {
@@ -133,7 +133,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
                 NavigationService.GoBack();
         }
 
-        public MergeColumnsPage()
+        public FillColumnsPage()
         {
             InitializeComponent();
             PreviewBox.Items.Add(200);
@@ -234,7 +234,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
 
             try
             {
-                var result = MergeColumnsWork.Merge(FullTable(true), FullTable(false), Keys(), Rules(), 0);
+                var result = FillColumnsWork.Fill(FullTable(true), FullTable(false), Keys(), Rules(), 0);
                 var loaded = new List<KeyValuePair<string, string>>();
                 loaded.Add(new KeyValuePair<string, string>("File B", PathB.Text));
                 loaded.Add(new KeyValuePair<string, string>("File A", PathA.Text));
@@ -260,7 +260,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
                 return;
             try
             {
-                ApplyLoad(isA, MergeColumnsWork.Load(dlg.FileName, null, _previewRows), dlg.FileName);
+                ApplyLoad(isA, FillColumnsWork.Load(dlg.FileName, null, _previewRows), dlg.FileName);
             }
             catch (Exception ex)
             {
@@ -276,7 +276,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
                 return;
             try
             {
-                ApplyLoad(isA, MergeColumnsWork.Load(path, sheet, _previewRows), path);
+                ApplyLoad(isA, FillColumnsWork.Load(path, sheet, _previewRows), path);
             }
             catch (Exception ex)
             {
@@ -339,7 +339,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
 
             var path = isA ? PathA.Text : PathB.Text;
             var sheet = (isA ? SheetA.SelectedItem : SheetB.SelectedItem) as string;
-            var table = MergeColumnsWork.Load(path, sheet, 0).Table;
+            var table = FillColumnsWork.Load(path, sheet, 0).Table;
             if (isA)
                 _fullA = table;
             else
@@ -368,7 +368,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
                 var a = FullTable(true);
                 var keys = Keys();
                 var rules = Rules();
-                var result = MergeColumnsWork.Merge(a, _tableB, keys, rules, _previewRows);
+                var result = FillColumnsWork.Fill(a, _tableB, keys, rules, _previewRows);
                 GridOut.ItemsSource = result.Table.DefaultView;
 
                 var text = result.Matched.ToString("N0", CultureInfo.InvariantCulture) + " matched, " +
@@ -380,7 +380,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
                 if (result.SharedKeys > 0)
                     text += " " + result.SharedKeys.ToString("N0", CultureInfo.InvariantCulture) +
                             " keys appear on more than one A row; the first A row is used.";
-                var unknown = MergeColumnsWork.UnknownNames(a, result.Table, keys, rules);
+                var unknown = FillColumnsWork.UnknownNames(a, result.Table, keys, rules);
                 if (unknown.Length > 0)
                     text += " Unknown names read as blank: $" + string.Join(", $", unknown) + ".";
                 Status.Text = text;
@@ -406,19 +406,19 @@ namespace OfficeWorkAssistant.Features.MergeColumns
             return true;
         }
 
-        List<MergeColumnsKey> Keys()
+        List<FillColumnsKey> Keys()
         {
-            var list = new List<MergeColumnsKey>();
+            var list = new List<FillColumnsKey>();
             foreach (var k in _keys)
-                list.Add(new MergeColumnsKey { FormulaA = k.ExprA.Text, FormulaB = k.ExprB.Text });
+                list.Add(new FillColumnsKey { FormulaA = k.ExprA.Text, FormulaB = k.ExprB.Text });
             return list;
         }
 
-        List<MergeColumnsRule> Rules()
+        List<FillColumnsRule> Rules()
         {
-            var list = new List<MergeColumnsRule>();
+            var list = new List<FillColumnsRule>();
             foreach (var r in _rules)
-                list.Add(new MergeColumnsRule { Target = r.Target.Text, When = r.When.Text, Value = r.Value.Text });
+                list.Add(new FillColumnsRule { Target = r.Target.Text, When = r.When.Text, Value = r.Value.Text });
             return list;
         }
 
@@ -427,7 +427,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
             AddKey(null);
         }
 
-        void AddKey(MergeColumnsKey seed)
+        void AddKey(FillColumnsKey seed)
         {
             var line = new Grid { Margin = new Thickness(0, 0, 8, 4) };
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -474,7 +474,7 @@ namespace OfficeWorkAssistant.Features.MergeColumns
             AddRule(null);
         }
 
-        void AddRule(MergeColumnsRule seed)
+        void AddRule(FillColumnsRule seed)
         {
             var line = new Grid { Margin = new Thickness(0, 0, 8, 4) };
             line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });

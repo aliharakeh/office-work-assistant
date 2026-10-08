@@ -12,9 +12,9 @@ Compare two `.xlsx` workbooks and pull out the rows you need.
 3. Pick the output: rows found in A but not B, rows found in B but not A, or rows common to both.
 4. Tick the columns to keep and save. When both files have a column with the same name, the saved sheet keeps both, with `_A` and `_B` suffixes.
 
-Workbooks are read with a shared file handle, so a file that is open in Excel still loads. The grid previews 200, 1000 or 5000 rows; saving always runs on the full sheet. Saving (Excel processing, Merge columns, Filter & sort, Templates) asks whether to write a new `.xlsx` file or add a new sheet to a loaded `.xlsx` file; `.xlsm` files are not offered because saving would drop their macros.
+Workbooks are read with a shared file handle, so a file that is open in Excel still loads. The grid previews 200, 1000 or 5000 rows; saving always runs on the full sheet. Saving (Excel processing, Fill columns, Filter & sort, Templates) asks whether to write a new `.xlsx` file or add a new sheet to a loaded `.xlsx` file; `.xlsm` files are not offered because saving would drop their macros.
 
-### Merge columns
+### Fill columns
 Fill columns of workbook B with values from workbook A, row by row, using formula rules.
 
 1. Load file A (the values come from here) and file B (the rows get filled), and pick a sheet in each.
@@ -71,8 +71,8 @@ Learn the formula language without touching a file.
 ### Pipeline
 Chain the Excel tools on a canvas, so one step's result feeds the next, and rerun the whole chain later on new files.
 
-- Add steps from the toolbar: Load file, Filter & Sort, Template, Compare A/B, Merge columns and Save file. When a step is selected, the new step is placed next to it and linked to it.
-- Link steps by dragging from a step's right dot to another step's left dot. Compare A/B and Merge columns have two inputs, A and B, so two branches can join. A step's result can feed several later steps. Links that would make a loop are refused. Select a link or step and press Delete to remove it.
+- Add steps from the toolbar: Load file, Filter & Sort, Template, Compare A/B, Fill columns and Save file. When a step is selected, the new step is placed next to it and linked to it.
+- Link steps by dragging from a step's right dot to another step's left dot. Compare A/B and Fill columns have two inputs, A and B, so two branches can join. A step's result can feed several later steps. Links that would make a loop are refused. Select a link or step and press Delete to remove it.
 - Double-click a step (or click Edit step) to set it up. This opens the normal tool page with the earlier step's result already loaded in place of a file. Set it up as usual and click Use in pipeline. Back cancels the edit. Load and Save steps are set up in the panel on the right.
 - Run preview runs the selected step and the steps it needs, and shows its result below the canvas. Nothing is written. A step that worked turns green. A step that failed turns red and shows why.
 - Run and save files reads every file again and runs every step. Only when every step has worked does it write the Save steps' files: each one either replaces a file or adds a new sheet to a workbook.

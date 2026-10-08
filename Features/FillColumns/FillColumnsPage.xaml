@@ -1,7 +1,7 @@
-<Page x:Class="OfficeWorkAssistant.Features.MergeColumns.MergeColumnsPage"
+<Page x:Class="OfficeWorkAssistant.Features.FillColumns.FillColumnsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Title="Merge Columns"
+      Title="Fill Columns"
       Background="White">
     <DockPanel Margin="10">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
@@ -10,7 +10,7 @@
                 <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
                 <ComboBox x:Name="PreviewBox" Width="96" SelectionChanged="PreviewBox_SelectionChanged" />
             </StackPanel>
-            <TextBlock Text="Merge Columns" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Text="Fill Columns" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
         </DockPanel>
         <Grid>
             <Grid.RowDefinitions>

@@ -7,7 +7,7 @@ using System.Xml.Serialization;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Features.ExcelProcessing;
 using OfficeWorkAssistant.Features.FilterSort;
-using OfficeWorkAssistant.Features.MergeColumns;
+using OfficeWorkAssistant.Features.FillColumns;
 using OfficeWorkAssistant.Features.Templates;
 
 namespace OfficeWorkAssistant.Features.Pipeline
@@ -18,7 +18,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         FilterSort,
         Templates,
         Compare,
-        MergeColumns,
+        FillColumns,
         Save
     }
 
@@ -85,7 +85,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         [XmlElement("FilterSort", typeof(FilterSortSettings))]
         [XmlElement("Template", typeof(TemplateDefinition))]
         [XmlElement("Compare", typeof(ExcelProcessingSettings))]
-        [XmlElement("MergeColumns", typeof(MergeColumnsSettings))]
+        [XmlElement("FillColumns", typeof(FillColumnsSettings))]
         [XmlElement("Save", typeof(SaveStepSettings))]
         public object Settings { get; set; }
     }
@@ -128,7 +128,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         {
             if (kind == PipelineStepKind.Load)
                 return NoPorts;
-            if (kind == PipelineStepKind.Compare || kind == PipelineStepKind.MergeColumns)
+            if (kind == PipelineStepKind.Compare || kind == PipelineStepKind.FillColumns)
                 return TwoPorts;
             return OnePort;
         }
@@ -141,14 +141,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.FilterSort: return "Filter & Sort";
                 case PipelineStepKind.Templates: return "Template";
                 case PipelineStepKind.Compare: return "Compare A/B";
-                case PipelineStepKind.MergeColumns: return "Merge columns";
+                case PipelineStepKind.FillColumns: return "Fill columns";
                 default: return "Save file";
             }
         }
 
         public static string PortLabel(PipelineStepKind kind, string port)
         {
-            if (kind == PipelineStepKind.MergeColumns)
+            if (kind == PipelineStepKind.FillColumns)
                 return port == PortA ? "A (take values from)" : "B (fill into)";
             if (kind == PipelineStepKind.Compare)
                 return port == PortA ? "File A" : "File B";
@@ -356,7 +356,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.FilterSort: return settings is FilterSortSettings;
                 case PipelineStepKind.Templates: return settings is TemplateDefinition;
                 case PipelineStepKind.Compare: return settings is ExcelProcessingSettings;
-                case PipelineStepKind.MergeColumns: return settings is MergeColumnsSettings;
+                case PipelineStepKind.FillColumns: return settings is FillColumnsSettings;
                 default: return settings is SaveStepSettings;
             }
         }
@@ -411,10 +411,10 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 var op = compare.Operation == "AOnly" ? "Only in A" : compare.Operation == "BOnly" ? "Only in B" : "Common rows";
                 return op + ", " + Count(compare.Matches == null ? 0 : compare.Matches.Count, "match rule");
             }
-            var merge = s as MergeColumnsSettings;
-            if (merge != null)
-                return Count(merge.Keys == null ? 0 : merge.Keys.Count, "match rule") + ", " +
-                    Count(merge.Rules == null ? 0 : merge.Rules.Count, "fill rule");
+            var fill = s as FillColumnsSettings;
+            if (fill != null)
+                return Count(fill.Keys == null ? 0 : fill.Keys.Count, "match rule") + ", " +
+                    Count(fill.Rules == null ? 0 : fill.Rules.Count, "fill rule");
             return "";
         }
 
@@ -552,9 +552,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.Compare:
                     return ExcelProcessingWork.Run(Input(def, node, PortA, cache), Input(def, node, PortB, cache),
                         (ExcelProcessingSettings)node.Settings);
-                case PipelineStepKind.MergeColumns:
-                    return MergeColumnsWork.Run(Input(def, node, PortA, cache), Input(def, node, PortB, cache),
-                        (MergeColumnsSettings)node.Settings);
+                case PipelineStepKind.FillColumns:
+                    return FillColumnsWork.Run(Input(def, node, PortA, cache), Input(def, node, PortB, cache),
+                        (FillColumnsSettings)node.Settings);
                 default:
                 {
                     // Files are written after every step worked; see WriteSaves.

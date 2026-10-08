@@ -105,7 +105,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Features\MergeColumns\MergeColumnsPage.xaml">
+    <Page Include="Features\FillColumns\FillColumnsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -147,10 +147,10 @@
       <DependentUpon>FormulaGuidePage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\FormulaGuide\FormulaGuideWork.cs" />
-    <Compile Include="Features\MergeColumns\MergeColumnsPage.xaml.cs">
-      <DependentUpon>MergeColumnsPage.xaml</DependentUpon>
+    <Compile Include="Features\FillColumns\FillColumnsPage.xaml.cs">
+      <DependentUpon>FillColumnsPage.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Features\MergeColumns\MergeColumnsWork.cs" />
+    <Compile Include="Features\FillColumns\FillColumnsWork.cs" />
     <Compile Include="Features\Pipeline\PipelinePage.xaml.cs">
       <DependentUpon>PipelinePage.xaml</DependentUpon>
     </Compile>
