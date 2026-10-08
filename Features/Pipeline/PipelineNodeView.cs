@@ -25,11 +25,28 @@ namespace OfficeWorkAssistant.Features.Pipeline
     // and the output port on the right. Code-only, so it needs no XAML entry.
     public sealed class PipelineNodeView
     {
-        public const double Width = 190;
-        public const double Height = 76;
+        public const double Width = 200;
+        public const double Height = 80;
         const double PortSize = 14;
 
-        static readonly Brush IdleBrush = Frozen(Color.FromRgb(0x9E, 0x9E, 0x9E));
+        // Step categories, shared with the palette: data in/out, Excel work, files, disk changes.
+        static readonly Brush InOutAccent = Frozen(Color.FromRgb(0x00, 0x89, 0x7B));
+        static readonly Brush ExcelAccent = Frozen(Color.FromRgb(0x1E, 0x88, 0xE5));
+        static readonly Brush FilesAccent = Frozen(Color.FromRgb(0xF5, 0x7C, 0x00));
+        static readonly Brush ActionAccent = Frozen(Color.FromRgb(0xD8, 0x1B, 0x60));
+
+        public static Brush AccentOf(PipelineStepKind kind)
+        {
+            if (PipelineWork.IsActionKind(kind))
+                return ActionAccent;
+            if (PipelineWork.IsFileKind(kind))
+                return FilesAccent;
+            if (kind == PipelineStepKind.Load || kind == PipelineStepKind.Save)
+                return InOutAccent;
+            return ExcelAccent;
+        }
+
+        static readonly Brush IdleBrush = Frozen(Color.FromRgb(0xBD, 0xBD, 0xBD));
         static readonly Brush OkBrush = Frozen(Color.FromRgb(0x43, 0xA0, 0x47));
         static readonly Brush ErrorBrush = Frozen(Color.FromRgb(0xE5, 0x39, 0x35));
         static readonly Brush SelectedFill = Frozen(Color.FromRgb(0xE3, 0xF2, 0xFD));
@@ -52,21 +69,27 @@ namespace OfficeWorkAssistant.Features.Pipeline
             Root = new Canvas { Width = Width, Height = Height };
             Panel.SetZIndex(Root, 1);
 
-            _kind = new TextBlock { FontSize = 10, Foreground = Brushes.Gray };
+            var accent = AccentOf(node.Kind);
+            _kind = new TextBlock { FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = accent };
             _title = new TextBlock { FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
-            _detail = new TextBlock { FontSize = 11, Foreground = Brushes.DimGray, TextWrapping = TextWrapping.Wrap, MaxHeight = 30 };
-            var text = new StackPanel { Margin = new Thickness(12, 4, 12, 4) };
+            _detail = new TextBlock { FontSize = 11, Foreground = Brushes.DimGray, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 30 };
+            var text = new StackPanel { Margin = new Thickness(10, 5, 12, 4) };
             text.Children.Add(_kind);
             text.Children.Add(_title);
             text.Children.Add(_detail);
+            var stripe = new Border { Width = 6, Background = accent, CornerRadius = new CornerRadius(4, 0, 0, 4) };
+            DockPanel.SetDock(stripe, Dock.Left);
+            var inner = new DockPanel();
+            inner.Children.Add(stripe);
+            inner.Children.Add(text);
             Box = new Border
             {
                 Width = Width,
                 Height = Height,
-                CornerRadius = new CornerRadius(4),
+                CornerRadius = new CornerRadius(6),
                 BorderThickness = new Thickness(2),
                 Background = Brushes.White,
-                Child = text,
+                Child = inner,
                 Cursor = System.Windows.Input.Cursors.SizeAll
             };
             Root.Children.Add(Box);
@@ -153,7 +176,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
         // Re-read the title and summary after the node changed.
         public void Refresh()
         {
-            _kind.Text = PipelineWork.KindLabel(Node.Kind).ToUpperInvariant();
+            _kind.Text = PipelineWork.KindLabel(Node.Kind).ToUpperInvariant() +
+                (PipelineWork.IsActionKind(Node.Kind) ? "  -  CHANGES FILES" : "");
             _title.Text = Node.Title;
             _detail.Text = PipelineWork.Summary(Node);
             Box.BorderBrush = _state == PipelineNodeState.Ok ? OkBrush : _state == PipelineNodeState.Error ? ErrorBrush : IdleBrush;

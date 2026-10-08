@@ -6,7 +6,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using OfficeWorkAssistant.Expressions;
-using OfficeWorkAssistant.Views;
 
 namespace OfficeWorkAssistant.Features.FormulaGuide
 {
@@ -26,12 +25,10 @@ namespace OfficeWorkAssistant.Features.FormulaGuide
             RunTest();
         }
 
-        void Home_Click(object sender, RoutedEventArgs e)
+        void Back_Click(object sender, RoutedEventArgs e)
         {
             if (NavigationService != null && NavigationService.CanGoBack)
                 NavigationService.GoBack();
-            else if (NavigationService != null)
-                NavigationService.Navigate(new HomePage());
         }
 
         void Variables_Click(object sender, RoutedEventArgs e)

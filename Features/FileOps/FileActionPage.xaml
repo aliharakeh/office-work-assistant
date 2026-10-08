@@ -1,0 +1,93 @@
+<Page x:Class="OfficeWorkAssistant.Features.FileOps.FileActionPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="File action"
+      Background="White">
+    <DockPanel Margin="10">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
+            <Button DockPanel.Dock="Left" Content="Back" Width="72" Margin="0,0,12,0" Click="Back_Click" />
+            <Button DockPanel.Dock="Right" Content="Use in pipeline" Padding="10,1" Click="Use_Click" />
+            <TextBlock Text="File action" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </DockPanel>
+
+        <GroupBox DockPanel.Dock="Top" Header="Action" Margin="0,0,0,8">
+            <StackPanel Margin="6">
+                <TextBlock x:Name="InputInfo" Foreground="#777" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap" />
+                <WrapPanel Margin="0,0,0,6">
+                    <RadioButton x:Name="CopyRadio" Content="Copy" Margin="0,0,16,0" Checked="Action_Changed" />
+                    <RadioButton x:Name="MoveRadio" Content="Move" Margin="0,0,16,0" Checked="Action_Changed" />
+                    <RadioButton x:Name="DeleteRadio" Content="Delete" Margin="0,0,24,0" Checked="Action_Changed" />
+                    <TextBlock Text="Paths in column" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <ComboBox x:Name="PathColBox" Width="160" IsEditable="True" />
+                </WrapPanel>
+
+                <StackPanel x:Name="DestPanel">
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Destination" VerticalAlignment="Center" />
+                        <TextBox x:Name="DestBox" Grid.Column="1" Margin="0,0,6,0" />
+                        <Button Grid.Column="2" Content="Browse..." Width="88" Click="Browse_Click" />
+                    </Grid>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Column="1" Text="For files" Foreground="#555" Margin="0,0,0,2" />
+                        <TextBlock Grid.Column="2" Text="For folders" Foreground="#555" Margin="6,0,0,2" />
+                        <TextBlock Grid.Row="1" Text="Subfolder" VerticalAlignment="Center" />
+                        <TextBox x:Name="FileSubBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,4"
+                                 ToolTip="Optional. A folder under Destination for each file; \ makes nested folders. Example: $Key  or  $Value &amp; &quot;\&quot; &amp; $Key" />
+                        <TextBox x:Name="FolderSubBox" Grid.Row="1" Grid.Column="2" Margin="6,0,0,4"
+                                 ToolTip="Optional. A folder under Destination for each folder; \ makes nested folders. Example: $Value" />
+                        <TextBlock Grid.Row="2" Text="New name" VerticalAlignment="Center" />
+                        <TextBox x:Name="FileNameBox" Grid.Row="2" Grid.Column="1"
+                                 ToolTip="Optional. Blank keeps the name. The extension is kept. Example: $Key &amp; &quot;-&quot; &amp; $Stem" />
+                        <TextBox x:Name="FolderNameBox" Grid.Row="2" Grid.Column="2" Margin="6,0,0,0"
+                                 ToolTip="Optional. Blank keeps the name. Example: $Key &amp; &quot; &quot; &amp; $Value" />
+                    </Grid>
+                    <WrapPanel Margin="100,0,0,6">
+                        <CheckBox x:Name="StructureBox" Content="Keep folder structure (Relative column)" VerticalAlignment="Center" Margin="0,0,16,0" />
+                        <TextBlock Text="If it exists" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <ComboBox x:Name="ConflictBox" Width="150" Margin="0,0,16,0">
+                            <ComboBoxItem Content="Skip it" />
+                            <ComboBoxItem Content="Overwrite" />
+                            <ComboBoxItem Content="Rename to name (2)" />
+                        </ComboBox>
+                        <TextBlock Text="Split $1 $2 by" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBox x:Name="SepBox" Width="30" MaxLength="1" />
+                    </WrapPanel>
+                </StackPanel>
+
+                <StackPanel x:Name="DeletePanel" Margin="0,0,0,6">
+                    <CheckBox x:Name="PermanentBox" Content="Delete permanently (skip the Recycle Bin)" Checked="Action_Changed" Unchecked="Action_Changed" />
+                    <TextBlock x:Name="PermanentWarn" Text="Permanently deleted files cannot be restored." Foreground="#C62828" Margin="20,2,0,0" />
+                </StackPanel>
+
+                <TextBlock Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"
+                           Text="Nothing is copied, moved or deleted here or by Run preview: files change only on Run and save files, after every step worked and you confirm." />
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Variables..." Width="88" Margin="0,0,6,0" Click="Variables_Click" />
+                    <Button Content="Preview plan" Width="100" Click="Preview_Click" />
+                </StackPanel>
+            </StackPanel>
+        </GroupBox>
+
+        <GroupBox Header="Plan">
+            <DockPanel Margin="6">
+                <TextBlock x:Name="ResultInfo" DockPanel.Dock="Top" Foreground="#777" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap" />
+                <DataGrid x:Name="ResultGrid" AutoGenerateColumns="True" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" />
+            </DockPanel>
+        </GroupBox>
+    </DockPanel>
+</Page>

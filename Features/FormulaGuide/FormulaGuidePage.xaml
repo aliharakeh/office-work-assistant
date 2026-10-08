@@ -5,7 +5,7 @@
       Background="White">
     <DockPanel Margin="10">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
-            <Button DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <Button DockPanel.Dock="Left" Content="Back" Width="72" Margin="0,0,12,0" Click="Back_Click" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Content="Variables..." Width="96" Click="Variables_Click" />
             </StackPanel>

@@ -7,55 +7,24 @@ using System.Windows.Controls;
 using Microsoft.Win32;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Expressions;
-using OfficeWorkAssistant.Views;
 
 namespace OfficeWorkAssistant.Features.Templates
 {
     public partial class TemplatesPage : Page
     {
         DataTable _source;
-        DataTable _fullSource;
-        bool _cutSource;
         int _previewRows = 1000;
         List<TemplateColumn> _columns = new List<TemplateColumn>();
         List<SourceColumnPick> _sourcePicks;
         int _editingIndex = -1;
-        bool _loadingSheet;
         bool _syncSource;
-        // Pipeline mode: the input comes from an earlier step instead of a file,
-        // and "Use in pipeline" hands the template back instead of saving.
+        // The input comes from an earlier pipeline step, and "Use in pipeline"
+        // hands the template back.
         DataTable _pipeInput;
         string _pipeLabel;
         Action<TemplateDefinition> _use;
 
         public TemplatesPage(DataTable input, string label, TemplateDefinition template, Action<TemplateDefinition> use)
-            : this()
-        {
-            _pipeInput = input;
-            _pipeLabel = label;
-            _use = use;
-            HomeBtn.Content = "Back";
-            BrowseBtn.Visibility = Visibility.Collapsed;
-            SheetRow.Visibility = Visibility.Collapsed;
-            SaveBtn.Visibility = Visibility.Collapsed;
-            UseBtn.Visibility = Visibility.Visible;
-            InjectInput();
-            if (template != null)
-                ApplyTemplateDefinition(template);
-        }
-
-        void InjectInput()
-        {
-            ApplySource(new TemplateSourceResult
-            {
-                Table = Capped(_pipeInput, _previewRows),
-                Sheets = new string[0],
-                TotalRows = _pipeInput.Rows.Count,
-                Truncated = _pipeInput.Rows.Count > _previewRows
-            }, _pipeLabel);
-        }
-
-        public TemplatesPage()
         {
             // KeepSource.Checked fires during InitializeComponent before later
             // controls exist, so block handlers until load finishes.
@@ -68,6 +37,9 @@ namespace OfficeWorkAssistant.Features.Templates
             {
                 _syncSource = false;
             }
+            _pipeInput = input;
+            _pipeLabel = label;
+            _use = use;
             PreviewBox.Items.Add(200);
             PreviewBox.Items.Add(1000);
             PreviewBox.Items.Add(5000);
@@ -80,53 +52,27 @@ namespace OfficeWorkAssistant.Features.Templates
             RefreshColumnList();
             SyncSelectAll();
             ExcelGrid.Hook(GridSource, GridOut);
+            InjectInput();
+            if (template != null)
+                ApplyTemplateDefinition(template);
         }
 
-        void Home_Click(object sender, RoutedEventArgs e)
+        // The grid shows a capped preview of the pipeline input.
+        void InjectInput()
+        {
+            bool cut = _pipeInput.Rows.Count > _previewRows;
+            _source = Capped(_pipeInput, _previewRows);
+            SourcePath.Text = _pipeLabel;
+            GridSource.ItemsSource = _source.DefaultView;
+            InfoSource.Text = RowInfo(_source.Rows.Count, _pipeInput.Rows.Count, cut);
+            RebuildSourcePicks(null);
+            RefreshSourceCombos();
+        }
+
+        void Back_Click(object sender, RoutedEventArgs e)
         {
             if (NavigationService != null && NavigationService.CanGoBack)
                 NavigationService.GoBack();
-            else if (NavigationService != null)
-                NavigationService.Navigate(new HomePage());
-        }
-
-        void Browse_Click(object sender, RoutedEventArgs e)
-        {
-            var dlg = new OpenFileDialog
-            {
-                Filter = "Excel files (*.xlsx;*.xlsm)|*.xlsx;*.xlsm",
-                Title = "Open data file"
-            };
-            if (dlg.ShowDialog() != true)
-                return;
-
-            try
-            {
-                ApplySource(TemplatesWork.LoadSource(dlg.FileName, null, _previewRows), dlg.FileName);
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not open file", MessageBoxImage.Error);
-            }
-        }
-
-        void Sheet_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (_loadingSheet)
-                return;
-            string path = SourcePath.Text;
-            string sheet = SourceSheet.SelectedItem as string;
-            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(sheet))
-                return;
-
-            try
-            {
-                ApplySource(TemplatesWork.LoadSource(path, sheet, _previewRows), path);
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not load sheet", MessageBoxImage.Error);
-            }
         }
 
         void PreviewBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -137,77 +83,22 @@ namespace OfficeWorkAssistant.Features.Templates
             if (rows == _previewRows)
                 return;
             _previewRows = rows;
-            ReloadSource();
+            InjectInput();
         }
 
-        void ReloadSource()
+        static string RowInfo(int shown, int total, bool cut)
         {
-            if (_pipeInput != null)
-            {
-                InjectInput();
-                return;
-            }
-            string path = SourcePath.Text;
-            string sheet = SourceSheet.SelectedItem as string;
-            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(sheet))
-                return;
-
-            try
-            {
-                ApplySource(TemplatesWork.LoadSource(path, sheet, _previewRows), path);
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not load sheet", MessageBoxImage.Error);
-            }
-        }
-
-        void ApplySource(TemplateSourceResult loaded, string path)
-        {
-            _loadingSheet = true;
-            try
-            {
-                _source = loaded.Table;
-                _fullSource = null;
-                _cutSource = loaded.Truncated;
-                SourcePath.Text = path;
-                SourceSheet.ItemsSource = loaded.Sheets;
-                SourceSheet.SelectedItem = loaded.Sheet;
-                GridSource.ItemsSource = loaded.Table.DefaultView;
-                InfoSource.Text = RowInfo(loaded);
-            }
-            finally
-            {
-                _loadingSheet = false;
-            }
-
-            RebuildSourcePicks(null);
-            RefreshSourceCombos();
-        }
-
-        static string RowInfo(TemplateSourceResult loaded)
-        {
-            var rows = loaded.Table.Rows.Count.ToString("N0", CultureInfo.InvariantCulture);
-            if (!loaded.Truncated)
+            var rows = shown.ToString("N0", CultureInfo.InvariantCulture);
+            if (!cut)
                 return rows + " rows";
-            return "Showing " + rows + " of " + loaded.TotalRows.ToString("N0", CultureInfo.InvariantCulture) +
+            return "Showing " + rows + " of " + total.ToString("N0", CultureInfo.InvariantCulture) +
                    " rows (all rows are used when you preview or save)";
         }
 
-        // The grid shows a capped preview; generating output needs every row, so load it once and cache it.
+        // Generating output needs every row, not just the capped preview.
         DataTable FullSource()
         {
-            if (_pipeInput != null)
-                return _pipeInput;
-            if (_fullSource != null)
-                return _fullSource;
-            if (!_cutSource)
-                return _source;
-
-            string path = SourcePath.Text;
-            string sheet = SourceSheet.SelectedItem as string;
-            _fullSource = TemplatesWork.LoadSource(path, sheet, 0).Table;
-            return _fullSource;
+            return _pipeInput;
         }
 
         // Keep the output grid light; Save writes the full table.
@@ -491,26 +382,6 @@ namespace OfficeWorkAssistant.Features.Templates
             if (!TryBuildOutput(out output))
                 return;
             GridOut.ItemsSource = Capped(output, _previewRows).DefaultView;
-        }
-
-        void SaveExcel_Click(object sender, RoutedEventArgs e)
-        {
-            DataTable output;
-            if (!TryBuildOutput(out output))
-                return;
-
-            try
-            {
-                var loaded = new List<KeyValuePair<string, string>>();
-                loaded.Add(new KeyValuePair<string, string>("Data file", SourcePath.Text));
-                var done = ExcelSaveDialog.Show(Window.GetWindow(this), output, "result.xlsx", loaded);
-                if (done != null)
-                    Alert(done, "Done", MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not save", MessageBoxImage.Error);
-            }
         }
 
         void SaveTemplate_Click(object sender, RoutedEventArgs e)

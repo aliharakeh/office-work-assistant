@@ -55,11 +55,6 @@ namespace OfficeWorkAssistant.Features.FillColumns
     {
         static readonly Regex Names = new Regex(@"\$(\w+)", RegexOptions.Compiled);
 
-        public static ExcelLoadResult Load(string path, string sheetName, int maxRows)
-        {
-            return ExcelFile.Load(path, sheetName, maxRows);
-        }
-
         // maxRows <= 0 fills every B row (used for saving); a positive value keeps the preview small.
         public static FillColumnsResult Fill(DataTable a, DataTable b, IList<FillColumnsKey> keys,
             IList<FillColumnsRule> rules, int maxRows)

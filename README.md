@@ -1,86 +1,87 @@
 # Office Work Assistant
 
-A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. It bundles seven tools for everyday file and Excel chores, plus a pipeline that chains the Excel tools together. Everything runs locally, and each tool previews what it will do before it changes anything.
+A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. The whole app is one pipeline canvas. You chain steps (load Excel files, filter, compare, fill, find files, copy, move, delete) into a pipeline, save it, and rerun it next month on new files. Everything runs locally. Run preview never changes anything on disk, and file changes happen only when you click Run and save files and confirm.
 
-## Tools
+## The pipeline window
 
-### Excel processing
-Compare two `.xlsx` workbooks and pull out the rows you need.
+- **Saved pipelines** (top left) lists the pipelines in `Documents\Office Work Assistant\Pipelines`, newest first. Click one to open it. The last saved pipeline opens when the app starts. New starts an empty pipeline. Duplicate copies the selected one. Delete moves it to the Recycle Bin. Import... copies a pipeline file from elsewhere into the list, and Folder opens the folder in Explorer.
+- **The name box** at the top is the pipeline's name. Save (Ctrl+S) stores the pipeline under that name, with no file dialog. Changing the name and saving renames the saved pipeline. Saving under a name another pipeline already uses asks first. Switching pipelines or closing the app with unsaved changes offers to save them.
+- **Add a step** (bottom left) lists every step in three groups, each with its own colour: Excel data, Files and folders, and Change files. Click a step to add it next to the selected step, linked to it. You can also drag a step onto the canvas to place it.
+- **The canvas:**
+  - Link steps by dragging from a step's right dot to another step's left dot. Compare A/B and Fill columns have two inputs, A and B.
+  - One step's result can feed several later steps.
+  - Links that would make a loop are refused.
+  - To remove a link or step, select it and press Delete.
+- **Editing a step:** double-click it, or select it and click Edit step... This opens the step's editor with the earlier step's result already loaded. Click Use in pipeline to keep the changes, or Back to cancel. Load file and Save file are edited in the Step panel on the right.
+- **Run preview** (F5) runs the selected step and the steps it needs, or every step when none is selected, and shows the result below the canvas. A step that worked turns green. A step that failed turns red and shows why.
+- **Run and save files** reads every file again and runs every step without changing anything. It then lists the files it will replace and how many items each Change files step will copy, move, delete or merge, and asks you to confirm. Only then does it carry out those steps in order and write the Save files.
+- **Formula guide** opens the formula lessons and tester. Back returns to the canvas.
+- **Column references:** steps remember columns by header name, not by position, so a step keeps working when an earlier step adds, removes or reorders columns. If a column it needs disappears, the step fails and names the missing column. Formulas such as `$A` still mean "first column", so prefer header names such as `$Qty` in pipelines.
 
-1. Load file A and file B, and pick a sheet in each.
-2. Set match rules. Each rule has a formula for side A and a formula for side B, joined by `==`, `!=`, `>`, `>=`, `<` or `<=`. `$A` is the value from A's chosen column, `$B` from B's. You can also split a column on a separator (space, underscore, dash or a custom character) and compare parts. `$1` is the first part, `$2` the second, and so on.
-3. Pick the output: rows found in A but not B, rows found in B but not A, or rows common to both.
-4. Tick the columns to keep and save. When both files have a column with the same name, the saved sheet keeps both, with `_A` and `_B` suffixes.
+## Excel steps
 
-Workbooks are read with a shared file handle, so a file that is open in Excel still loads. The grid previews 200, 1000 or 5000 rows; saving always runs on the full sheet. Saving (Excel processing, Fill columns, Filter & sort, Templates) asks whether to write a new `.xlsx` file or add a new sheet to a loaded `.xlsx` file; `.xlsm` files are not offered because saving would drop their macros.
+### Load file / Save file
+Load file reads one sheet of an `.xlsx` or `.xlsm` file, even when it is open in Excel. Save file either writes a new `.xlsx` file or adds a new sheet to a workbook. It writes only on Run and save files.
+
+### Filter & Sort
+- Conditions work on a column (pick a column, an operator and a value) or as a free formula such as `$A > 10 && $B == "OK"`. The column operators are `==`, `!=`, `>`, `>=`, `<`, `<=`, contains, starts with, ends with, is empty and is not empty.
+- Rows can match all conditions or any one of them.
+- Unchecked columns are dropped from the result.
+- Add any number of sort keys, each ascending or descending, and move them up or down to set priority. Ties keep the original row order.
+
+### Template
+Keep all source columns, or tick only the ones you want, and add extra columns. An extra column can be a fixed value, a copy of a column, combined text (`$A $B`), math (`$A * $B`, `ADDDAYS($Today, 7)`) or a condition (`IF($A > 10, "Big", "Small")`). Save template... and Load template... share a template between pipelines as an XML file.
+
+### Compare A/B
+Two inputs, A and B.
+- Match rules compare a formula on A with a formula on B, using `==`, `!=`, `>`, `>=`, `<` or `<=`. A column can be split on a separator, and its parts compared as `$1`, `$2` and so on.
+- The result is the rows only in A, the rows only in B, or the rows common to both. When both sides have a column with the same name, the result keeps both, with `_A` and `_B` suffixes.
 
 ### Fill columns
-Fill columns of workbook B with values from workbook A, row by row, using formula rules.
+Fills columns of B with values from the matching row of A.
+- **Match rules** compare a formula on the A row with a formula on the B row, for example `TRIM($ID)` == `$Code`. All rules must match, text compares ignore case, and the first matching A row is used.
+- **Fill rules** each have a target column (one of B's columns, or a new name to add a column), an optional When condition, and a Value formula. For each column, the first rule that fires fills the cell.
+- **Variables:**
+  - `$A_Price` reads the matched A row.
+  - `$Price` reads the B row.
+  - `$Value` is the cell's current value.
+  - `$Matched` is true when an A row matched.
 
-1. Load file A (the values come from here) and file B (the rows get filled), and pick a sheet in each.
-2. Set match rules. Each rule is a formula on the A row `==` a formula on the B row, for example `TRIM($ID)` == `$Code`. Each side only sees its own file. All rules must match, text compares ignore case, and when several A rows share a key the first one is used (the status line counts these).
-3. Add fill rules. Each rule has a target column (one of B's columns, or a new name to add a column), an optional When condition, and a Value formula. Rules run top to bottom, and the first rule that fires for a column fills that cell. A cell that no rule fills keeps B's value. Use Up to reorder.
-4. Inside fill formulas, `$A_Price` or `$A_C` reads the matched A row (blank when nothing matched). `$B_Price`, `$Price` or `$C` reads the B row, including values that earlier rules wrote. A name that B does not have falls back to A. `$Value` is the target cell's current value, and `$Matched` is true when an A row matched.
-5. The preview updates as you type and lists any `$names` that match no column. Save writes B with the filled columns, either as a new file or as a new sheet.
+## File steps
 
-Example: target `Price`, When `$Matched && $Value == ""`, Value `$A_Price` fills only the empty prices. A second `Price` rule below it, with When `$Matched` and Value `$Value * 1.1`, raises the prices that B already had.
+These steps link Excel data to files and folders on disk. Each step's result is a normal table, so you can filter, compare and save it like any other step.
 
-### Copy files
-Copy files into a destination folder under new names, leaving the originals alone.
+- **List / set / map** builds keys from the step before it with a key formula, such as `$Code` or `TRIM($A)`:
+  - A list keeps every row.
+  - A set keeps unique keys.
+  - A map keeps unique keys, each with the value from a value formula.
 
-- File filter and folder filter are formulas. Leave them blank to take everything, or narrow the list with something like `CONTAINS($Name, "report") && $Ext == ".pdf"`.
-- File pattern renames each file. Split the name on a separator and rebuild it from the parts. `$2-$1` turns `report_2024.pdf` into `2024-report.pdf`. `$Stem`, `$Name`, `$Ext`, `$Size` and `$Modified` are available too.
-- All filters and patterns have explicit source variables: `$FileName` includes the extension, `$FileStem` omits it, `$RootFolderName` is the selected Source folder's name, and `$ParentFolderName` is the file's immediate containing folder name. With Source `C:\Reports`, the file `C:\Reports\Invoices\bill.pdf` gives `bill.pdf`, `bill`, `Reports`, and `Invoices`. For files directly in Source, both folder variables give `Reports`; for deeper files, the parent is always the immediate folder, not the first subfolder. Existing `$Name`, `$Stem`, and `$FolderName` remain aliases.
-- File pattern automatically appends the original extension, so use `$FileStem`, not `$FileName`, to keep the original name. `$RootFolderName & "-" & $ParentFolderName & "-" & $FileStem` produces `Reports-Invoices-bill.pdf` in the example above.
-- Create wrapper folder puts each file in a subfolder named by the folder pattern, for example `$ParentFolderName` to group by the immediate source folder or `$RootFolderName & "-" & $ParentFolderName` to combine the two names. `$1` still means the first split part of the file stem.
-- Preview lists every file with its new path and a status: Ready, Exists, Same path or Bad name. Only Ready rows are copied, and an existing destination is never overwritten.
+  You can also choose Stored values and type the keys in, or click Capture from input to freeze what the input gives today. Stored values are kept in the pipeline, and the step then needs no input.
+- **List folder** lists the files, the folders, or both in a folder, with or without its subfolders. A file filter (for example `$Ext == ".pdf"`) and a separate folder filter (for example `STARTSWITH($Name, "20")`) narrow the list. The folder filter only decides which folders are listed: files inside a folder that is not listed are still searched.
+- **Find files** searches a folder for the items that match each key of the step before it. An item can match when its name equals the key, when its name without extension equals the key, or when its name contains, starts with or ends with the key. Formula mode uses one formula for files and another for folders, for example `$1 == $Key && $Ext == ".pdf"` for files and `$Name == $Key` for folders. Keep keys with no match adds a row with `Found = FALSE` for each key that matched nothing. When a folder matches, the items inside it are skipped, so the folder is handled as a whole.
 
-### Merge duplicates
-Combine folders that are near-copies of each other.
+## Change files steps
 
-- Choose a parent folder and a separator, then write a match formula that compares two folder names. `$A1 == $B1` groups folders that share their first split part, and `CONTAINS($A, "2024")` can narrow it further.
-- Preview lists each group of matching folders.
-- Per group, pick the folder to keep, then tick the folders to merge into it. The ticked folders are emptied into the keeper.
-- Merge moves files. A name that already exists in the target is renamed to `name (2).ext`, files that are locked or fail to move are skipped and counted, empty subfolders are cleaned up, and a merged-away folder is deleted only once it is empty.
-- The result grid reports per folder: moved, renamed, skipped, and any error.
+These steps change the disk. Run preview and their editors only show the plan, with a Status for each row: Ready, Overwrite, Exists - skip, Missing, Duplicate, and so on. The changes happen only on Run and save files. A Save file step after one of these steps saves the real outcome: Copied, Moved, Recycled, Merged or Failed: ...
 
-### Templates
-Build a reusable Excel transform and run it on any sheet.
+- **File action** copies, moves or deletes the paths in one column of the step before it (`Path` by default).
+  - Copy and Move take a destination folder and an option to keep the folder structure. Files and folders each have their own optional subfolder formula (for example `$Key`) and new-name formula. A file keeps its extension.
+  - When the target exists, the step can skip it, overwrite it, or rename to `name (2).ext`.
+  - Delete sends items to the Recycle Bin unless Delete permanently is ticked.
+- **Merge folders** finds subfolders of a folder that belong together and moves everything from the others into one of them.
+  - A match formula compares two folder names. `$A` and `$B` are the names, and `$A1` and `$B2` are their parts after a split. `$A1 == $B1` groups folders that share their first part.
+  - A keep rule picks the folder that stays: first or last by name, shortest or longest name, or newest or oldest change.
+  - Name clashes are renamed to `name (2).ext`.
+  - A merged-away folder is deleted only once it is empty.
 
-- Keep all source columns, or tick only the ones you want.
-- Add extra columns of five kinds: fixed value, copy of a column, combined text (`$A $B`), math (`$A * $B`, `ADDDAYS($Today, 7)`), or conditional (`IF($A > 10, "Big", "Small")`).
-- Save template writes the definition to an XML file. Load template brings it back later.
-- Preview shows the generated sheet and Save Excel writes it out. The preview caps at 200, 1000 or 5000 rows; saving runs the whole sheet.
+All file formulas can use `$Name $Stem $Ext $Path $Folder $FolderName $Relative $IsFolder $Size $Modified $1 $2`, plus `$Key` and `$Value`. File action can also use any column of its input row.
 
-### Filter & sort
-Filter rows and reorder columns into a new workbook.
+Example: Load file -> List / set / map (a set of `$Code`) -> Find files (name without extension = key) -> File action (copy to `D:\Out`, subfolder `$Key`) -> Save file (report).
 
-- Conditions work on a column (pick a column, an operator and a value) or as a free formula like `$A > 10 && $B == "OK"`. Column operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, contains, starts with, ends with, is empty, is not empty.
-- Match all conditions or any condition.
-- Pick the columns to keep. Unchecked columns are dropped from the result.
-- Add any number of sort keys, each ascending or descending, and move them up or down to set priority. Ties keep the original row order.
-- Preview the result and save it as a new `.xlsx` file.
-
-### Formula guide
-Learn the formula language without touching a file.
-
-- Eight lessons walk from plain numbers through text, dates, decisions and finished multi-part formulas. Each step shows the formula and the result the engine gives on the sample values.
-- The tester at the bottom runs anything you type. Edit the sample values, or add rows, to stand in for your own columns and fields.
-- Try on any example loads it into the tester, ready to tweak, and the lesson results refresh whenever you edit a sample value.
-
-### Pipeline
-Chain the Excel tools on a canvas, so one step's result feeds the next, and rerun the whole chain later on new files.
-
-- Add steps from the toolbar: Load file, Filter & Sort, Template, Compare A/B, Fill columns and Save file. When a step is selected, the new step is placed next to it and linked to it.
-- Link steps by dragging from a step's right dot to another step's left dot. Compare A/B and Fill columns have two inputs, A and B, so two branches can join. A step's result can feed several later steps. Links that would make a loop are refused. Select a link or step and press Delete to remove it.
-- Double-click a step (or click Edit step) to set it up. This opens the normal tool page with the earlier step's result already loaded in place of a file. Set it up as usual and click Use in pipeline. Back cancels the edit. Load and Save steps are set up in the panel on the right.
-- Run preview runs the selected step and the steps it needs, and shows its result below the canvas. Nothing is written. A step that worked turns green. A step that failed turns red and shows why.
-- Run and save files reads every file again and runs every step. Only when every step has worked does it write the Save steps' files: each one either replaces a file or adds a new sheet to a workbook.
-- Save... writes the pipeline to an XML file, and Open... loads it back. To rerun the chain on next month's files, open the pipeline, point the Load steps at the new files, and click Run and save files.
-- Steps remember columns by header name, not by position. A step therefore keeps working when an earlier step adds, removes or reorders columns. If a column it needs disappears, the step fails and names the missing column. Formulas such as `$A` still mean "first column", so prefer header names (`$Qty`) in pipelines.
+To find files that are not in the Excel list, link List folder to Compare A/B as A, with the Excel list as B, and keep the rows only in A. Then send the result to a File action.
 
 ## Formulas
-All seven tools share one formula language.
+Every step shares one formula language.
 
 Columns are `$A`, `$B`, `$C`, the first, second and third column of the sheet. Split values add `$1`, `$2` for the parts.
 
@@ -90,7 +91,7 @@ Functions: `TODAY()`, `NOW()`, `DATE()`, `YEAR()`, `MONTH()`, `DAY()`, `WEEKDAY(
 
 Date variables: `$Today`, `$Yesterday`, `$Tomorrow`, `$WeekAgo`, `$WeekLater`, `$MonthAgo`, `$MonthLater`, `$StartOfWeek`, `$EndOfWeek`, `$StartOfMonth`, `$EndOfMonth`, `$StartOfYear`, `$EndOfYear`, `$CurrentYear`, `$CurrentMonth`, `$CurrentDay`, `$Now`, plus the start and end of next and previous week and month.
 
-Each page has a Variables button that lists every variable with the value it has right now.
+Each step editor has a Variables button that lists every variable with the value it has right now.
 
 ## Requirements
 
@@ -112,9 +113,11 @@ Close a running instance before rebuilding, otherwise MSBuild cannot overwrite t
 ## Project layout
 
 ```
-Views/             Shell and navigation. MainWindow hosts a Frame, HomePage links to the tools.
-Features/<Name>/   One tool per folder: <Name>Page.xaml (UI) plus <Name>Work.cs (logic, no WPF).
+Views/             MainWindow: a Frame that shows the pipeline page, with step editors opening on top of it.
+Features/Pipeline/ The main page: canvas, saved pipelines, running.
+Features/<Name>/   One step per folder: <Name>Page.xaml (the step editor) plus <Name>Work.cs (logic, no WPF).
+Excel/             Shared .xlsx reading and writing.
 Expressions/       Shared formula engine and the Variables help window.
 ```
 
-Each feature keeps its logic in the `Work` class so the page stays thin, and features do not reference each other. See `AGENTS.md` for the rules on adding a new tool.
+Each step keeps its logic in its `Work` class so the editor stays thin. Steps do not reference each other; only the pipeline references them. See `AGENTS.md` for the rules on adding a new step.

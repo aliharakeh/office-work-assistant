@@ -10,16 +10,18 @@ using System.Windows.Shapes;
 using Microsoft.Win32;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Features.ExcelProcessing;
+using OfficeWorkAssistant.Features.FileOps;
 using OfficeWorkAssistant.Features.FilterSort;
 using OfficeWorkAssistant.Features.FillColumns;
+using OfficeWorkAssistant.Features.FormulaGuide;
+using OfficeWorkAssistant.Features.MergeDuplicates;
 using OfficeWorkAssistant.Features.Templates;
-using OfficeWorkAssistant.Views;
 
 namespace OfficeWorkAssistant.Features.Pipeline
 {
-    // The canvas. Steps are edited on the feature pages themselves (pipeline mode); this page
-    // owns the graph, runs it, and shows each step's result. The Frame keeps this instance
-    // alive while a feature page is open, so all set-up happens in the constructor.
+    // The app's main page. Steps are edited on the feature pages (step editors); this page owns
+    // the graph, the saved pipelines, runs it, and shows each step's result. The Frame keeps
+    // this instance alive while a step editor is open, so all set-up happens in the constructor.
     public partial class PipelinePage : Page
     {
         const int PreviewRows = 1000;
@@ -45,6 +47,20 @@ namespace OfficeWorkAssistant.Features.Pipeline
         string _linkFrom;
         Path _tempWire;
 
+        // Palette item being pressed: a click adds the step, a drag places it on the canvas.
+        PipelineStepKind? _paletteKind;
+        Point _paletteStart;
+        bool _listing;
+
+        static readonly PipelineStepKind[][] PaletteGroups =
+        {
+            new[] { PipelineStepKind.Load, PipelineStepKind.FilterSort, PipelineStepKind.Templates, PipelineStepKind.Compare,
+                PipelineStepKind.FillColumns, PipelineStepKind.Save },
+            new[] { PipelineStepKind.ValueList, PipelineStepKind.ListFolder, PipelineStepKind.FindFiles },
+            new[] { PipelineStepKind.FileAction, PipelineStepKind.MergeFolders }
+        };
+        static readonly string[] PaletteHeaders = { "Excel data", "Files and folders", "Change files (on Run and save)" };
+
         public PipelinePage()
         {
             InitializeComponent();
@@ -52,15 +68,36 @@ namespace OfficeWorkAssistant.Features.Pipeline
             Board.MouseLeftButtonDown += Board_MouseDown;
             Board.MouseMove += Board_MouseMove;
             Board.MouseLeftButtonUp += Board_MouseUp;
+            Board.DragOver += Board_DragOver;
+            Board.Drop += Board_Drop;
             PreviewKeyDown += Page_PreviewKeyDown;
             Loaded += Page_Loaded;
-            ShowSelection();
-            UpdateHeader();
+            BuildPalette();
+            RefreshPipelines();
+
+            // Pick up where the user left off: the pipeline saved most recently.
+            var saved = PipelineStore.List();
+            if (saved.Count > 0)
+            {
+                try
+                {
+                    Reset(PipelineStore.Load(saved[0].Path), saved[0].Path);
+                    SetStatus("Opened " + saved[0].Name + ". Point the Load steps at new files if needed, then Run and save files.");
+                }
+                catch (Exception ex)
+                {
+                    Reset(new PipelineDefinition(), null);
+                    SetStatus("Could not open " + saved[0].Name + ": " + ex.Message);
+                }
+            }
+            else
+                Reset(new PipelineDefinition(), null);
         }
 
         // Fires again when a feature page goes back here: show what the edited step now gives.
         void Page_Loaded(object sender, RoutedEventArgs e)
         {
+            UpdateHeader();
             if (_previewOnReturn == null)
                 return;
             var id = _previewOnReturn;
@@ -69,16 +106,63 @@ namespace OfficeWorkAssistant.Features.Pipeline
             RunPreview(id);
         }
 
-        // ---------- toolbar ----------
+        // ---------- saved pipelines ----------
 
-        void Home_Click(object sender, RoutedEventArgs e)
+        void RefreshPipelines()
         {
-            if (!ConfirmDiscard())
+            _listing = true;
+            try
+            {
+                List<SavedPipeline> saved;
+                try
+                {
+                    saved = PipelineStore.List();
+                }
+                catch (Exception ex)
+                {
+                    saved = new List<SavedPipeline>();
+                    SetStatus("Could not read the pipelines folder: " + ex.Message);
+                }
+                PipelineList.ItemsSource = saved;
+                NoPipelines.Visibility = saved.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                PipelineList.SelectedItem = null;
+                foreach (var p in saved)
+                {
+                    if (_filePath != null && string.Equals(p.Path, _filePath, StringComparison.OrdinalIgnoreCase))
+                        PipelineList.SelectedItem = p;
+                }
+            }
+            finally
+            {
+                _listing = false;
+            }
+        }
+
+        void PipelineList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var picked = PipelineList.SelectedItem as SavedPipeline;
+            if (_listing || picked == null || (_filePath != null && string.Equals(picked.Path, _filePath, StringComparison.OrdinalIgnoreCase)))
                 return;
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
-            else if (NavigationService != null)
-                NavigationService.Navigate(new HomePage());
+            if (!ConfirmDiscard())
+            {
+                RefreshPipelines();
+                return;
+            }
+            OpenSaved(picked.Path);
+        }
+
+        void OpenSaved(string path)
+        {
+            try
+            {
+                Reset(PipelineStore.Load(path), path);
+                SetStatus("Opened " + _def.Name + ". Point the Load steps at new files if needed, then Run and save files.");
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not open pipeline", MessageBoxImage.Error);
+            }
+            RefreshPipelines();
         }
 
         void New_Click(object sender, RoutedEventArgs e)
@@ -86,54 +170,237 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (!ConfirmDiscard())
                 return;
             Reset(new PipelineDefinition(), null);
-        }
-
-        void Open_Click(object sender, RoutedEventArgs e)
-        {
-            if (!ConfirmDiscard())
-                return;
-            var dlg = new OpenFileDialog
-            {
-                Filter = "Pipeline files (*.xml)|*.xml",
-                Title = "Open pipeline"
-            };
-            if (dlg.ShowDialog() != true)
-                return;
-            try
-            {
-                Reset(PipelineWork.LoadFile(dlg.FileName), dlg.FileName);
-                SetStatus("Opened. Point the Load steps at this month's files if needed, then Run and save files.");
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not open pipeline", MessageBoxImage.Error);
-            }
+            RefreshPipelines();
+            NameBox.Focus();
+            SetStatus("New pipeline. Name it at the top, add steps from the left, then Save.");
         }
 
         void Save_Click(object sender, RoutedEventArgs e)
         {
-            var dlg = new SaveFileDialog
+            SaveCurrent();
+        }
+
+        // Saves under the name in the header. False when it was not saved.
+        bool SaveCurrent()
+        {
+            var name = NameBox.Text.Trim();
+            var error = PipelineStore.CheckName(name);
+            if (error != null)
             {
-                Filter = "Pipeline files (*.xml)|*.xml",
-                FileName = _filePath != null ? System.IO.Path.GetFileName(_filePath) : "pipeline.xml"
-            };
-            if (_filePath != null)
-                dlg.InitialDirectory = System.IO.Path.GetDirectoryName(_filePath);
-            if (dlg.ShowDialog() != true)
-                return;
+                Alert(error + " Type it in the box at the top, then Save.", "Name the pipeline", MessageBoxImage.Warning);
+                NameBox.Focus();
+                return false;
+            }
+            var path = PipelineStore.PathFor(name);
+            if (System.IO.File.Exists(path) && (_filePath == null || !string.Equals(System.IO.Path.GetFullPath(_filePath), path, StringComparison.OrdinalIgnoreCase)) &&
+                MessageBox.Show(Window.GetWindow(this), "A pipeline named \"" + name + "\" already exists. Replace it?", "Save",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return false;
             try
             {
-                _def.Name = System.IO.Path.GetFileNameWithoutExtension(dlg.FileName);
-                PipelineWork.SaveFile(_def, dlg.FileName);
-                _filePath = dlg.FileName;
+                _filePath = PipelineStore.Save(_def, name, _filePath);
                 _dirty = false;
                 UpdateHeader();
-                SetStatus("Pipeline saved.");
+                RefreshPipelines();
+                SetStatus("Saved to " + _filePath);
+                return true;
             }
             catch (Exception ex)
             {
                 Alert(ex.Message, "Could not save pipeline", MessageBoxImage.Error);
+                return false;
             }
+        }
+
+        void Duplicate_Click(object sender, RoutedEventArgs e)
+        {
+            var picked = PipelineList.SelectedItem as SavedPipeline;
+            if (picked == null)
+            {
+                SetStatus("Select a saved pipeline to duplicate.");
+                return;
+            }
+            if (!ConfirmDiscard())
+                return;
+            try
+            {
+                OpenSaved(PipelineStore.Duplicate(picked.Path));
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not duplicate", MessageBoxImage.Error);
+            }
+        }
+
+        void DeletePipeline_Click(object sender, RoutedEventArgs e)
+        {
+            var picked = PipelineList.SelectedItem as SavedPipeline;
+            if (picked == null)
+            {
+                SetStatus("Select a saved pipeline to delete.");
+                return;
+            }
+            if (MessageBox.Show(Window.GetWindow(this), "Move the pipeline \"" + picked.Name + "\" to the Recycle Bin?", "Delete pipeline",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+            try
+            {
+                PipelineStore.Delete(picked.Path);
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not delete", MessageBoxImage.Error);
+                return;
+            }
+            // The open pipeline stays on the canvas, as an unsaved one.
+            if (_filePath != null && string.Equals(_filePath, picked.Path, StringComparison.OrdinalIgnoreCase))
+            {
+                _filePath = null;
+                MarkDirty();
+            }
+            RefreshPipelines();
+            SetStatus("Moved " + picked.Name + " to the Recycle Bin.");
+        }
+
+        void Import_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Filter = "Pipeline files (*.xml)|*.xml",
+                Title = "Import a pipeline"
+            };
+            if (dlg.ShowDialog() != true || !ConfirmDiscard())
+                return;
+            try
+            {
+                OpenSaved(PipelineStore.Import(dlg.FileName));
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not import pipeline", MessageBoxImage.Error);
+            }
+        }
+
+        void OpenFolder_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                System.IO.Directory.CreateDirectory(PipelineStore.Folder);
+                System.Diagnostics.Process.Start("explorer.exe", "\"" + PipelineStore.Folder + "\"");
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not open folder", MessageBoxImage.Error);
+            }
+        }
+
+        void NameBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            NameHint.Visibility = NameBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (_filling)
+                return;
+            _def.Name = NameBox.Text.Trim();
+            MarkDirty();
+        }
+
+        void FormulaGuide_Click(object sender, RoutedEventArgs e)
+        {
+            NavigationService.Navigate(new FormulaGuidePage());
+        }
+
+        // ---------- step palette ----------
+
+        void BuildPalette()
+        {
+            for (var g = 0; g < PaletteGroups.Length; g++)
+            {
+                Palette.Children.Add(new TextBlock
+                {
+                    Text = PaletteHeaders[g],
+                    Foreground = Brushes.Gray,
+                    FontSize = 11,
+                    Margin = new Thickness(0, g == 0 ? 0 : 10, 0, 4)
+                });
+                foreach (var kind in PaletteGroups[g])
+                    Palette.Children.Add(PaletteItem(kind));
+            }
+        }
+
+        FrameworkElement PaletteItem(PipelineStepKind kind)
+        {
+            var text = new StackPanel { Margin = new Thickness(8, 3, 6, 4) };
+            text.Children.Add(new TextBlock { Text = PipelineWork.KindLabel(kind), FontWeight = FontWeights.SemiBold });
+            text.Children.Add(new TextBlock { Text = PipelineWork.KindDescription(kind), FontSize = 11, Foreground = Brushes.DimGray, TextWrapping = TextWrapping.Wrap });
+            var stripe = new Border { Width = 4, Background = PipelineNodeView.AccentOf(kind), CornerRadius = new CornerRadius(3, 0, 0, 3) };
+            DockPanel.SetDock(stripe, Dock.Left);
+            var inner = new DockPanel();
+            inner.Children.Add(stripe);
+            inner.Children.Add(text);
+            var item = new Border
+            {
+                Child = inner,
+                Margin = new Thickness(0, 0, 0, 4),
+                BorderThickness = new Thickness(1),
+                BorderBrush = PaletteBorder,
+                Background = Brushes.White,
+                CornerRadius = new CornerRadius(3),
+                Cursor = Cursors.Hand,
+                Tag = kind,
+                ToolTip = "Click to add (linked to the selected step), or drag onto the canvas."
+            };
+            item.MouseEnter += (s, e) => item.Background = PaletteHover;
+            item.MouseLeave += (s, e) => item.Background = Brushes.White;
+            item.MouseLeftButtonDown += Palette_MouseDown;
+            item.MouseMove += Palette_MouseMove;
+            item.MouseLeftButtonUp += Palette_MouseUp;
+            return item;
+        }
+
+        static readonly Brush PaletteBorder = Frozen(Color.FromRgb(0xE0, 0xE6, 0xEB));
+        static readonly Brush PaletteHover = Frozen(Color.FromRgb(0xF1, 0xF6, 0xFB));
+
+        void Palette_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            _paletteKind = (PipelineStepKind)((FrameworkElement)sender).Tag;
+            _paletteStart = e.GetPosition(this);
+            e.Handled = true;
+        }
+
+        void Palette_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (_paletteKind == null || e.LeftButton != MouseButtonState.Pressed)
+                return;
+            var p = e.GetPosition(this);
+            if (Math.Abs(p.X - _paletteStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(p.Y - _paletteStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+                return;
+            var kind = _paletteKind.Value;
+            _paletteKind = null;
+            DragDrop.DoDragDrop((DependencyObject)sender, new DataObject(typeof(PipelineStepKind), kind), DragDropEffects.Copy);
+        }
+
+        void Palette_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_paletteKind == null)
+                return;
+            var kind = _paletteKind.Value;
+            _paletteKind = null;
+            AddStep(kind, null);
+        }
+
+        void Board_DragOver(object sender, DragEventArgs e)
+        {
+            e.Effects = e.Data.GetDataPresent(typeof(PipelineStepKind)) ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+        }
+
+        void Board_Drop(object sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(typeof(PipelineStepKind)))
+                return;
+            var p = e.GetPosition(Board);
+            AddStep((PipelineStepKind)e.Data.GetData(typeof(PipelineStepKind)),
+                new Point(p.X - PipelineNodeView.Width / 2, p.Y - PipelineNodeView.Height / 2));
         }
 
         void RunPreview_Click(object sender, RoutedEventArgs e)
@@ -150,47 +417,80 @@ namespace OfficeWorkAssistant.Features.Pipeline
         void RunAll_Click(object sender, RoutedEventArgs e)
         {
             var saves = new List<SaveStepSettings>();
+            var actions = new List<PipelineNode>();
             foreach (var node in _def.Nodes)
             {
                 var s = node.Settings as SaveStepSettings;
                 if (s != null)
                     saves.Add(s);
+                if (PipelineWork.IsActionKind(node.Kind))
+                    actions.Add(node);
             }
-            if (saves.Count == 0)
+            if (saves.Count == 0 && actions.Count == 0)
             {
-                Alert("Add a Save file step to write a result.", "Nothing to save", MessageBoxImage.Warning);
+                Alert("Add a Save file, File action or Merge folders step: those are the steps that write or change files.", "Nothing to save", MessageBoxImage.Warning);
                 return;
             }
+
+            // Start clean so every Load step reads its file again.
+            _cache.Clear();
+
+            var warnings = new List<string>();
             var replaced = new List<string>();
             foreach (var s in saves)
             {
                 if (s.Mode == SaveStepMode.NewFile && !string.IsNullOrWhiteSpace(s.Path) && System.IO.File.Exists(s.Path))
                     replaced.Add(s.Path);
             }
-            if (replaced.Count > 0 &&
-                MessageBox.Show(Window.GetWindow(this), "These files will be replaced:\n\n" + string.Join("\n", replaced.ToArray()) +
-                    "\n\nContinue?", "Run and save", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            if (replaced.Count > 0)
+                warnings.Add("These files will be replaced:\n" + string.Join("\n", replaced.ToArray()));
+            if (actions.Count > 0)
+            {
+                // A dry run first, so the question can say how many items each action touches.
+                if (!RunPreview(null))
+                    return;
+                var lines = new List<string>();
+                foreach (var node in actions)
+                {
+                    DataTable plan;
+                    _cache.TryGetValue(node.Id, out plan);
+                    lines.Add(node.Title + ": " + PipelineWork.DescribeAction(node, plan));
+                }
+                warnings.Add("These file actions will run:\n" + string.Join("\n", lines.ToArray()));
+            }
+            if (warnings.Count > 0 &&
+                MessageBox.Show(Window.GetWindow(this), string.Join("\n\n", warnings.ToArray()) + "\n\nContinue?", "Run and save",
+                    MessageBoxButton.YesNo, actions.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
-            // Start clean so every Load step reads its file again.
-            _cache.Clear();
             var result = Execute(null, true);
             if (result.Error != null)
             {
                 Alert(result.Error, "Pipeline stopped", MessageBoxImage.Error);
                 return;
             }
-            SetStatus("Saved " + result.Written.Count.ToString(CultureInfo.InvariantCulture) + " result(s).");
-            Alert("Saved:\n\n" + string.Join("\n", result.Written.ToArray()), "Done", MessageBoxImage.Information);
+            var done = new List<string>();
+            if (result.Written.Count > 0)
+                done.Add("Saved:\n" + string.Join("\n", result.Written.ToArray()));
+            if (result.Actions.Count > 0)
+                done.Add("File actions:\n" + string.Join("\n", result.Actions.ToArray()));
+            SetStatus("Saved " + result.Written.Count.ToString(CultureInfo.InvariantCulture) + " result(s), ran " +
+                result.Actions.Count.ToString(CultureInfo.InvariantCulture) + " file action(s). Select a File action step to see each item's status.");
+            Alert(string.Join("\n\n", done.ToArray()), "Done", MessageBoxImage.Information);
         }
 
-        void AddStep_Click(object sender, RoutedEventArgs e)
+        // at: where the step was dropped; null places it next to the selected step.
+        void AddStep(PipelineStepKind kind, Point? at)
         {
-            var kind = (PipelineStepKind)Enum.Parse(typeof(PipelineStepKind), (string)((Button)sender).Tag);
             PipelineNode from = _selected != null ? PipelineWork.Find(_def, _selected) : null;
             double x;
             double y;
-            if (from != null)
+            if (at != null)
+            {
+                x = Math.Max(0, at.Value.X);
+                y = Math.Max(0, at.Value.Y);
+            }
+            else if (from != null)
             {
                 x = from.X + PipelineNodeView.Width + 60;
                 y = from.Y;
@@ -211,9 +511,30 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
             MarkDirty();
             GrowBoard();
+            UpdateEmptyHint();
             Select(node.Id);
+            BringIntoView(node);
             if (kind == PipelineStepKind.Load)
                 LoadBrowse_Click(null, null);
+            else if (PipelineWork.Ports(kind).Length == 0 || from != null)
+                SetStatus("Added " + node.Title + ". Double-click it to set it up.");
+            else
+                SetStatus("Added " + node.Title + ". Link an earlier step's right dot to its left dot, then double-click it to set it up.");
+        }
+
+        void BringIntoView(PipelineNode node)
+        {
+            var left = node.X - BoardScroll.HorizontalOffset;
+            var top = node.Y - BoardScroll.VerticalOffset;
+            if (left < 0 || left + PipelineNodeView.Width > BoardScroll.ViewportWidth)
+                BoardScroll.ScrollToHorizontalOffset(Math.Max(0, node.X - 40));
+            if (top < 0 || top + PipelineNodeView.Height > BoardScroll.ViewportHeight)
+                BoardScroll.ScrollToVerticalOffset(Math.Max(0, node.Y - 40));
+        }
+
+        void UpdateEmptyHint()
+        {
+            EmptyHint.Visibility = _def.Nodes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // ---------- canvas ----------
@@ -233,8 +554,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 AddView(node);
             RedrawWires();
             GrowBoard();
+            UpdateEmptyHint();
             ShowSelection();
+            _filling = true;
+            NameBox.Text = _def.Name ?? "";
+            _filling = false;
             UpdateHeader();
+            BoardScroll.ScrollToHorizontalOffset(0);
+            BoardScroll.ScrollToVerticalOffset(0);
         }
 
         void AddView(PipelineNode node)
@@ -462,6 +789,25 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         void Page_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+            if (ctrl && e.Key == Key.S)
+            {
+                SaveCurrent();
+                e.Handled = true;
+                return;
+            }
+            if (ctrl && e.Key == Key.N)
+            {
+                New_Click(null, null);
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.F5)
+            {
+                RunPreview_Click(null, null);
+                e.Handled = true;
+                return;
+            }
             if (e.Key != Key.Delete || Keyboard.FocusedElement is TextBox)
                 return;
             if (_selected == null && _selectedLink == null)
@@ -496,6 +842,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 return;
             MarkDirty();
             RedrawWires();
+            UpdateEmptyHint();
             ShowSelection();
         }
 
@@ -545,6 +892,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 }
 
                 StepKind.Text = PipelineWork.KindLabel(node.Kind).ToUpperInvariant();
+                StepKind.Foreground = PipelineNodeView.AccentOf(node.Kind);
+                StepAbout.Text = PipelineWork.KindDescription(node.Kind) +
+                    (PipelineWork.IsActionKind(node.Kind) ? " Preview only shows the plan; files change on Run and save files." : "");
                 StepTitle.Text = node.Title;
                 LoadPanel.Visibility = node.Kind == PipelineStepKind.Load ? Visibility.Visible : Visibility.Collapsed;
                 SavePanel.Visibility = node.Kind == PipelineStepKind.Save ? Visibility.Visible : Visibility.Collapsed;
@@ -750,6 +1100,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
             for (var i = 0; i < ports.Length; i++)
             {
                 var link = PipelineWork.InputLink(_def, node.Id, ports[i]);
+                // A list can be typed in without an input.
+                if (link == null && node.Kind == PipelineStepKind.ValueList)
+                    continue;
                 if (link == null)
                 {
                     Alert("Connect " + PipelineWork.PortLabel(node.Kind, ports[i]) + " of this step first: drag from the right dot of an earlier step.",
@@ -784,6 +1137,21 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.Compare:
                     page = new ExcelProcessingPage(inputs[0], labels[0], inputs[1], labels[1],
                         PipelineWork.Clone(node.Settings as ExcelProcessingSettings), r => UseSettings(node, r));
+                    break;
+                case PipelineStepKind.ValueList:
+                    page = new ValueListPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as ValueListSettings), r => UseSettings(node, r));
+                    break;
+                case PipelineStepKind.ListFolder:
+                    page = new FindFilesPage(PipelineWork.Clone(node.Settings as FolderScanSettings), r => UseSettings(node, r));
+                    break;
+                case PipelineStepKind.FindFiles:
+                    page = new FindFilesPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FindFilesSettings), r => UseSettings(node, r));
+                    break;
+                case PipelineStepKind.FileAction:
+                    page = new FileActionPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FileActionSettings), r => UseSettings(node, r));
+                    break;
+                case PipelineStepKind.MergeFolders:
+                    page = new MergeDuplicatesPage(PipelineWork.Clone(node.Settings as MergeFoldersSettings), r => UseSettings(node, r));
                     break;
                 default:
                     page = new FillColumnsPage(inputs[0], labels[0], inputs[1], labels[1],
@@ -877,15 +1245,30 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         void UpdateHeader()
         {
-            HeaderTitle.Text = "Pipeline" + (_filePath != null ? " - " + System.IO.Path.GetFileName(_filePath) : "") + (_dirty ? " *" : "");
+            DirtyMark.Visibility = _dirty ? Visibility.Visible : Visibility.Collapsed;
+            NameHint.Visibility = NameBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+            var window = Window.GetWindow(this);
+            if (window != null)
+                window.Title = (string.IsNullOrWhiteSpace(_def.Name) ? "Untitled pipeline" : _def.Name) + (_dirty ? " *" : "") + " - Office Work Assistant";
         }
 
+        // True when it is fine to replace what is on the canvas.
         bool ConfirmDiscard()
         {
             if (!_dirty || _def.Nodes.Count == 0)
                 return true;
-            return MessageBox.Show(Window.GetWindow(this), "The pipeline has unsaved changes. Discard them?", "Pipeline",
-                MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+            var answer = MessageBox.Show(Window.GetWindow(this), "Save the changes to \"" +
+                (string.IsNullOrWhiteSpace(NameBox.Text) ? "Untitled pipeline" : NameBox.Text.Trim()) + "\" first?", "Unsaved changes",
+                MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Yes)
+                return SaveCurrent();
+            return answer == MessageBoxResult.No;
+        }
+
+        // The window asks before closing with unsaved changes.
+        public bool CanClose()
+        {
+            return ConfirmDiscard();
         }
 
         void SetStatus(string text)

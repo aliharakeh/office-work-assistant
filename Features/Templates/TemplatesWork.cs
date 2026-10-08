@@ -85,15 +85,6 @@ namespace OfficeWorkAssistant.Features.Templates
         }
     }
 
-    public sealed class TemplateSourceResult
-    {
-        public DataTable Table { get; set; }
-        public string[] Sheets { get; set; }
-        public string Sheet { get; set; }
-        public int TotalRows { get; set; }
-        public bool Truncated { get; set; }
-    }
-
     public static class TemplatesWork
     {
         public static bool TryGetVariable(string name, out object value)
@@ -119,25 +110,6 @@ namespace OfficeWorkAssistant.Features.Templates
         static bool IsDateLike(object value)
         {
             return ExpressionEngine.IsDateLike(value);
-        }
-
-        public static TemplateSourceResult LoadSource(string path, string sheetName)
-        {
-            return LoadSource(path, sheetName, 0);
-        }
-
-        // maxRows <= 0 loads everything; a positive value keeps the UI preview small.
-        public static TemplateSourceResult LoadSource(string path, string sheetName, int maxRows)
-        {
-            var loaded = ExcelFile.Load(path, sheetName, maxRows);
-            return new TemplateSourceResult
-            {
-                Table = loaded.Table,
-                Sheets = loaded.Sheets,
-                Sheet = loaded.Sheet,
-                TotalRows = loaded.TotalRows,
-                Truncated = loaded.Truncated
-            };
         }
 
         public static void SaveTemplate(TemplateDefinition template, string path)

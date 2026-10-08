@@ -5,7 +5,7 @@
       Background="White">
     <DockPanel Margin="10">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
-            <Button x:Name="HomeBtn" DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <Button x:Name="BackBtn" DockPanel.Dock="Left" Content="Back" Width="72" Margin="0,0,12,0" Click="Back_Click" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
                 <ComboBox x:Name="PreviewBox" Width="96" SelectionChanged="PreviewBox_SelectionChanged" />
@@ -28,22 +28,7 @@
 
                 <GroupBox Header="File A (take values from)" Grid.Column="0" Margin="0,0,6,0">
                     <DockPanel LastChildFill="True" Margin="6">
-                        <Grid DockPanel.Dock="Top">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBox x:Name="PathA" IsReadOnly="True" Margin="0,0,6,6" />
-                            <Button x:Name="BrowseABtn" Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="BrowseA_Click" />
-                        </Grid>
-                        <Grid x:Name="SheetRowA" DockPanel.Dock="Top" Margin="0,0,0,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <ComboBox x:Name="SheetA" Grid.Column="1" SelectionChanged="SheetA_SelectionChanged" />
-                        </Grid>
+                        <TextBox x:Name="PathA" DockPanel.Dock="Top" IsReadOnly="True" Margin="0,0,0,6" />
                         <TextBlock x:Name="InfoA" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777"
                                    FontSize="11" Text="No file loaded." />
                         <DataGrid x:Name="GridA" AutoGenerateColumns="True" IsReadOnly="True"
@@ -53,22 +38,7 @@
 
                 <GroupBox Header="File B (fill into)" Grid.Column="1" Margin="6,0,0,0">
                     <DockPanel LastChildFill="True" Margin="6">
-                        <Grid DockPanel.Dock="Top">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBox x:Name="PathB" IsReadOnly="True" Margin="0,0,6,6" />
-                            <Button x:Name="BrowseBBtn" Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="BrowseB_Click" />
-                        </Grid>
-                        <Grid x:Name="SheetRowB" DockPanel.Dock="Top" Margin="0,0,0,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <ComboBox x:Name="SheetB" Grid.Column="1" SelectionChanged="SheetB_SelectionChanged" />
-                        </Grid>
+                        <TextBox x:Name="PathB" DockPanel.Dock="Top" IsReadOnly="True" Margin="0,0,0,6" />
                         <TextBlock x:Name="InfoB" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777"
                                    FontSize="11" Text="No file loaded." />
                         <DataGrid x:Name="GridB" AutoGenerateColumns="True" IsReadOnly="True"
@@ -120,8 +90,7 @@
             <GroupBox Header="Result (file B with the filled columns)" Grid.Row="3">
                 <DockPanel Margin="6">
                     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="True">
-                        <Button x:Name="SaveBtn" DockPanel.Dock="Right" Content="Save..." Width="88" Click="Save_Click" />
-                        <Button x:Name="UseBtn" DockPanel.Dock="Right" Content="Use in pipeline" Width="120" Margin="0,0,8,0" Visibility="Collapsed" Click="UseInPipeline_Click" />
+                        <Button x:Name="UseBtn" DockPanel.Dock="Right" Content="Use in pipeline" Width="120" Margin="0,0,8,0" Click="UseInPipeline_Click" />
                         <TextBlock x:Name="Status" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="#555"
                                    Text="Open both files and set a match rule." />
                     </DockPanel>

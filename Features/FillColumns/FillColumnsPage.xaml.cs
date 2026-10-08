@@ -2,14 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using Microsoft.Win32;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Expressions;
-using OfficeWorkAssistant.Views;
 
 namespace OfficeWorkAssistant.Features.FillColumns
 {
@@ -17,17 +14,14 @@ namespace OfficeWorkAssistant.Features.FillColumns
     {
         DataTable _tableA;
         DataTable _tableB;
-        DataTable _fullA;
-        DataTable _fullB;
-        bool _cutA;
         bool _cutB;
         int _previewRows = 1000;
-        bool _loadingSheet;
+        bool _loading;
         readonly List<KeyRow> _keys = new List<KeyRow>();
         readonly List<RuleRow> _rules = new List<RuleRow>();
         bool _restoring;
-        // Pipeline mode: inputs come from earlier steps instead of files,
-        // and "Use in pipeline" hands the settings back instead of saving.
+        // Inputs come from earlier pipeline steps, and "Use in pipeline"
+        // hands the settings back.
         DataTable _pipeA;
         DataTable _pipeB;
         string _pipeLabelA;
@@ -36,20 +30,20 @@ namespace OfficeWorkAssistant.Features.FillColumns
 
         public FillColumnsPage(DataTable a, string labelA, DataTable b, string labelB,
             FillColumnsSettings settings, Action<FillColumnsSettings> use)
-            : this()
         {
+            InitializeComponent();
             _pipeA = a;
             _pipeB = b;
             _pipeLabelA = labelA;
             _pipeLabelB = labelB;
             _use = use;
-            HomeBtn.Content = "Back";
-            BrowseABtn.Visibility = Visibility.Collapsed;
-            BrowseBBtn.Visibility = Visibility.Collapsed;
-            SheetRowA.Visibility = Visibility.Collapsed;
-            SheetRowB.Visibility = Visibility.Collapsed;
-            SaveBtn.Visibility = Visibility.Collapsed;
-            UseBtn.Visibility = Visibility.Visible;
+            PreviewBox.Items.Add(200);
+            PreviewBox.Items.Add(1000);
+            PreviewBox.Items.Add(5000);
+            PreviewBox.SelectedItem = 1000;
+            ExcelGrid.Hook(GridA, GridB, GridOut);
+            AddKey();
+            AddRule();
             InjectInputs();
             if (settings != null)
                 ApplySettings(settings);
@@ -57,26 +51,8 @@ namespace OfficeWorkAssistant.Features.FillColumns
 
         void InjectInputs()
         {
-            ApplyLoad(true, PipeLoad(_pipeA), _pipeLabelA);
-            ApplyLoad(false, PipeLoad(_pipeB), _pipeLabelB);
-        }
-
-        ExcelLoadResult PipeLoad(DataTable full)
-        {
-            var preview = full;
-            if (full.Rows.Count > _previewRows)
-            {
-                preview = full.Clone();
-                for (var i = 0; i < _previewRows; i++)
-                    preview.ImportRow(full.Rows[i]);
-            }
-            return new ExcelLoadResult
-            {
-                Table = preview,
-                Sheets = new string[0],
-                TotalRows = full.Rows.Count,
-                Truncated = full.Rows.Count > _previewRows
-            };
+            ApplyLoad(true, _pipeA, _pipeLabelA);
+            ApplyLoad(false, _pipeB, _pipeLabelB);
         }
 
         void ApplySettings(FillColumnsSettings s)
@@ -133,46 +109,10 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 NavigationService.GoBack();
         }
 
-        public FillColumnsPage()
-        {
-            InitializeComponent();
-            PreviewBox.Items.Add(200);
-            PreviewBox.Items.Add(1000);
-            PreviewBox.Items.Add(5000);
-            PreviewBox.SelectedItem = 1000;
-            ExcelGrid.Hook(GridA, GridB, GridOut);
-            AddKey();
-            AddRule();
-        }
-
-        void Home_Click(object sender, RoutedEventArgs e)
+        void Back_Click(object sender, RoutedEventArgs e)
         {
             if (NavigationService != null && NavigationService.CanGoBack)
                 NavigationService.GoBack();
-            else if (NavigationService != null)
-                NavigationService.Navigate(new HomePage());
-        }
-
-        void BrowseA_Click(object sender, RoutedEventArgs e)
-        {
-            LoadFile(true);
-        }
-
-        void BrowseB_Click(object sender, RoutedEventArgs e)
-        {
-            LoadFile(false);
-        }
-
-        void SheetA_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (!_loadingSheet)
-                ReloadSheet(true);
-        }
-
-        void SheetB_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (!_loadingSheet)
-                ReloadSheet(false);
         }
 
         void PreviewBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -183,15 +123,7 @@ namespace OfficeWorkAssistant.Features.FillColumns
             if (rows == _previewRows)
                 return;
             _previewRows = rows;
-            if (_pipeA != null)
-            {
-                InjectInputs();
-                return;
-            }
-            if (!string.IsNullOrEmpty(PathA.Text))
-                ReloadSheet(true);
-            if (!string.IsNullOrEmpty(PathB.Text))
-                ReloadSheet(false);
+            InjectInputs();
         }
 
         void AddKey_Click(object sender, RoutedEventArgs e)
@@ -219,137 +151,59 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 extras);
         }
 
-        void Save_Click(object sender, RoutedEventArgs e)
+        // The grids show a capped preview of the pipeline input.
+        void ApplyLoad(bool isA, DataTable full, string label)
         {
-            if (_tableA == null || _tableB == null)
+            var preview = full;
+            var cut = full.Rows.Count > _previewRows;
+            if (cut)
             {
-                Alert("Open both Excel files first.", "Nothing to save", MessageBoxImage.Warning);
-                return;
-            }
-            if (!FormulasOk())
-            {
-                Alert("Fix the formulas marked in red first.", "Formula error", MessageBoxImage.Warning);
-                return;
+                preview = full.Clone();
+                for (var i = 0; i < _previewRows; i++)
+                    preview.ImportRow(full.Rows[i]);
             }
 
-            try
-            {
-                var result = FillColumnsWork.Fill(FullTable(true), FullTable(false), Keys(), Rules(), 0);
-                var loaded = new List<KeyValuePair<string, string>>();
-                loaded.Add(new KeyValuePair<string, string>("File B", PathB.Text));
-                loaded.Add(new KeyValuePair<string, string>("File A", PathA.Text));
-                var name = Path.GetFileNameWithoutExtension(PathB.Text) + "_merged.xlsx";
-                var done = ExcelSaveDialog.Show(Window.GetWindow(this), result.Table, name, loaded);
-                if (done != null)
-                    Alert(done, "Done", MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not save", MessageBoxImage.Error);
-            }
-        }
-
-        void LoadFile(bool isA)
-        {
-            var dlg = new OpenFileDialog
-            {
-                Filter = "Excel files (*.xlsx;*.xlsm)|*.xlsx;*.xlsm",
-                Title = isA ? "Open File A" : "Open File B"
-            };
-            if (dlg.ShowDialog() != true)
-                return;
-            try
-            {
-                ApplyLoad(isA, FillColumnsWork.Load(dlg.FileName, null, _previewRows), dlg.FileName);
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not open file", MessageBoxImage.Error);
-            }
-        }
-
-        void ReloadSheet(bool isA)
-        {
-            var path = isA ? PathA.Text : PathB.Text;
-            var sheet = (isA ? SheetA.SelectedItem : SheetB.SelectedItem) as string;
-            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(sheet))
-                return;
-            try
-            {
-                ApplyLoad(isA, FillColumnsWork.Load(path, sheet, _previewRows), path);
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not load sheet", MessageBoxImage.Error);
-            }
-        }
-
-        void ApplyLoad(bool isA, ExcelLoadResult loaded, string path)
-        {
-            _loadingSheet = true;
+            _loading = true;
             try
             {
                 if (isA)
-                {
-                    _tableA = loaded.Table;
-                    _fullA = null;
-                    _cutA = loaded.Truncated;
-                }
+                    _tableA = preview;
                 else
                 {
-                    _tableB = loaded.Table;
-                    _fullB = null;
-                    _cutB = loaded.Truncated;
+                    _tableB = preview;
+                    _cutB = cut;
                 }
-                (isA ? PathA : PathB).Text = path;
-                var sheetBox = isA ? SheetA : SheetB;
-                sheetBox.ItemsSource = loaded.Sheets;
-                sheetBox.SelectedItem = loaded.Sheet;
-                (isA ? GridA : GridB).ItemsSource = loaded.Table.DefaultView;
-                (isA ? InfoA : InfoB).Text = RowInfo(loaded);
+                (isA ? PathA : PathB).Text = label;
+                (isA ? GridA : GridB).ItemsSource = preview.DefaultView;
+                (isA ? InfoA : InfoB).Text = RowInfo(preview.Rows.Count, full.Rows.Count, cut);
                 if (!isA)
                     RefreshTargets();
             }
             finally
             {
-                _loadingSheet = false;
+                _loading = false;
             }
             RefreshPreview();
         }
 
-        static string RowInfo(ExcelLoadResult loaded)
+        static string RowInfo(int shown, int total, bool cut)
         {
-            var rows = loaded.Table.Rows.Count.ToString("N0", CultureInfo.InvariantCulture);
-            if (!loaded.Truncated)
+            var rows = shown.ToString("N0", CultureInfo.InvariantCulture);
+            if (!cut)
                 return rows + " rows";
-            return "Showing " + rows + " of " + loaded.TotalRows.ToString("N0", CultureInfo.InvariantCulture) +
+            return "Showing " + rows + " of " + total.ToString("N0", CultureInfo.InvariantCulture) +
                    " rows (all rows are used when you save)";
         }
 
-        // The grids show a capped preview; matching needs every A row, so load it once and cache it.
+        // Matching needs every A row, not just the capped preview.
         DataTable FullTable(bool isA)
         {
-            if (_pipeA != null)
-                return isA ? _pipeA : _pipeB;
-            var cached = isA ? _fullA : _fullB;
-            if (cached != null)
-                return cached;
-            if (!(isA ? _cutA : _cutB))
-                return isA ? _tableA : _tableB;
-
-            var path = isA ? PathA.Text : PathB.Text;
-            var sheet = (isA ? SheetA.SelectedItem : SheetB.SelectedItem) as string;
-            var table = FillColumnsWork.Load(path, sheet, 0).Table;
-            if (isA)
-                _fullA = table;
-            else
-                _fullB = table;
-            return table;
+            return isA ? _pipeA : _pipeB;
         }
 
         void RefreshPreview()
         {
-            if (_loadingSheet || _restoring)
+            if (_loading || _restoring)
                 return;
             GridOut.ItemsSource = null;
             if (_tableA == null || _tableB == null)

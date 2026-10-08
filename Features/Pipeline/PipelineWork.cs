@@ -6,6 +6,8 @@ using System.IO;
 using System.Xml.Serialization;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Features.ExcelProcessing;
+using OfficeWorkAssistant.Features.FileOps;
+using OfficeWorkAssistant.Features.MergeDuplicates;
 using OfficeWorkAssistant.Features.FilterSort;
 using OfficeWorkAssistant.Features.FillColumns;
 using OfficeWorkAssistant.Features.Templates;
@@ -19,7 +21,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
         Templates,
         Compare,
         FillColumns,
-        Save
+        Save,
+        ValueList,
+        ListFolder,
+        FindFiles,
+        FileAction,
+        MergeFolders
     }
 
     public enum SaveStepMode
@@ -87,6 +94,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
         [XmlElement("Compare", typeof(ExcelProcessingSettings))]
         [XmlElement("FillColumns", typeof(FillColumnsSettings))]
         [XmlElement("Save", typeof(SaveStepSettings))]
+        [XmlElement("ValueList", typeof(ValueListSettings))]
+        [XmlElement("ListFolder", typeof(FolderScanSettings))]
+        [XmlElement("FindFiles", typeof(FindFilesSettings))]
+        [XmlElement("FileAction", typeof(FileActionSettings))]
+        [XmlElement("MergeFolders", typeof(MergeFoldersSettings))]
         public object Settings { get; set; }
     }
 
@@ -106,10 +118,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
         public string FailedNodeId { get; set; }
         public string Error { get; set; }
         public List<string> Written { get; set; }
+        // One line per File action step that ran: what happened to its items.
+        public List<string> Actions { get; set; }
 
         public PipelineRunResult()
         {
             Written = new List<string>();
+            Actions = new List<string>();
         }
     }
 
@@ -126,7 +141,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         public static string[] Ports(PipelineStepKind kind)
         {
-            if (kind == PipelineStepKind.Load)
+            if (kind == PipelineStepKind.Load || kind == PipelineStepKind.ListFolder || kind == PipelineStepKind.MergeFolders)
                 return NoPorts;
             if (kind == PipelineStepKind.Compare || kind == PipelineStepKind.FillColumns)
                 return TwoPorts;
@@ -142,8 +157,53 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.Templates: return "Template";
                 case PipelineStepKind.Compare: return "Compare A/B";
                 case PipelineStepKind.FillColumns: return "Fill columns";
+                case PipelineStepKind.ValueList: return "List / set / map";
+                case PipelineStepKind.ListFolder: return "List folder";
+                case PipelineStepKind.FindFiles: return "Find files";
+                case PipelineStepKind.FileAction: return "File action";
+                case PipelineStepKind.MergeFolders: return "Merge folders";
                 default: return "Save file";
             }
+        }
+
+        // One line for the step palette.
+        public static string KindDescription(PipelineStepKind kind)
+        {
+            switch (kind)
+            {
+                case PipelineStepKind.Load: return "Read a sheet of an Excel file.";
+                case PipelineStepKind.FilterSort: return "Keep rows that match, sort, pick columns.";
+                case PipelineStepKind.Templates: return "Add columns built from formulas.";
+                case PipelineStepKind.Compare: return "Rows only in A, only in B, or in both.";
+                case PipelineStepKind.FillColumns: return "Copy values from A into matching rows of B.";
+                case PipelineStepKind.ValueList: return "Keys (and values) from rows, or typed in.";
+                case PipelineStepKind.ListFolder: return "Every file and/or folder in a folder.";
+                case PipelineStepKind.FindFiles: return "Files and folders that match the keys.";
+                case PipelineStepKind.FileAction: return "Copy, move or delete the listed paths.";
+                case PipelineStepKind.MergeFolders: return "Merge subfolders that belong together.";
+                default: return "Write the result to an Excel file.";
+            }
+        }
+
+        // Steps that work on files and folders rather than Excel data.
+        public static bool IsFileKind(PipelineStepKind kind)
+        {
+            return kind >= PipelineStepKind.ValueList;
+        }
+
+        // Steps that change the disk. They only plan until Run and save files.
+        public static bool IsActionKind(PipelineStepKind kind)
+        {
+            return kind == PipelineStepKind.FileAction || kind == PipelineStepKind.MergeFolders;
+        }
+
+        // How many items an action step's plan would touch, in words.
+        public static string DescribeAction(PipelineNode node, DataTable plan)
+        {
+            var merge = node.Settings as MergeFoldersSettings;
+            if (merge != null)
+                return "Merge " + Count(MergeDuplicatesWork.CountReady(plan), "folder") + " in " + merge.Folder;
+            return FileOpsWork.Describe((FileActionSettings)node.Settings, FileOpsWork.CountReady(plan));
         }
 
         public static string PortLabel(PipelineStepKind kind, string port)
@@ -152,6 +212,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 return port == PortA ? "A (take values from)" : "B (fill into)";
             if (kind == PipelineStepKind.Compare)
                 return port == PortA ? "File A" : "File B";
+            if (kind == PipelineStepKind.FindFiles)
+                return "keys input";
             return "input";
         }
 
@@ -357,6 +419,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.Templates: return settings is TemplateDefinition;
                 case PipelineStepKind.Compare: return settings is ExcelProcessingSettings;
                 case PipelineStepKind.FillColumns: return settings is FillColumnsSettings;
+                case PipelineStepKind.ValueList: return settings is ValueListSettings;
+                case PipelineStepKind.ListFolder: return settings is FolderScanSettings;
+                case PipelineStepKind.FindFiles: return settings is FindFilesSettings;
+                case PipelineStepKind.FileAction: return settings is FileActionSettings;
+                case PipelineStepKind.MergeFolders: return settings is MergeFoldersSettings;
                 default: return settings is SaveStepSettings;
             }
         }
@@ -415,7 +482,51 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (fill != null)
                 return Count(fill.Keys == null ? 0 : fill.Keys.Count, "match rule") + ", " +
                     Count(fill.Rules == null ? 0 : fill.Rules.Count, "fill rule");
+            var list = s as ValueListSettings;
+            if (list != null)
+                return list.Mode + " of " + (list.Source == ValueListSource.Stored
+                    ? Count(list.Items == null ? 0 : list.Items.Count, "stored value")
+                    : list.KeyFormula);
+            var scan = s as FolderScanSettings;
+            if (scan != null)
+                return ScanSummary(scan);
+            var find = s as FindFilesSettings;
+            if (find != null)
+                return MatchLabel(find.Match) + " - " + ScanSummary(find.Scan);
+            var action = s as FileActionSettings;
+            if (action != null)
+            {
+                if (action.Action == FileActionKind.Delete)
+                    return action.Permanent ? "Delete permanently" : "Delete to Recycle Bin";
+                return action.Action + " to " + action.DestFolder + " - " +
+                    (action.Conflict == FileConflict.Skip ? "skip" : action.Conflict == FileConflict.Overwrite ? "overwrite" : "rename") + " if it exists";
+            }
+            var merge = s as MergeFoldersSettings;
+            if (merge != null)
+                return string.IsNullOrWhiteSpace(merge.Folder) ? "Choose a folder."
+                    : "In " + merge.Folder + " when " + merge.Condition + ", keep " + MergeDuplicatesWork.KeepLabel(merge.Keep);
             return "";
+        }
+
+        static string ScanSummary(FolderScanSettings scan)
+        {
+            if (scan == null || string.IsNullOrWhiteSpace(scan.Folder))
+                return "Choose a folder.";
+            var what = scan.Include == FileInclude.Files ? "files" : scan.Include == FileInclude.Folders ? "folders" : "files and folders";
+            return what + " in " + scan.Folder + (scan.Recursive ? " and below" : "");
+        }
+
+        static string MatchLabel(FileMatchMode mode)
+        {
+            switch (mode)
+            {
+                case FileMatchMode.NameEquals: return "Name = key";
+                case FileMatchMode.StemEquals: return "Name (no ext) = key";
+                case FileMatchMode.Contains: return "Name contains key";
+                case FileMatchMode.StartsWith: return "Name starts with key";
+                case FileMatchMode.EndsWith: return "Name ends with key";
+                default: return "Formula match";
+            }
         }
 
         static string Count(int n, string noun)
@@ -467,9 +578,54 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 }
             }
 
-            if (writeFiles)
+            if (writeFiles && RunActions(def, order, wanted, cache, result))
                 WriteSaves(saves, cache, result);
             return result;
+        }
+
+        // Every step has worked as a dry run. Now do the File action steps in order, each planned
+        // again against the disk as it is now, and run the steps after them again so a Save of
+        // their result reports what really happened. False when a step failed.
+        static bool RunActions(PipelineDefinition def, List<PipelineNode> order, HashSet<string> wanted,
+            IDictionary<string, DataTable> cache, PipelineRunResult result)
+        {
+            var stale = new HashSet<string>();
+            foreach (var node in order)
+            {
+                if (wanted != null && !wanted.Contains(node.Id))
+                    continue;
+                var action = IsActionKind(node.Kind);
+                if (!action && !stale.Contains(node.Id))
+                    continue;
+                try
+                {
+                    if (action)
+                    {
+                        var done = node.Kind == PipelineStepKind.MergeFolders
+                            ? MergeDuplicatesWork.Apply((MergeFoldersSettings)node.Settings)
+                            : FileOpsWork.Apply(Input(def, node, PortIn, cache), (FileActionSettings)node.Settings);
+                        cache[node.Id] = done;
+                        result.Actions.Add(node.Title + ": " + FileOpsWork.Outcome(done));
+                        foreach (var d in Downstream(def, node.Id))
+                        {
+                            if (d != node.Id)
+                                stale.Add(d);
+                        }
+                    }
+                    else
+                        cache[node.Id] = RunNode(def, node, cache);
+                }
+                catch (Exception ex)
+                {
+                    cache.Remove(node.Id);
+                    result.FailedNodeId = node.Id;
+                    result.Error = ex.Message + (result.Actions.Count > 0
+                        ? "\n\nFile actions that already ran:\n" + string.Join("\n", result.Actions.ToArray())
+                        : "");
+                    return false;
+                }
+            }
+            return true;
         }
 
         // New files first, then new sheets, so a sheet added to a workbook that another
@@ -555,6 +711,20 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.FillColumns:
                     return FillColumnsWork.Run(Input(def, node, PortA, cache), Input(def, node, PortB, cache),
                         (FillColumnsSettings)node.Settings);
+                case PipelineStepKind.ValueList:
+                {
+                    var s = (ValueListSettings)node.Settings;
+                    return FileOpsWork.BuildList(s.Source == ValueListSource.Stored ? null : Input(def, node, PortIn, cache), s);
+                }
+                case PipelineStepKind.ListFolder:
+                    return FileOpsWork.ListFolder((FolderScanSettings)node.Settings);
+                case PipelineStepKind.FindFiles:
+                    return FileOpsWork.FindFiles(Input(def, node, PortIn, cache), (FindFilesSettings)node.Settings);
+                case PipelineStepKind.FileAction:
+                    // Only the plan. RunActions does it once every step has worked.
+                    return FileOpsWork.PlanActions(Input(def, node, PortIn, cache), (FileActionSettings)node.Settings);
+                case PipelineStepKind.MergeFolders:
+                    return MergeDuplicatesWork.Plan((MergeFoldersSettings)node.Settings);
                 default:
                 {
                     // Files are written after every step worked; see WriteSaves.

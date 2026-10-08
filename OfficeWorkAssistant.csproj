@@ -47,6 +47,7 @@
       <HintPath>packages\ExcelNumberFormat.1.0.10\lib\net20\ExcelNumberFormat.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Data" />
@@ -77,15 +78,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Views\HomePage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
     <Page Include="Features\ExcelProcessing\ExcelProcessingPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="Features\CopyFiles\CopyFilesPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -113,6 +106,18 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Features\FileOps\ValueListPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Features\FileOps\FindFilesPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Features\FileOps\FileActionPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -120,17 +125,10 @@
     <Compile Include="Views\MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Views\HomePage.xaml.cs">
-      <DependentUpon>HomePage.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Features\ExcelProcessing\ExcelProcessingPage.xaml.cs">
       <DependentUpon>ExcelProcessingPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\ExcelProcessing\ExcelProcessingWork.cs" />
-    <Compile Include="Features\CopyFiles\CopyFilesPage.xaml.cs">
-      <DependentUpon>CopyFilesPage.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Features\CopyFiles\CopyFilesWork.cs" />
     <Compile Include="Features\MergeDuplicates\MergeDuplicatesPage.xaml.cs">
       <DependentUpon>MergeDuplicatesPage.xaml</DependentUpon>
     </Compile>
@@ -156,12 +154,22 @@
     </Compile>
     <Compile Include="Features\Pipeline\PipelineWork.cs" />
     <Compile Include="Features\Pipeline\PipelineNodeView.cs" />
+    <Compile Include="Features\Pipeline\PipelineStore.cs" />
+    <Compile Include="Features\FileOps\ValueListPage.xaml.cs">
+      <DependentUpon>ValueListPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\FileOps\FindFilesPage.xaml.cs">
+      <DependentUpon>FindFilesPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\FileOps\FileActionPage.xaml.cs">
+      <DependentUpon>FileActionPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\FileOps\FileOpsWork.cs" />
     <Compile Include="Expressions\ExpressionEngine.cs" />
     <Compile Include="Expressions\ExpressionHelp.cs" />
     <Compile Include="Expressions\FormulaField.cs" />
     <Compile Include="Excel\ExcelFile.cs" />
     <Compile Include="Excel\ExcelGrid.cs" />
-    <Compile Include="Excel\ExcelSaveDialog.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">

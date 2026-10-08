@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
+using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Expressions;
 
 namespace OfficeWorkAssistant.Features.MergeDuplicates
@@ -32,8 +34,38 @@ namespace OfficeWorkAssistant.Features.MergeDuplicates
         public int Skipped { get; set; }
     }
 
+    public enum MergeKeep
+    {
+        FirstByName,
+        LastByName,
+        ShortestName,
+        LongestName,
+        Newest,
+        Oldest
+    }
+
+    // The pipeline's Merge folders step: subfolders of Folder that match each other by
+    // Condition ($A $B $A1 $B2 ...) are merged into the one Keep picks.
+    public sealed class MergeFoldersSettings
+    {
+        public string Folder { get; set; }
+        public string Separator { get; set; }
+        public string Condition { get; set; }
+        public MergeKeep Keep { get; set; }
+
+        public MergeFoldersSettings()
+        {
+            Folder = "";
+            Separator = "_";
+            Condition = "$A1 == $B1";
+        }
+    }
+
     public static class MergeDuplicatesWork
     {
+        public const string StatusReady = "Ready";
+        public const string StatusKeep = "Keep";
+
         static MergeDuplicatesWork()
         {
             var a = Entry("foo_bar", '_');
@@ -101,6 +133,7 @@ namespace OfficeWorkAssistant.Features.MergeDuplicates
         public static List<MergeDuplicatesGroup> FindGroups(string parentDir, char separator, string condition)
         {
             CheckCondition(condition);
+            var formula = ExpressionEngine.Compile(condition);
             var entries = ListFolders(parentDir, separator);
             var n = entries.Count;
             var parent = new int[n];
@@ -114,7 +147,7 @@ namespace OfficeWorkAssistant.Features.MergeDuplicates
                     bool hit;
                     try
                     {
-                        hit = Matches(entries[i], entries[j], condition);
+                        hit = ExpressionEngine.ToBool(formula(Lookup(entries[i], entries[j])));
                     }
                     catch (Exception ex)
                     {
@@ -156,51 +189,139 @@ namespace OfficeWorkAssistant.Features.MergeDuplicates
             return groups;
         }
 
-        public static List<MergeDuplicatesPlan> BuildMergePlans(List<MergeDuplicatesGroup> groups, IList<string> targets)
+        public static string Check(MergeFoldersSettings s)
         {
-            return BuildMergePlans(groups, targets, null);
+            if (s == null || string.IsNullOrWhiteSpace(s.Folder))
+                return "Choose the parent folder that holds the duplicates.";
+            if (string.IsNullOrWhiteSpace(s.Condition))
+                return "Enter a match formula such as $A1 == $B1.";
+            var error = ExpressionEngine.Validate(s.Condition);
+            return error == null ? null : "Match formula: " + error;
         }
 
-        public static List<MergeDuplicatesPlan> BuildMergePlans(List<MergeDuplicatesGroup> groups, IList<string> targets, IList<IList<string>> selected)
+        // What would be merged, one row per folder of each group. Touches nothing.
+        public static DataTable Plan(MergeFoldersSettings s)
         {
-            var plans = new List<MergeDuplicatesPlan>();
+            var error = Check(s);
+            if (error != null)
+                throw new InvalidOperationException(error);
+            var folder = s.Folder.Trim();
+            if (!Directory.Exists(folder))
+                throw new InvalidOperationException("Folder not found: " + folder);
+
+            var table = new DataTable();
+            var groupCol = ExcelFile.AddColumn(table, "Group");
+            var nameCol = ExcelFile.AddColumn(table, "Folder");
+            var pathCol = ExcelFile.AddColumn(table, "Path");
+            var intoCol = ExcelFile.AddColumn(table, "Merge into");
+            var statusCol = ExcelFile.AddColumn(table, "Status");
+
+            var groups = FindGroups(folder, SeparatorOf(s.Separator), s.Condition);
             for (var gi = 0; gi < groups.Count; gi++)
             {
-                var g = groups[gi];
-                string target = targets != null && gi < targets.Count ? targets[gi] : null;
-                if (string.IsNullOrEmpty(target))
-                    target = g.Members[0].Name;
-                HashSet<string> wanted = null;
-                if (selected != null && gi < selected.Count && selected[gi] != null)
+                var keep = PickKeep(groups[gi].Members, s.Keep);
+                foreach (var m in groups[gi].Members)
                 {
-                    wanted = new HashSet<string>(selected[gi], StringComparer.OrdinalIgnoreCase);
-                }
-                string targetPath = null;
-                foreach (var m in g.Members)
-                {
-                    if (string.Equals(m.Name, target, StringComparison.OrdinalIgnoreCase))
-                    {
-                        targetPath = m.FullPath;
-                        break;
-                    }
-                }
-                if (targetPath == null)
-                    throw new InvalidOperationException("Group " + (gi + 1) + ": target \"" + target + "\" is not in the group.");
-                foreach (var m in g.Members)
-                {
-                    if (string.Equals(m.FullPath, targetPath, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    if (wanted != null && !wanted.Contains(m.Name))
-                        continue;
-                    plans.Add(new MergeDuplicatesPlan
-                    {
-                        SourcePath = m.FullPath,
-                        TargetPath = targetPath,
-                        Status = "Ready"
-                    });
+                    var row = table.NewRow();
+                    row[groupCol] = (double)(gi + 1);
+                    row[nameCol] = m.Name;
+                    row[pathCol] = m.FullPath;
+                    var kept = m == keep;
+                    row[intoCol] = kept ? "" : keep.FullPath;
+                    row[statusCol] = kept ? StatusKeep : StatusReady;
+                    table.Rows.Add(row);
                 }
             }
-            return plans;
+            return table;
+        }
+
+        // Plans against the disk as it is now, then merges. Each row's Status says what happened.
+        public static DataTable Apply(MergeFoldersSettings s)
+        {
+            var table = Plan(s);
+            var pathCol = ExcelFile.FindColumn(table, "Path");
+            var intoCol = ExcelFile.FindColumn(table, "Merge into");
+            var statusCol = ExcelFile.FindColumn(table, "Status");
+            foreach (DataRow row in table.Rows)
+            {
+                if (ExpressionEngine.ToText(row[statusCol]) != StatusReady)
+                    continue;
+                var plan = new MergeDuplicatesPlan
+                {
+                    SourcePath = ExpressionEngine.ToText(row[pathCol]),
+                    TargetPath = ExpressionEngine.ToText(row[intoCol]),
+                    Status = StatusReady
+                };
+                ExecuteMerge(new[] { plan });
+                row[statusCol] = plan.Status;
+            }
+            return table;
+        }
+
+        public static int CountReady(DataTable plan)
+        {
+            var statusCol = plan == null ? null : ExcelFile.FindColumn(plan, "Status");
+            if (statusCol == null)
+                return 0;
+            var n = 0;
+            foreach (DataRow row in plan.Rows)
+            {
+                if (ExpressionEngine.ToText(row[statusCol]) == StatusReady)
+                    n++;
+            }
+            return n;
+        }
+
+        public static string KeepLabel(MergeKeep keep)
+        {
+            switch (keep)
+            {
+                case MergeKeep.LastByName: return "last by name";
+                case MergeKeep.ShortestName: return "shortest name";
+                case MergeKeep.LongestName: return "longest name";
+                case MergeKeep.Newest: return "newest";
+                case MergeKeep.Oldest: return "oldest";
+                default: return "first by name";
+            }
+        }
+
+        // Members come sorted by name.
+        static MergeDuplicatesEntry PickKeep(List<MergeDuplicatesEntry> members, MergeKeep keep)
+        {
+            var best = members[0];
+            foreach (var m in members)
+            {
+                bool better;
+                switch (keep)
+                {
+                    case MergeKeep.LastByName:
+                        better = string.Compare(m.Name, best.Name, StringComparison.OrdinalIgnoreCase) > 0;
+                        break;
+                    case MergeKeep.ShortestName:
+                        better = m.Name.Length < best.Name.Length;
+                        break;
+                    case MergeKeep.LongestName:
+                        better = m.Name.Length > best.Name.Length;
+                        break;
+                    case MergeKeep.Newest:
+                        better = Directory.GetLastWriteTime(m.FullPath) > Directory.GetLastWriteTime(best.FullPath);
+                        break;
+                    case MergeKeep.Oldest:
+                        better = Directory.GetLastWriteTime(m.FullPath) < Directory.GetLastWriteTime(best.FullPath);
+                        break;
+                    default:
+                        better = false;
+                        break;
+                }
+                if (better)
+                    best = m;
+            }
+            return best;
+        }
+
+        static char SeparatorOf(string s)
+        {
+            return string.IsNullOrEmpty(s) ? '_' : s[0];
         }
 
         public static void ExecuteMerge(IList<MergeDuplicatesPlan> plans)

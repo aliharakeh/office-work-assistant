@@ -8,15 +8,6 @@ using OfficeWorkAssistant.Expressions;
 
 namespace OfficeWorkAssistant.Features.ExcelProcessing
 {
-    public sealed class ExcelProcessingLoadResult
-    {
-        public DataTable Table { get; set; }
-        public string[] Sheets { get; set; }
-        public string Sheet { get; set; }
-        public int TotalRows { get; set; }
-        public bool Truncated { get; set; }
-    }
-
     public sealed class ExcelProcessingCompareResult
     {
         public DataTable Table { get; set; }
@@ -64,25 +55,6 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
 
     public static class ExcelProcessingWork
     {
-        public static ExcelProcessingLoadResult Load(string path, string sheetName)
-        {
-            return Load(path, sheetName, 0);
-        }
-
-        // maxRows <= 0 loads everything; a positive value keeps the UI preview small.
-        public static ExcelProcessingLoadResult Load(string path, string sheetName, int maxRows)
-        {
-            var loaded = ExcelFile.Load(path, sheetName, maxRows);
-            return new ExcelProcessingLoadResult
-            {
-                Table = loaded.Table,
-                Sheets = loaded.Sheets,
-                Sheet = loaded.Sheet,
-                TotalRows = loaded.TotalRows,
-                Truncated = loaded.Truncated
-            };
-        }
-
         public static ExcelProcessingCompareResult OnlyInA(DataTable a, DataTable b, IList<ExcelProcessingMatch> extra)
         {
             return FromOne(CopyUnmatched(a, b, extra, true), 'A');

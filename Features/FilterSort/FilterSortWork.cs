@@ -80,16 +80,7 @@ namespace OfficeWorkAssistant.Features.FilterSort
         }
     }
 
-    public sealed class FilterSortSourceResult
-    {
-        public DataTable Table { get; set; }
-        public string[] Sheets { get; set; }
-        public string Sheet { get; set; }
-        public int TotalRows { get; set; }
-        public bool Truncated { get; set; }
-    }
-
-    // Pure logic: load, filter, sort and save. No WPF, no page code.
+    // Pure logic: filter and sort. No WPF, no page code.
     public static class FilterSortWork
     {
         // Index-aligned with the Op combo in the page: same order, same count.
@@ -97,25 +88,6 @@ namespace OfficeWorkAssistant.Features.FilterSort
         {
             "==", "!=", ">", ">=", "<", "<=", "contains", "startsWith", "endsWith", "isEmpty", "isNotEmpty"
         };
-
-        public static FilterSortSourceResult Load(string path, string sheetName)
-        {
-            return Load(path, sheetName, 0);
-        }
-
-        // maxRows <= 0 loads everything; a positive value keeps the UI preview small.
-        public static FilterSortSourceResult Load(string path, string sheetName, int maxRows)
-        {
-            var loaded = ExcelFile.Load(path, sheetName, maxRows);
-            return new FilterSortSourceResult
-            {
-                Table = loaded.Table,
-                Sheets = loaded.Sheets,
-                Sheet = loaded.Sheet,
-                TotalRows = loaded.TotalRows,
-                Truncated = loaded.Truncated
-            };
-        }
 
         public static string Validate(IList<FilterCondition> conditions)
         {

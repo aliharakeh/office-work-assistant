@@ -5,7 +5,7 @@
       Background="White">
     <DockPanel Margin="10">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
-            <Button x:Name="HomeBtn" DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <Button x:Name="BackBtn" DockPanel.Dock="Left" Content="Back" Width="72" Margin="0,0,12,0" Click="Back_Click" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
                 <ComboBox x:Name="PreviewBox" Width="96" SelectionChanged="PreviewBox_SelectionChanged" />
@@ -104,22 +104,7 @@
 
                 <GroupBox Header="Data file" Grid.Column="1" Margin="6,0,0,0">
                     <DockPanel LastChildFill="True" Margin="6">
-                        <Grid DockPanel.Dock="Top">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBox x:Name="SourcePath" IsReadOnly="True" Margin="0,0,6,6" />
-                            <Button x:Name="BrowseBtn" Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="Browse_Click" />
-                        </Grid>
-                        <Grid x:Name="SheetRow" DockPanel.Dock="Top" Margin="0,0,0,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <ComboBox x:Name="SourceSheet" Grid.Column="1" SelectionChanged="Sheet_SelectionChanged" />
-                        </Grid>
+                        <TextBox x:Name="SourcePath" DockPanel.Dock="Top" IsReadOnly="True" Margin="0,0,0,6" />
                         <TextBlock x:Name="InfoSource" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777"
                                    FontSize="11" Text="No file loaded." />
                         <DataGrid x:Name="GridSource" AutoGenerateColumns="True" IsReadOnly="True"
@@ -198,8 +183,7 @@
                 <DockPanel Margin="6" LastChildFill="True">
                     <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                         <Button Content="Preview" Width="90" Margin="0,0,8,0" Click="Preview_Click" />
-                        <Button x:Name="SaveBtn" Content="Save Excel..." Width="110" Margin="0,0,8,0" Click="SaveExcel_Click" />
-                        <Button x:Name="UseBtn" Content="Use in pipeline" Width="120" Margin="0,0,8,0" Visibility="Collapsed" Click="UseInPipeline_Click" />
+                        <Button x:Name="UseBtn" Content="Use in pipeline" Width="120" Margin="0,0,8,0" Click="UseInPipeline_Click" />
                         <TextBlock x:Name="InfoOut" VerticalAlignment="Center" Foreground="#777" FontSize="11"
                                    Text="No preview yet." />
                     </WrapPanel>

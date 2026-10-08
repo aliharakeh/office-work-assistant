@@ -321,6 +321,14 @@ namespace OfficeWorkAssistant.Expressions
             return root.Evaluate(lookup);
         }
 
+        // Parses once; the result evaluates many times. For a formula run per file or per row pair.
+        public static Func<Func<string, object>, object> Compile(string expression)
+        {
+            var parser = new ExpressionParser(expression);
+            ExprNode root = parser.Parse();
+            return root.Evaluate;
+        }
+
         public static bool TryToNumber(object value, out double result)
         {
             result = 0;
