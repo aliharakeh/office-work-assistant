@@ -1,6 +1,6 @@
 # Office Work Assistant
 
-A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. It bundles six tools for everyday file and Excel chores. Everything runs locally, and each tool previews what it will do before it changes anything.
+A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. It bundles seven tools for everyday file and Excel chores. Everything runs locally, and each tool previews what it will do before it changes anything.
 
 ## Tools
 
@@ -12,7 +12,18 @@ Compare two `.xlsx` workbooks and pull out the rows you need.
 3. Pick the output: rows found in A but not B, rows found in B but not A, or rows common to both.
 4. Tick the columns to keep and save. When both files have a column with the same name, the saved sheet keeps both, with `_A` and `_B` suffixes.
 
-Workbooks are read with a shared file handle, so a file that is open in Excel still loads. The grid previews 200, 1000 or 5000 rows; saving always runs on the full sheet. Saving (Excel processing, Filter & sort, Templates) asks whether to write a new `.xlsx` file or add a new sheet to a loaded `.xlsx` file; `.xlsm` files are not offered because saving would drop their macros.
+Workbooks are read with a shared file handle, so a file that is open in Excel still loads. The grid previews 200, 1000 or 5000 rows; saving always runs on the full sheet. Saving (Excel processing, Merge columns, Filter & sort, Templates) asks whether to write a new `.xlsx` file or add a new sheet to a loaded `.xlsx` file; `.xlsm` files are not offered because saving would drop their macros.
+
+### Merge columns
+Fill columns of workbook B with values from workbook A, row by row, using formula rules.
+
+1. Load file A (the values come from here) and file B (the rows get filled), and pick a sheet in each.
+2. Set match rules. Each rule is a formula on the A row `==` a formula on the B row, for example `TRIM($ID)` == `$Code`. Each side only sees its own file. All rules must match, text compares ignore case, and when several A rows share a key the first one is used (the status line counts these).
+3. Add fill rules. Each rule has a target column (one of B's columns, or a new name to add a column), an optional When condition, and a Value formula. Rules run top to bottom, and the first rule that fires for a column fills that cell. A cell that no rule fills keeps B's value. Use Up to reorder.
+4. Inside fill formulas, `$A_Price` or `$A_C` reads the matched A row (blank when nothing matched). `$B_Price`, `$Price` or `$C` reads the B row, including values that earlier rules wrote. A name that B does not have falls back to A. `$Value` is the target cell's current value, and `$Matched` is true when an A row matched.
+5. The preview updates as you type and lists any `$names` that match no column. Save writes B with the filled columns, either as a new file or as a new sheet.
+
+Example: target `Price`, When `$Matched && $Value == ""`, Value `$A_Price` fills only the empty prices. A second `Price` rule below it, with When `$Matched` and Value `$Value * 1.1`, raises the prices that B already had.
 
 ### Copy files
 Copy files into a destination folder under new names, leaving the originals alone.
@@ -58,7 +69,7 @@ Learn the formula language without touching a file.
 - Try on any example loads it into the tester, ready to tweak, and the lesson results refresh whenever you edit a sample value.
 
 ## Formulas
-All six tools share one formula language.
+All seven tools share one formula language.
 
 Columns are `$A`, `$B`, `$C`, the first, second and third column of the sheet. Split values add `$1`, `$2` for the parts.
 

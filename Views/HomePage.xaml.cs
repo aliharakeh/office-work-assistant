@@ -6,6 +6,7 @@ using OfficeWorkAssistant.Features.MergeDuplicates;
 using OfficeWorkAssistant.Features.Templates;
 using OfficeWorkAssistant.Features.FilterSort;
 using OfficeWorkAssistant.Features.FormulaGuide;
+using OfficeWorkAssistant.Features.MergeColumns;
 
 namespace OfficeWorkAssistant.Views
 {
@@ -44,6 +45,11 @@ namespace OfficeWorkAssistant.Views
         void FormulaGuideCard_Click(object sender, RoutedEventArgs e)
         {
             NavigationService.Navigate(new FormulaGuidePage());
+        }
+
+        void MergeColumnsCard_Click(object sender, RoutedEventArgs e)
+        {
+            NavigationService.Navigate(new MergeColumnsPage());
         }
     }
 }

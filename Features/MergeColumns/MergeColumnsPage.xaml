@@ -1,0 +1,133 @@
+<Page x:Class="OfficeWorkAssistant.Features.MergeColumns.MergeColumnsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Merge Columns"
+      Background="White">
+    <DockPanel Margin="10">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
+            <Button DockPanel.Dock="Left" Content="Home" Width="72" Margin="0,0,12,0" Click="Home_Click" />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
+                <ComboBox x:Name="PreviewBox" Width="96" SelectionChanged="PreviewBox_SelectionChanged" />
+            </StackPanel>
+            <TextBlock Text="Merge Columns" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </DockPanel>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <GroupBox Header="File A (take values from)" Grid.Column="0" Margin="0,0,6,0">
+                    <DockPanel LastChildFill="True" Margin="6">
+                        <Grid DockPanel.Dock="Top">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="PathA" IsReadOnly="True" Margin="0,0,6,6" />
+                            <Button Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="BrowseA_Click" />
+                        </Grid>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox x:Name="SheetA" Grid.Column="1" SelectionChanged="SheetA_SelectionChanged" />
+                        </Grid>
+                        <TextBlock x:Name="InfoA" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777"
+                                   FontSize="11" Text="No file loaded." />
+                        <DataGrid x:Name="GridA" AutoGenerateColumns="True" IsReadOnly="True"
+                                  CanUserAddRows="False" HeadersVisibility="Column" />
+                    </DockPanel>
+                </GroupBox>
+
+                <GroupBox Header="File B (fill into)" Grid.Column="1" Margin="6,0,0,0">
+                    <DockPanel LastChildFill="True" Margin="6">
+                        <Grid DockPanel.Dock="Top">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="PathB" IsReadOnly="True" Margin="0,0,6,6" />
+                            <Button Grid.Column="1" Content="Browse..." Width="88" Margin="0,0,0,6" Click="BrowseB_Click" />
+                        </Grid>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Sheet" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <ComboBox x:Name="SheetB" Grid.Column="1" SelectionChanged="SheetB_SelectionChanged" />
+                        </Grid>
+                        <TextBlock x:Name="InfoB" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777"
+                                   FontSize="11" Text="No file loaded." />
+                        <DataGrid x:Name="GridB" AutoGenerateColumns="True" IsReadOnly="True"
+                                  CanUserAddRows="False" HeadersVisibility="Column" />
+                    </DockPanel>
+                </GroupBox>
+            </Grid>
+
+            <GroupBox Header="Match rows (A formula == B formula, all must match)" Grid.Row="1" Margin="0,0,0,8">
+                <DockPanel LastChildFill="True" Margin="4">
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="True">
+                        <Button DockPanel.Dock="Right" Content="Add" Width="56" Click="AddKey_Click" />
+                        <TextBlock VerticalAlignment="Center" FontSize="11" Foreground="#555"
+                                   Text="Each side sees only its own file, e.g. $ID or TRIM($Code). Text matches ignore case. The first A row with a key is used." />
+                    </DockPanel>
+                    <ScrollViewer MaxHeight="96" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="KeyPanel" />
+                    </ScrollViewer>
+                </DockPanel>
+            </GroupBox>
+
+            <GroupBox Header="Fill rules (top to bottom, first rule that fires wins the cell)" Grid.Row="2" Margin="0,0,0,8">
+                <DockPanel LastChildFill="True" Margin="4">
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="True">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                            <Button Content="Variables..." Width="88" Margin="0,0,6,0" Click="Variables_Click" />
+                            <Button Content="Add" Width="56" Click="AddRule_Click" />
+                        </StackPanel>
+                        <TextBlock VerticalAlignment="Center" FontSize="11" Foreground="#555" TextWrapping="Wrap"
+                                   Text="Target: a B column or a new name. When: blank = always. $A_Name reads A, $B_Name or $Name reads B, $Value is the target cell, $Matched is true when A matched." />
+                    </DockPanel>
+                    <Grid DockPanel.Dock="Top" Margin="0,0,8,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="160" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="124" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Target column" FontSize="11" Foreground="#555" />
+                        <TextBlock Grid.Column="1" Text="When (optional)" FontSize="11" Foreground="#555" />
+                        <TextBlock Grid.Column="2" Text="Value" FontSize="11" Foreground="#555" />
+                    </Grid>
+                    <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="RulePanel" />
+                    </ScrollViewer>
+                </DockPanel>
+            </GroupBox>
+
+            <GroupBox Header="Result (file B with the filled columns)" Grid.Row="3">
+                <DockPanel Margin="6">
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="True">
+                        <Button DockPanel.Dock="Right" Content="Save..." Width="88" Click="Save_Click" />
+                        <TextBlock x:Name="Status" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="#555"
+                                   Text="Open both files and set a match rule." />
+                    </DockPanel>
+                    <DataGrid x:Name="GridOut" AutoGenerateColumns="True" IsReadOnly="True"
+                              CanUserAddRows="False" HeadersVisibility="Column" />
+                </DockPanel>
+            </GroupBox>
+        </Grid>
+    </DockPanel>
+</Page>
