@@ -11,7 +11,7 @@ using OfficeWorkAssistant.Expressions;
 namespace OfficeWorkAssistant.Features.FileOps
 {
     // Pipeline-only: edits a File action step. Shows the plan; never touches the disk.
-    public partial class FileActionPage : Page
+    public partial class FileActionPage : UserControl
     {
         const int PreviewRows = 1000;
 
@@ -24,8 +24,7 @@ namespace OfficeWorkAssistant.Features.FileOps
             InitializeComponent();
             _input = input;
             _use = use;
-            ExcelGrid.Hook(ResultGrid);
-            FormulaField.WatchOptional(FileSubBox);
+                        FormulaField.WatchOptional(FileSubBox);
             FormulaField.WatchOptional(FileNameBox);
             FormulaField.WatchOptional(FolderSubBox);
             FormulaField.WatchOptional(FolderNameBox);
@@ -49,10 +48,6 @@ namespace OfficeWorkAssistant.Features.FileOps
             SepBox.Text = string.IsNullOrEmpty(s.Separator) ? "_" : s.Separator;
             _filling = false;
             Action_Changed(null, null);
-            if (settings != null)
-                Preview_Click(null, null);
-            else
-                ResultInfo.Text = "Choose the action, then click Preview plan.";
         }
 
         void Action_Changed(object sender, RoutedEventArgs e)
@@ -82,37 +77,6 @@ namespace OfficeWorkAssistant.Features.FileOps
                 Permanent = PermanentBox.IsChecked == true,
                 Separator = SepBox.Text.Length > 0 ? SepBox.Text.Substring(0, 1) : "_"
             };
-        }
-
-        void Preview_Click(object sender, RoutedEventArgs e)
-        {
-            var s = Current();
-            DataTable plan;
-            Mouse.OverrideCursor = Cursors.Wait;
-            try
-            {
-                plan = FileOpsWork.PlanActions(_input, s);
-            }
-            catch (Exception ex)
-            {
-                ResultGrid.ItemsSource = null;
-                ResultInfo.Text = ex.Message;
-                return;
-            }
-            finally
-            {
-                Mouse.OverrideCursor = null;
-            }
-            var shown = plan;
-            if (plan.Rows.Count > PreviewRows)
-            {
-                shown = plan.Clone();
-                for (var i = 0; i < PreviewRows; i++)
-                    shown.ImportRow(plan.Rows[i]);
-            }
-            ResultGrid.ItemsSource = shown.DefaultView;
-            ResultInfo.Text = FileOpsWork.Describe(s, FileOpsWork.CountReady(plan)) + ". " + FileOpsWork.Outcome(plan) +
-                (shown != plan ? " (showing the first " + PreviewRows.ToString("N0", CultureInfo.InvariantCulture) + " rows)" : "") + ".";
         }
 
         void Variables_Click(object sender, RoutedEventArgs e)
@@ -147,13 +111,6 @@ namespace OfficeWorkAssistant.Features.FileOps
                 return;
             }
             _use(s);
-            Back_Click(null, null);
-        }
-
-        void Back_Click(object sender, RoutedEventArgs e)
-        {
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
 
         void Alert(string message, string title, MessageBoxImage icon)

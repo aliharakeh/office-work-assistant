@@ -1,0 +1,53 @@
+<UserControl x:Class="OfficeWorkAssistant.Features.CleanText.CleanTextPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="White">
+    <StackPanel Margin="0,4,0,0">
+        <TextBlock x:Name="InputInfo" Foreground="#777" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap" />
+        <GroupBox Header="Columns">
+            <StackPanel Margin="6">
+                <TextBlock Text="Tick the columns to clean, or none for every column." Foreground="#666" Margin="0,0,0,4" />
+                <ScrollViewer MaxHeight="110" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="ColumnList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Label}" IsChecked="{Binding Include, Mode=TwoWay}" Margin="0,0,12,4" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+        </GroupBox>
+        <GroupBox Header="What to clean" Margin="0,8,0,0">
+            <StackPanel Margin="6">
+                <CheckBox x:Name="TrimBox" Content="Remove spaces at the start and end" Margin="0,0,0,2" />
+                <CheckBox x:Name="CollapseBox" Content="Turn runs of spaces into one space" Margin="0,0,0,2" />
+                <CheckBox x:Name="BreaksBox" Content="Turn line breaks into spaces" Margin="0,0,0,2" />
+                <CheckBox x:Name="HiddenBox" Content="Remove hidden characters (non-breaking spaces, zero-width marks, control codes)" Margin="0,0,0,2" />
+                <CheckBox x:Name="NumberBox" Content="Turn text that is a number (1,234.50) into a number" Margin="0,0,0,2" />
+                <CheckBox x:Name="BlankBox" Content="Leave the cell empty when nothing is left" Margin="0,0,0,6" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Case" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ComboBox x:Name="CaseBox" Grid.Column="1">
+                        <ComboBoxItem Content="Keep as it is" />
+                        <ComboBoxItem Content="UPPER CASE" />
+                        <ComboBoxItem Content="lower case" />
+                        <ComboBoxItem Content="Proper Case (Each Word)" />
+                        <ComboBoxItem Content="Sentence case" />
+                    </ComboBox>
+                </Grid>
+            </StackPanel>
+        </GroupBox>
+        <Button Content="Apply to step" Width="120" HorizontalAlignment="Left" Margin="0,8,0,6" Click="Apply_Click" />
+        <TextBlock x:Name="Status" Foreground="#777" FontSize="11" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

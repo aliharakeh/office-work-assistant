@@ -217,6 +217,124 @@ namespace OfficeWorkAssistant.Excel
                         ws.Cell(r + 2, c + 1).Value = Convert.ToString(v, CultureInfo.InvariantCulture);
                 }
             }
+
+            var style = GetStyle(table);
+            if (style != null)
+                WriteStyle(ws, table, style);
+        }
+
+        // ---------- styles from the Highlight and Format sheet steps ----------
+
+        const string StyleKey = "OfficeWorkAssistant.Style";
+
+        // How Save should style this table; null when it is plain.
+        public static SheetStyle GetStyle(DataTable table)
+        {
+            if (table == null || !table.ExtendedProperties.ContainsKey(StyleKey))
+                return null;
+            return table.ExtendedProperties[StyleKey] as SheetStyle;
+        }
+
+        // A copy of the table that carries the style. Tables are shared between steps, so the
+        // input itself is never changed.
+        public static DataTable WithStyle(DataTable table, SheetStyle style)
+        {
+            var copy = table.Copy();
+            copy.ExtendedProperties[StyleKey] = style;
+            return copy;
+        }
+
+        // For a step's own new result: rows may have moved, so an old style no longer fits.
+        public static void ClearStyle(DataTable table)
+        {
+            if (table != null && table.ExtendedProperties.ContainsKey(StyleKey))
+                table.ExtendedProperties.Remove(StyleKey);
+        }
+
+        // Bottom layer first, so each later one only changes what it sets.
+        static void WriteStyle(IXLWorksheet ws, DataTable table, SheetStyle style)
+        {
+            int rows = table.Rows.Count;
+            int cols = table.Columns.Count;
+            if (cols == 0)
+                return;
+
+            if (rows > 0)
+            {
+                if (style.AllCells != null)
+                    Apply(ws.Range(2, 1, rows + 1, cols), style.AllCells);
+                foreach (var pair in style.Columns)
+                {
+                    if (pair.Key < cols)
+                        Apply(ws.Range(2, pair.Key + 1, rows + 1, pair.Key + 1), pair.Value);
+                }
+                if (style.Band != null)
+                {
+                    for (var r = 1; r < rows; r += 2)
+                        Apply(ws.Range(r + 2, 1, r + 2, cols), style.Band);
+                }
+                foreach (var pair in style.Rows)
+                {
+                    if (pair.Key < rows)
+                        Apply(ws.Range(pair.Key + 2, 1, pair.Key + 2, cols), pair.Value);
+                }
+                foreach (var cell in style.CellKeys)
+                {
+                    if (cell.Key < rows && cell.Value < cols)
+                        Apply(ws.Range(cell.Key + 2, cell.Value + 1, cell.Key + 2, cell.Value + 1), style.CellOnly(cell.Key, cell.Value));
+                }
+            }
+            if (style.Header != null)
+                Apply(ws.Range(1, 1, 1, cols), style.Header);
+
+            if (style.AutoFit)
+                ws.Columns(1, cols).AdjustToContents();
+            foreach (var pair in style.Widths)
+            {
+                if (pair.Key < cols)
+                    ws.Column(pair.Key + 1).Width = pair.Value;
+            }
+            if (style.FreezeRows > 0 || style.FreezeColumns > 0)
+                ws.SheetView.Freeze(style.FreezeRows, style.FreezeColumns);
+            if (style.AutoFilter)
+                ws.Range(1, 1, Math.Max(rows, 1) + 1, cols).SetAutoFilter();
+        }
+
+        static void Apply(IXLRange range, CellStyle s)
+        {
+            if (s == null)
+                return;
+            var st = range.Style;
+            string hex = NamedColors.ToHex(s.Fill);
+            if (!string.IsNullOrEmpty(hex))
+                st.Fill.BackgroundColor = XLColor.FromHtml(hex);
+            hex = NamedColors.ToHex(s.FontColor);
+            if (!string.IsNullOrEmpty(hex))
+                st.Font.FontColor = XLColor.FromHtml(hex);
+            if (s.Bold)
+                st.Font.Bold = true;
+            if (s.Italic)
+                st.Font.Italic = true;
+            if (s.Underline)
+                st.Font.Underline = XLFontUnderlineValues.Single;
+            if (s.Strike)
+                st.Font.Strikethrough = true;
+            if (s.Border != CellBorder.None)
+            {
+                var line = s.Border == CellBorder.Thick ? XLBorderStyleValues.Medium : XLBorderStyleValues.Thin;
+                st.Border.OutsideBorder = line;
+                st.Border.InsideBorder = line;
+            }
+            if (!string.IsNullOrWhiteSpace(s.NumberFormat))
+                st.NumberFormat.Format = s.NumberFormat.Trim();
+            if (s.Align == CellAlign.Left)
+                st.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+            else if (s.Align == CellAlign.Center)
+                st.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            else if (s.Align == CellAlign.Right)
+                st.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            if (s.Wrap)
+                st.Alignment.WrapText = true;
         }
 
         public static DataColumn AddColumn(DataTable table, string header)

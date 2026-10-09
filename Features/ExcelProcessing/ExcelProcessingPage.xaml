@@ -1,25 +1,22 @@
-<Page x:Class="OfficeWorkAssistant.Features.ExcelProcessing.ExcelProcessingPage"
+<UserControl x:Class="OfficeWorkAssistant.Features.ExcelProcessing.ExcelProcessingPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Title="Excel Processing"
       Background="White">
-    <DockPanel Margin="10">
-        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
-            <Button x:Name="BackBtn" DockPanel.Dock="Left" Content="Back" Width="72" Margin="0,0,12,0" Click="Back_Click" />
+    <DockPanel Margin="0,4,0,0">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True" Visibility="Collapsed">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
                 <ComboBox x:Name="PreviewBox" Width="96" SelectionChanged="PreviewBox_SelectionChanged" />
             </StackPanel>
-            <TextBlock Text="Excel Processing" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
         </DockPanel>
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Grid Margin="0,0,0,8">
+            <Grid Margin="0,0,0,8" Visibility="Collapsed">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -83,7 +80,7 @@
                                       IsThreeState="True" Click="PickB_Click" />
                             <CheckBox x:Name="PickBoth" Content="All" Margin="0,0,12,0" VerticalAlignment="Center"
                                       IsThreeState="True" Click="PickBoth_Click" />
-                            <Button x:Name="UseBtn" DockPanel.Dock="Right" Content="Use in pipeline" Width="120" Click="UseInPipeline_Click" />
+                            <Button x:Name="UseBtn" DockPanel.Dock="Right" Content="Apply to step" Width="120" Click="UseInPipeline_Click" />
                         </DockPanel>
                         <ScrollViewer DockPanel.Dock="Top" MaxHeight="72" Margin="0,0,0,6"
                                       HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -101,11 +98,11 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </ScrollViewer>
-                        <DataGrid x:Name="GridOut" AutoGenerateColumns="True" IsReadOnly="True"
+                        <DataGrid x:Name="GridOut" Visibility="Collapsed" AutoGenerateColumns="True" IsReadOnly="True"
                                   CanUserAddRows="False" HeadersVisibility="Column" />
                     </DockPanel>
                 </Grid>
             </GroupBox>
         </Grid>
     </DockPanel>
-</Page>
+</UserControl>

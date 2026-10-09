@@ -9,7 +9,7 @@ using OfficeWorkAssistant.Expressions;
 
 namespace OfficeWorkAssistant.Features.ExcelProcessing
 {
-    public partial class ExcelProcessingPage : Page
+    public partial class ExcelProcessingPage : UserControl
     {
         DataTable _tableA;
         DataTable _tableB;
@@ -52,12 +52,6 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
         {
             ApplyLoad(true, _pipeA, _pipeLabelA);
             ApplyLoad(false, _pipeB, _pipeLabelB);
-        }
-
-        void Back_Click(object sender, RoutedEventArgs e)
-        {
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
 
         void PreviewBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -109,8 +103,6 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
                     s.Columns.Add(new ExcelProcessingColumn { Side = selected[i].Source.ToString(), Header = selected[i].OriginalName });
             }
             _use(s);
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
 
         void ApplySettings(ExcelProcessingSettings s)

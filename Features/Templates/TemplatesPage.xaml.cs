@@ -10,7 +10,7 @@ using OfficeWorkAssistant.Expressions;
 
 namespace OfficeWorkAssistant.Features.Templates
 {
-    public partial class TemplatesPage : Page
+    public partial class TemplatesPage : UserControl
     {
         DataTable _source;
         int _previewRows = 1000;
@@ -67,12 +67,6 @@ namespace OfficeWorkAssistant.Features.Templates
             InfoSource.Text = RowInfo(_source.Rows.Count, _pipeInput.Rows.Count, cut);
             RebuildSourcePicks(null);
             RefreshSourceCombos();
-        }
-
-        void Back_Click(object sender, RoutedEventArgs e)
-        {
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
 
         void PreviewBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -457,8 +451,6 @@ namespace OfficeWorkAssistant.Features.Templates
             if (template.KeepSourceColumns && _sourcePicks != null && template.SourceColumns.Count == _sourcePicks.Count)
                 template.SourceColumns = new List<string>();
             _use(template);
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
 
         bool TryBuildOutput(out DataTable output)

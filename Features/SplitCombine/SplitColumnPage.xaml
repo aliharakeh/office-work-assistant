@@ -1,0 +1,65 @@
+<UserControl x:Class="OfficeWorkAssistant.Features.SplitCombine.SplitColumnPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="White">
+    <StackPanel Margin="0,4,0,0">
+        <TextBlock x:Name="InputInfo" Foreground="#777" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap" />
+        <GroupBox Header="Split">
+            <StackPanel Margin="6">
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Column" VerticalAlignment="Center" />
+                    <ComboBox x:Name="ColumnBox" Grid.Column="1" />
+                </Grid>
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Split by" VerticalAlignment="Center" />
+                    <ComboBox x:Name="ModeBox" Grid.Column="1" SelectionChanged="ModeBox_SelectionChanged">
+                        <ComboBoxItem Content="Delimiter (text between the parts)" />
+                        <ComboBoxItem Content="Fixed widths (character counts)" />
+                        <ComboBoxItem Content="Pattern (regular expression)" />
+                    </ComboBox>
+                </Grid>
+                <Grid Margin="0,0,0,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ValueLabel" Text="Delimiter" VerticalAlignment="Center" />
+                    <TextBox x:Name="ValueBox" Grid.Column="1" />
+                </Grid>
+                <TextBlock x:Name="ValueHint" Foreground="#666" Margin="90,0,0,6" TextWrapping="Wrap" />
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="60" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Max parts" VerticalAlignment="Center" />
+                    <TextBox x:Name="MaxBox" Grid.Column="1" />
+                    <TextBlock Grid.Column="2" Text="  0 = all. Otherwise the last part keeps the rest." Foreground="#666" VerticalAlignment="Center" TextWrapping="Wrap" />
+                </Grid>
+                <Grid Margin="0,0,0,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="New headers" VerticalAlignment="Center" />
+                    <TextBox x:Name="HeadersBox" Grid.Column="1" />
+                </Grid>
+                <TextBlock Text="Comma-separated, e.g. First name, Last name. Blank ones become &quot;Column 1&quot;, &quot;Column 2&quot;."
+                           Foreground="#666" Margin="90,0,0,6" TextWrapping="Wrap" />
+                <CheckBox x:Name="TrimBox" Content="Remove spaces around each part" Margin="0,0,0,2" />
+                <CheckBox x:Name="KeepBox" Content="Keep the original column" />
+            </StackPanel>
+        </GroupBox>
+        <Button Content="Apply to step" Width="120" HorizontalAlignment="Left" Margin="0,8,0,6" Click="Apply_Click" />
+        <TextBlock x:Name="Status" Foreground="#777" FontSize="11" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

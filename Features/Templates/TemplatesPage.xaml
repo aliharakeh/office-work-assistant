@@ -1,30 +1,27 @@
-<Page x:Class="OfficeWorkAssistant.Features.Templates.TemplatesPage"
+<UserControl x:Class="OfficeWorkAssistant.Features.Templates.TemplatesPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Title="Templates"
       Background="White">
-    <DockPanel Margin="10">
-        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
-            <Button x:Name="BackBtn" DockPanel.Dock="Left" Content="Back" Width="72" Margin="0,0,12,0" Click="Back_Click" />
+    <DockPanel Margin="0,4,0,0">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True" Visibility="Collapsed">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" />
                 <ComboBox x:Name="PreviewBox" Width="96" SelectionChanged="PreviewBox_SelectionChanged" />
             </StackPanel>
-            <TextBlock Text="Templates" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
         </DockPanel>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="0" />
                 </Grid.ColumnDefinitions>
 
-                <GroupBox Header="Template" Grid.Column="0" Margin="0,0,6,0">
+                <GroupBox Header="Template" Grid.Column="0" Margin="0">
                     <StackPanel Margin="6">
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
@@ -160,7 +157,7 @@
                     </StackPanel>
                 </GroupBox>
 
-                <GroupBox Header="Data file" Grid.Column="1" Margin="6,0,0,0">
+                <GroupBox Header="Data file" Grid.Column="1" Visibility="Collapsed">
                     <DockPanel LastChildFill="True" Margin="6">
                         <TextBox x:Name="SourcePath" DockPanel.Dock="Top" IsReadOnly="True" Margin="0,0,0,6" />
                         <TextBlock x:Name="InfoSource" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777"
@@ -171,18 +168,14 @@
                 </GroupBox>
             </Grid>
 
-            <GroupBox Header="Generated Excel" Grid.Row="1">
-                <DockPanel Margin="6" LastChildFill="True">
-                    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-                        <Button Content="Preview" Width="90" Margin="0,0,8,0" Click="Preview_Click" />
-                        <Button x:Name="UseBtn" Content="Use in pipeline" Width="120" Margin="0,0,8,0" Click="UseInPipeline_Click" />
-                        <Button Content="Save template..." Width="120" Margin="0,0,8,0" Click="SaveTemplate_Click" />
-                        <Button Content="Load template..." Width="120" Click="LoadTemplate_Click" />
-                    </WrapPanel>
-                    <DataGrid x:Name="GridOut" AutoGenerateColumns="True" IsReadOnly="True"
-                              CanUserAddRows="False" HeadersVisibility="Column" />
-                </DockPanel>
-            </GroupBox>
+            <StackPanel Grid.Row="1">
+                <WrapPanel Margin="0,0,0,6">
+                    <Button x:Name="UseBtn" Content="Apply to step" Width="120" Margin="0,0,8,0" Click="UseInPipeline_Click" />
+                    <Button Content="Save template..." Width="120" Margin="0,0,8,0" Click="SaveTemplate_Click" />
+                    <Button Content="Load template..." Width="120" Click="LoadTemplate_Click" />
+                </WrapPanel>
+                <DataGrid x:Name="GridOut" Visibility="Collapsed" AutoGenerateColumns="True" IsReadOnly="True" />
+            </StackPanel>
         </Grid>
     </DockPanel>
-</Page>
+</UserControl>

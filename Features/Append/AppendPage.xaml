@@ -1,0 +1,34 @@
+<UserControl x:Class="OfficeWorkAssistant.Features.Append.AppendPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="White">
+    <StackPanel Margin="0,4,0,0">
+        <GroupBox Header="Tables, in the order their rows are added">
+            <StackPanel Margin="6">
+                <ItemsControl x:Name="InputList" />
+                <TextBlock Text="To add another table, link it to the free dot at the bottom left of this step. To change the order, delete links and link again."
+                           Foreground="#666" TextWrapping="Wrap" Margin="0,6,0,0" />
+            </StackPanel>
+        </GroupBox>
+        <GroupBox Header="Columns" Margin="0,8,0,0">
+            <StackPanel Margin="6">
+                <RadioButton x:Name="ByHeaderBox" Content="Match columns by header (order does not matter)" Margin="0,0,0,2" />
+                <RadioButton x:Name="ByPositionBox" Content="Match columns by position (A with A, B with B)" Margin="0,0,0,6" />
+                <CheckBox x:Name="CommonBox" Content="Only keep columns that every table has" Margin="0,0,0,6" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Source column" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBox x:Name="SourceBox" Grid.Column="1"
+                             ToolTip="Header of a first column with the name of the step each row came from. Blank = none." />
+                </Grid>
+                <TextBlock Text="The source column shows each input step's title, so rename the steps to label the rows."
+                           Foreground="#666" TextWrapping="Wrap" Margin="0,4,0,0" />
+            </StackPanel>
+        </GroupBox>
+        <Button Content="Apply to step" Width="120" HorizontalAlignment="Left" Margin="0,8,0,6" Click="Apply_Click" />
+        <TextBlock x:Name="Status" Foreground="#777" FontSize="11" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

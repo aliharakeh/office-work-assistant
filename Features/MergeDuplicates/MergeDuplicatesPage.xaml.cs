@@ -11,7 +11,7 @@ using OfficeWorkAssistant.Expressions;
 namespace OfficeWorkAssistant.Features.MergeDuplicates
 {
     // Pipeline step editor for Merge folders. Shows the plan; never touches the disk.
-    public partial class MergeDuplicatesPage : Page
+    public partial class MergeDuplicatesPage : UserControl
     {
         readonly Action<MergeFoldersSettings> _use;
 
@@ -19,15 +19,12 @@ namespace OfficeWorkAssistant.Features.MergeDuplicates
         {
             InitializeComponent();
             _use = use;
-            ExcelGrid.Hook(ResultGrid);
             FormulaField.Watch(ConditionBox);
             var s = settings ?? new MergeFoldersSettings();
             FolderBox.Text = s.Folder ?? "";
             ConditionBox.Text = s.Condition ?? "";
             SepBox.Text = string.IsNullOrEmpty(s.Separator) ? "_" : s.Separator;
             KeepBox.SelectedIndex = (int)s.Keep;
-            if (settings != null)
-                Preview_Click(null, null);
         }
 
         MergeFoldersSettings Current()
@@ -39,30 +36,6 @@ namespace OfficeWorkAssistant.Features.MergeDuplicates
                 Separator = SepBox.Text.Length > 0 ? SepBox.Text.Substring(0, 1) : "_",
                 Keep = (MergeKeep)Math.Max(0, KeepBox.SelectedIndex)
             };
-        }
-
-        void Preview_Click(object sender, RoutedEventArgs e)
-        {
-            DataTable plan;
-            Mouse.OverrideCursor = Cursors.Wait;
-            try
-            {
-                plan = MergeDuplicatesWork.Plan(Current());
-            }
-            catch (Exception ex)
-            {
-                ResultGrid.ItemsSource = null;
-                ResultInfo.Text = ex.Message;
-                return;
-            }
-            finally
-            {
-                Mouse.OverrideCursor = null;
-            }
-            ResultGrid.ItemsSource = plan.DefaultView;
-            ResultInfo.Text = plan.Rows.Count == 0
-                ? "No folders belong together."
-                : MergeDuplicatesWork.CountReady(plan).ToString(CultureInfo.InvariantCulture) + " folder(s) would be merged into the kept one of their group.";
         }
 
         void Variables_Click(object sender, RoutedEventArgs e)
@@ -101,13 +74,6 @@ namespace OfficeWorkAssistant.Features.MergeDuplicates
                 return;
             }
             _use(s);
-            Back_Click(null, null);
-        }
-
-        void Back_Click(object sender, RoutedEventArgs e)
-        {
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
     }
 }

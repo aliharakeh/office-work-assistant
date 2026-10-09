@@ -1,0 +1,67 @@
+<UserControl x:Class="OfficeWorkAssistant.Features.RemoveDuplicates.RemoveDuplicatesPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="White">
+    <StackPanel Margin="0,4,0,0">
+        <TextBlock x:Name="InputInfo" Foreground="#777" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap" />
+        <GroupBox Header="Rows are the same when">
+            <StackPanel Margin="6">
+                <RadioButton x:Name="ByColumnsBox" Content="these columns match" Margin="0,0,0,2" Checked="Mode_Changed" />
+                <RadioButton x:Name="ByFormulaBox" Content="a formula gives the same result" Margin="0,0,0,6" Checked="Mode_Changed" />
+                <StackPanel x:Name="ColumnsPanel">
+                    <TextBlock Text="Tick none to compare whole rows." Foreground="#666" Margin="0,0,0,6" />
+                    <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="KeyList">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Label}" IsChecked="{Binding Include, Mode=TwoWay}" Margin="0,0,12,4" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </StackPanel>
+                <StackPanel x:Name="FormulaPanel" Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="FormulaBox" Margin="0,0,6,0" />
+                        <Button Grid.Column="1" Content="Help..." Width="60" Click="Help_Click" />
+                    </Grid>
+                    <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,4,0,0"
+                               Text="Evaluated for every row; rows with the same result are duplicates. E.g. $Email, LOWER(TRIM($Name)) &amp; &quot;|&quot; &amp; $City, FORMAT($Date, &quot;yyyy-MM&quot;) &amp; $Code, LEFT($Code, 5)." />
+                </StackPanel>
+                <WrapPanel Margin="0,6,0,0">
+                    <CheckBox x:Name="IgnoreCaseBox" Content="Ignore upper / lower case" Margin="0,0,12,4" />
+                    <CheckBox x:Name="TrimBox" Content="Ignore spaces at the start and end" Margin="0,0,12,4" />
+                </WrapPanel>
+            </StackPanel>
+        </GroupBox>
+        <GroupBox Header="Keep" Margin="0,8,0,0">
+            <StackPanel Margin="6">
+                <ComboBox x:Name="KeepBox" Margin="0,0,0,6">
+                    <ComboBoxItem Content="The first of each (remove later repeats)" />
+                    <ComboBoxItem Content="The last of each (remove earlier repeats)" />
+                    <ComboBoxItem Content="Only rows that appear once" />
+                    <ComboBoxItem Content="Only rows that repeat (to review them)" />
+                </ComboBox>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Count column" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBox x:Name="CountBox" Grid.Column="1" ToolTip="Header of a new column with how many rows share the key. Blank = none." />
+                </Grid>
+            </StackPanel>
+        </GroupBox>
+        <Button Content="Apply to step" Width="120" HorizontalAlignment="Left" Margin="0,8,0,6" Click="Apply_Click" />
+        <TextBlock x:Name="Status" Foreground="#777" FontSize="11" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

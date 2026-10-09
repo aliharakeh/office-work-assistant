@@ -10,7 +10,7 @@ using OfficeWorkAssistant.Expressions;
 
 namespace OfficeWorkAssistant.Features.FillColumns
 {
-    public partial class FillColumnsPage : Page
+    public partial class FillColumnsPage : UserControl
     {
         DataTable _tableA;
         DataTable _tableB;
@@ -105,14 +105,6 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 return;
             }
             _use(s);
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
-        }
-
-        void Back_Click(object sender, RoutedEventArgs e)
-        {
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
 
         void PreviewBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

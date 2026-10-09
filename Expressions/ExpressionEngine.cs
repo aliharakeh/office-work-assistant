@@ -142,6 +142,12 @@ namespace OfficeWorkAssistant.Expressions
                 new FunctionHelp { Signature = "CONTAINS(text, needle)", Description = "True if text contains needle (ignore case).", Example = "CONTAINS($Name, \"report\")" },
                 new FunctionHelp { Signature = "STARTSWITH(text, prefix)", Description = "True if text starts with prefix (ignore case).", Example = "STARTSWITH($Name, \"INV\")" },
                 new FunctionHelp { Signature = "ENDSWITH(text, suffix)", Description = "True if text ends with suffix (ignore case).", Example = "ENDSWITH($Name, \".pdf\")" },
+                new FunctionHelp { Signature = "UPPER(text) LOWER(text) PROPER(text)", Description = "Change case; PROPER capitalises each word.", Example = "PROPER($Name)" },
+                new FunctionHelp { Signature = "LEN(text)", Description = "Number of characters.", Example = "LEN($Code) == 8" },
+                new FunctionHelp { Signature = "LEFT(text, n) RIGHT(text, n)", Description = "First / last n characters.", Example = "LEFT($Code, 3)" },
+                new FunctionHelp { Signature = "MID(text, start, n)", Description = "n characters from position start (1 = first).", Example = "MID($Code, 4, 2)" },
+                new FunctionHelp { Signature = "SUBSTITUTE(text, old, new)", Description = "Replace every old with new (ignore case).", Example = "SUBSTITUTE($Phone, \" \", \"\")" },
+                new FunctionHelp { Signature = "ISBLANK(value)", Description = "True if the value is empty or only spaces.", Example = "ISBLANK($Email)" },
             };
         }
 
@@ -297,7 +303,8 @@ namespace OfficeWorkAssistant.Expressions
         // STARTOFWEEK(d) ENDOFWEEK(d) STARTOFMONTH(d) ENDOFMONTH(d)
         // FORMAT(d, "dd/MM/yyyy"). Dates also support + / - days, e.g.
         // $Today + 1, and date comparisons, e.g. $Due > $Today.
-        // Text helpers: TRIM REMOVEDIGITS CLEARSYMBOLS FIRSTWORD LASTWORD.
+        // Text helpers: TRIM REMOVEDIGITS CLEARSYMBOLS FIRSTWORD LASTWORD UPPER LOWER PROPER
+        // LEN LEFT RIGHT MID SUBSTITUTE ISBLANK.
         public static string Validate(string expression)
         {
             if (string.IsNullOrWhiteSpace(expression))
@@ -565,7 +572,74 @@ namespace OfficeWorkAssistant.Expressions
                     return hay.StartsWith(needle, StringComparison.OrdinalIgnoreCase);
                 return hay.EndsWith(needle, StringComparison.OrdinalIgnoreCase);
             }
+            if (fn == "UPPER" || fn == "LOWER" || fn == "PROPER")
+            {
+                if (args.Length != 1)
+                    throw new InvalidOperationException(fn + " needs (text).");
+                string text = ToText(args[0]);
+                if (fn == "UPPER")
+                    return text.ToUpperInvariant();
+                if (fn == "LOWER")
+                    return text.ToLowerInvariant();
+                return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(text.ToLowerInvariant());
+            }
+            if (fn == "LEN")
+            {
+                if (args.Length != 1)
+                    throw new InvalidOperationException("LEN needs (text).");
+                return (double)ToText(args[0]).Length;
+            }
+            if (fn == "LEFT" || fn == "RIGHT")
+            {
+                if (args.Length != 2)
+                    throw new InvalidOperationException(fn + " needs (text, n).");
+                string text = ToText(args[0]);
+                int n = Count(args[1], fn);
+                if (n >= text.Length)
+                    return text;
+                return fn == "LEFT" ? text.Substring(0, n) : text.Substring(text.Length - n);
+            }
+            if (fn == "MID")
+            {
+                if (args.Length != 3)
+                    throw new InvalidOperationException("MID needs (text, start, n).");
+                string text = ToText(args[0]);
+                int start = Count(args[1], fn) - 1;
+                int n = Count(args[2], fn);
+                if (start < 0)
+                    start = 0;
+                if (start >= text.Length)
+                    return "";
+                return text.Substring(start, Math.Min(n, text.Length - start));
+            }
+            if (fn == "SUBSTITUTE")
+            {
+                if (args.Length != 3)
+                    throw new InvalidOperationException("SUBSTITUTE needs (text, old, new).");
+                string text = ToText(args[0]);
+                string old = ToText(args[1]);
+                if (old.Length == 0)
+                    return text;
+                return Regex.Replace(text, Regex.Escape(old), ToText(args[2]).Replace("$", "$$"), RegexOptions.IgnoreCase);
+            }
+            if (fn == "ISBLANK")
+            {
+                if (args.Length != 1)
+                    throw new InvalidOperationException("ISBLANK needs (value).");
+                return ToText(args[0]).Trim().Length == 0;
+            }
             throw new InvalidOperationException("Unknown function '" + name + "'.");
+        }
+
+        // A character count for LEFT / RIGHT / MID: a whole number, never below 0.
+        static int Count(object value, string fn)
+        {
+            double d;
+            if (!TryToNumber(value, out d))
+                throw new InvalidOperationException(fn + " needs a number of characters.");
+            if (d < 0)
+                return 0;
+            return d > int.MaxValue ? int.MaxValue : (int)d;
         }
 
         static void CheckArity(string name, int count)
@@ -585,9 +659,26 @@ namespace OfficeWorkAssistant.Expressions
             {
                 if (count != 1) need = "needs (date)";
             }
-            else if (fn == "REMOVEDIGITS" || fn == "CLEARSYMBOLS" || fn == "TRIM" || fn == "FIRSTWORD" || fn == "LASTWORD")
+            else if (fn == "REMOVEDIGITS" || fn == "CLEARSYMBOLS" || fn == "TRIM" || fn == "FIRSTWORD" || fn == "LASTWORD" ||
+                fn == "UPPER" || fn == "LOWER" || fn == "PROPER" || fn == "LEN")
             {
                 if (count != 1) need = "needs (text)";
+            }
+            else if (fn == "ISBLANK")
+            {
+                if (count != 1) need = "needs (value)";
+            }
+            else if (fn == "LEFT" || fn == "RIGHT")
+            {
+                if (count != 2) need = "needs (text, n)";
+            }
+            else if (fn == "MID")
+            {
+                if (count != 3) need = "needs (text, start, n)";
+            }
+            else if (fn == "SUBSTITUTE")
+            {
+                if (count != 3) need = "needs (text, old, new)";
             }
             else if (fn == "CONTAINS" || fn == "STARTSWITH" || fn == "ENDSWITH")
             {

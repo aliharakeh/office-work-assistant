@@ -1,0 +1,63 @@
+<UserControl x:Class="OfficeWorkAssistant.Excel.CellStylePicker"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <Grid Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Fill" VerticalAlignment="Center" />
+            <ComboBox x:Name="FillBox" Grid.Column="1" IsEditable="True"
+                      ToolTip="A colour name, or #RRGGBB. Blank = no fill." />
+        </Grid>
+        <Grid Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Text colour" VerticalAlignment="Center" />
+            <ComboBox x:Name="FontBox" Grid.Column="1" IsEditable="True"
+                      ToolTip="A colour name, or #RRGGBB. Blank = unchanged." />
+        </Grid>
+        <WrapPanel Margin="90,0,0,4">
+            <CheckBox x:Name="BoldBox" Content="Bold" Margin="0,0,10,2" />
+            <CheckBox x:Name="ItalicBox" Content="Italic" Margin="0,0,10,2" />
+            <CheckBox x:Name="UnderlineBox" Content="Underline" Margin="0,0,10,2" />
+            <CheckBox x:Name="StrikeBox" Content="Strikethrough" Margin="0,0,10,2" />
+            <CheckBox x:Name="WrapBox" Content="Wrap text" Margin="0,0,10,2" />
+        </WrapPanel>
+        <Grid Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Border / align" VerticalAlignment="Center" />
+            <ComboBox x:Name="BorderBox" Grid.Column="1">
+                <ComboBoxItem Content="No border" />
+                <ComboBoxItem Content="Thin border" />
+                <ComboBoxItem Content="Thick border" />
+            </ComboBox>
+            <ComboBox x:Name="AlignBox" Grid.Column="3">
+                <ComboBoxItem Content="Align as Excel does" />
+                <ComboBoxItem Content="Align left" />
+                <ComboBoxItem Content="Align center" />
+                <ComboBoxItem Content="Align right" />
+            </ComboBox>
+        </Grid>
+        <Grid Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="90" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Number format" VerticalAlignment="Center" />
+            <ComboBox x:Name="FormatBox" Grid.Column="1" IsEditable="True"
+                      ToolTip="An Excel number format. Blank = unchanged." />
+        </Grid>
+        <Border x:Name="Sample" Margin="90,2,0,0" BorderBrush="#CCC" BorderThickness="1" Padding="8,3" HorizontalAlignment="Left">
+            <TextBlock x:Name="SampleText" Text="Sample 1,234.50" />
+        </Border>
+    </StackPanel>
+</UserControl>

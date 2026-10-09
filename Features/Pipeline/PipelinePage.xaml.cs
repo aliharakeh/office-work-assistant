@@ -9,19 +9,25 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using Microsoft.Win32;
 using OfficeWorkAssistant.Excel;
+using OfficeWorkAssistant.Features.Append;
+using OfficeWorkAssistant.Features.ArrangeColumns;
+using OfficeWorkAssistant.Features.CleanText;
 using OfficeWorkAssistant.Features.ExcelProcessing;
 using OfficeWorkAssistant.Features.FileOps;
 using OfficeWorkAssistant.Features.FilterSort;
 using OfficeWorkAssistant.Features.FillColumns;
+using OfficeWorkAssistant.Features.FormatSheet;
 using OfficeWorkAssistant.Features.FormulaGuide;
+using OfficeWorkAssistant.Features.Highlight;
 using OfficeWorkAssistant.Features.MergeDuplicates;
+using OfficeWorkAssistant.Features.RemoveDuplicates;
+using OfficeWorkAssistant.Features.SplitCombine;
 using OfficeWorkAssistant.Features.Templates;
 
 namespace OfficeWorkAssistant.Features.Pipeline
 {
-    // The app's main page. Steps are edited on the feature pages (step editors); this page owns
-    // the graph, the saved pipelines, runs it, and shows each step's result. The Frame keeps
-    // this instance alive while a step editor is open, so all set-up happens in the constructor.
+    // The app's main page. Steps are edited in the right sidebar with the feature's editor control;
+    // this page owns the graph, the saved pipelines, runs it, and shows each step's result.
     public partial class PipelinePage : Page
     {
         const int PreviewRows = 1000;
@@ -39,7 +45,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         string _filePath;
         bool _dirty;
         bool _filling;
-        string _previewOnReturn;
+        string _editorFor;
 
         PipelineNodeView _dragNode;
         Point _dragOffset;
@@ -56,10 +62,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
         {
             new[] { PipelineStepKind.Load, PipelineStepKind.FilterSort, PipelineStepKind.Templates, PipelineStepKind.Compare,
                 PipelineStepKind.FillColumns, PipelineStepKind.Save },
+            new[] { PipelineStepKind.CleanText, PipelineStepKind.SplitColumn, PipelineStepKind.CombineColumns,
+                PipelineStepKind.RemoveDuplicates, PipelineStepKind.ArrangeColumns, PipelineStepKind.Append },
+            new[] { PipelineStepKind.Highlight, PipelineStepKind.FormatSheet },
             new[] { PipelineStepKind.ValueList, PipelineStepKind.ListFolder, PipelineStepKind.FindFiles },
             new[] { PipelineStepKind.FileAction, PipelineStepKind.MergeFolders }
         };
-        static readonly string[] PaletteHeaders = { "Excel data", "Files and folders", "Change files (on Run and save)" };
+        static readonly string[] PaletteHeaders =
+        {
+            "Excel data", "Tidy and reshape", "Style (put right before Save)", "Files and folders", "Change files (on Run and save)"
+        };
 
         public PipelinePage()
         {
@@ -94,16 +106,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 Reset(new PipelineDefinition(), null);
         }
 
-        // Fires again when a feature page goes back here: show what the edited step now gives.
         void Page_Loaded(object sender, RoutedEventArgs e)
         {
             UpdateHeader();
-            if (_previewOnReturn == null)
-                return;
-            var id = _previewOnReturn;
-            _previewOnReturn = null;
-            Select(id);
-            RunPreview(id);
         }
 
         // ---------- saved pipelines ----------
@@ -463,7 +468,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     MessageBoxButton.YesNo, actions.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
-            var result = Execute(null, true);
+            var result = Execute(null, true, true);
             if (result.Error != null)
             {
                 Alert(result.Error, "Pipeline stopped", MessageBoxImage.Error);
@@ -517,9 +522,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (kind == PipelineStepKind.Load)
                 LoadBrowse_Click(null, null);
             else if (PipelineWork.Ports(kind).Length == 0 || from != null)
-                SetStatus("Added " + node.Title + ". Double-click it to set it up.");
+                SetStatus("Added " + node.Title + ". Set it up in the panel on the right.");
             else
-                SetStatus("Added " + node.Title + ". Link an earlier step's right dot to its left dot, then double-click it to set it up.");
+                SetStatus("Added " + node.Title + ". Link an earlier step's right dot to its left dot, then set it up in the panel on the right.");
         }
 
         void BringIntoView(PipelineNode node)
@@ -566,12 +571,25 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         void AddView(PipelineNode node)
         {
-            var view = new PipelineNodeView(node);
+            var view = new PipelineNodeView(node, PipelineWork.InputPorts(_def, node));
             view.Box.MouseLeftButtonDown += Node_MouseDown;
             view.Output.MouseLeftButtonDown += Output_MouseDown;
             view.Box.Tag = node.Id;
             _views[node.Id] = view;
             Board.Children.Add(view.Root);
+        }
+
+        // An Append step's ports follow its links, so its box is built again when they change.
+        void RebuildView(string id)
+        {
+            PipelineNodeView old;
+            if (!_views.TryGetValue(id, out old) || old.Node.Kind != PipelineStepKind.Append)
+                return;
+            Board.Children.Remove(old.Root);
+            AddView(old.Node);
+            var view = _views[id];
+            view.Selected = _selected == id;
+            view.SetState(_cache.ContainsKey(id) ? PipelineNodeState.Ok : PipelineNodeState.Idle, null);
         }
 
         void Node_MouseDown(object sender, MouseButtonEventArgs e)
@@ -581,9 +599,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
             e.Handled = true;
             Board.Focus();
             Select(id);
-            if (e.ClickCount == 2)
+            if (e.ClickCount == 2 && view.Node.Kind == PipelineStepKind.Load)
             {
-                EditStep(view.Node);
+                LoadBrowse_Click(null, null);
+                return;
+            }
+            if (e.ClickCount == 2 && view.Node.Kind == PipelineStepKind.Save)
+            {
+                SaveBrowse_Click(null, null);
                 return;
             }
             _dragNode = view;
@@ -677,7 +700,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (nodeId == null)
                 return null;
             var node = PipelineWork.Find(_def, nodeId);
-            var ports = PipelineWork.Ports(node.Kind);
+            var ports = PipelineWork.InputPorts(_def, node);
             if (ports.Length == 0)
                 return null;
             foreach (var name in ports)
@@ -724,7 +747,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
             _def.Links.Add(new PipelineLink { From = from, To = to, Port = port });
             Invalidate(to);
             MarkDirty();
+            RebuildView(to);
             RedrawWires();
+            if (_selected == to)
+            {
+                // Its editor was built for the old input.
+                _editorFor = null;
+                ShowSelection();
+            }
             var node = PipelineWork.Find(_def, to);
             SetStatus("Linked " + PipelineWork.Find(_def, from).Title + " to " + node.Title +
                 (port == PipelineWork.PortIn ? "." : " (" + PipelineWork.PortLabel(node.Kind, port) + ")."));
@@ -825,9 +855,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
         {
             if (_selectedLink != null)
             {
+                var to = _selectedLink.To;
                 _def.Links.Remove(_selectedLink);
-                Invalidate(_selectedLink.To);
+                Invalidate(to);
                 _selectedLink = null;
+                PipelineWork.CompactPorts(_def, to);
+                RebuildView(to);
+                if (_editorFor == to)
+                    _editorFor = null;
             }
             else if (_selected != null)
             {
@@ -835,8 +870,10 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     Forget(id);
                 Board.Children.Remove(_views[_selected].Root);
                 _views.Remove(_selected);
-                PipelineWork.RemoveNode(_def, _selected);
+                var fed = PipelineWork.RemoveNode(_def, _selected);
                 _selected = null;
+                foreach (var id in fed)
+                    RebuildView(id);
             }
             else
                 return;
@@ -888,6 +925,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 if (node == null)
                 {
                     ShowResult(null);
+                    ShowEditor(null);
                     return;
                 }
 
@@ -898,8 +936,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 StepTitle.Text = node.Title;
                 LoadPanel.Visibility = node.Kind == PipelineStepKind.Load ? Visibility.Visible : Visibility.Collapsed;
                 SavePanel.Visibility = node.Kind == PipelineStepKind.Save ? Visibility.Visible : Visibility.Collapsed;
-                EditBtn.Visibility = node.Kind == PipelineStepKind.Load || node.Kind == PipelineStepKind.Save
-                    ? Visibility.Collapsed : Visibility.Visible;
+
                 StepError.Text = _views[node.Id].Box.ToolTip as string ?? "";
 
                 var load = node.Settings as LoadStepSettings;
@@ -918,6 +955,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     SaveNewSheet.IsChecked = save.Mode == SaveStepMode.NewSheet;
                 }
                 ShowResult(node);
+                ShowEditor(node);
             }
             finally
             {
@@ -1071,109 +1109,170 @@ namespace OfficeWorkAssistant.Features.Pipeline
             MarkDirty();
         }
 
-        // ---------- editing a step on its feature page ----------
+        // ---------- editing a step in the sidebar ----------
 
-        void EditStep_Click(object sender, RoutedEventArgs e)
+        // The editor stays while the same step is selected, so edits are not lost when a run
+        // redraws the selection. It is built again when another step is selected.
+        void ShowEditor(PipelineNode node)
         {
-            var node = SelectedNode();
-            if (node != null)
-                EditStep(node);
+            if (node == null || node.Kind == PipelineStepKind.Load || node.Kind == PipelineStepKind.Save)
+            {
+                EditorHost.Child = null;
+                _editorFor = null;
+                return;
+            }
+            if (_editorFor == node.Id && EditorHost.Child != null)
+                return;
+            _editorFor = node.Id;
+            EditorHost.Child = BuildEditor(node);
         }
 
-        void EditStep(PipelineNode node)
+        static FrameworkElement Notice(string text)
         {
-            if (node.Kind == PipelineStepKind.Load)
-            {
-                LoadBrowse_Click(null, null);
-                return;
-            }
-            if (node.Kind == PipelineStepKind.Save)
-            {
-                SaveBrowse_Click(null, null);
-                return;
-            }
+            return new TextBlock { Text = text, Foreground = Brushes.DimGray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
+        }
 
-            // The page needs the real inputs, so run the steps before this one first.
-            var ports = PipelineWork.Ports(node.Kind);
+        FrameworkElement BuildEditor(PipelineNode node)
+        {
+            // The editor needs the real inputs, so run the steps before this one first.
+            var ports = PipelineWork.InputPorts(_def, node);
             var inputs = new DataTable[ports.Length];
             var labels = new string[ports.Length];
             for (var i = 0; i < ports.Length; i++)
             {
                 var link = PipelineWork.InputLink(_def, node.Id, ports[i]);
-                // A list can be typed in without an input.
-                if (link == null && node.Kind == PipelineStepKind.ValueList)
+                // A list can be typed in without an input; Append always has a free port.
+                if (link == null && (node.Kind == PipelineStepKind.ValueList || node.Kind == PipelineStepKind.Append))
                     continue;
                 if (link == null)
+                    return Notice("Connect " + PipelineWork.PortLabel(node.Kind, ports[i]) +
+                        " of this step first: drag from the right dot of an earlier step to this step's left dot.");
+                var result = Execute(link.From, false, false);
+                if (result.Error != null)
                 {
-                    Alert("Connect " + PipelineWork.PortLabel(node.Kind, ports[i]) + " of this step first: drag from the right dot of an earlier step.",
-                        "Not connected", MessageBoxImage.Warning);
-                    return;
+                    var failed = result.FailedNodeId != null ? PipelineWork.Find(_def, result.FailedNodeId) : null;
+                    return Notice("This step cannot be set up until the steps before it work.\n\n" +
+                        (failed != null ? failed.Title + ": " : "") + result.Error);
                 }
-                if (!RunPreview(link.From))
-                    return;
                 inputs[i] = _cache[link.From];
                 labels[i] = "From step: " + PipelineWork.Find(_def, link.From).Title;
             }
 
-            Page page;
             switch (node.Kind)
             {
                 case PipelineStepKind.FilterSort:
                 {
                     var input = inputs[0];
                     var s = node.Settings as FilterSortSettings;
-                    page = new FilterSortPage(input, labels[0], s == null ? null : PipelineWork.FilterSortToLetters(s, input, false),
+                    return new FilterSortPage(input, labels[0], s == null ? null : PipelineWork.FilterSortToLetters(s, input, false),
                         r => UseSettings(node, PipelineWork.FilterSortToNames(r, input)));
-                    break;
                 }
                 case PipelineStepKind.Templates:
                 {
                     var input = inputs[0];
                     var t = node.Settings as TemplateDefinition;
-                    page = new TemplatesPage(input, labels[0], t == null ? null : PipelineWork.TemplateToLetters(t, input, false),
+                    return new TemplatesPage(input, labels[0], t == null ? null : PipelineWork.TemplateToLetters(t, input, false),
                         r => UseSettings(node, PipelineWork.TemplateToNames(r, input)));
-                    break;
                 }
                 case PipelineStepKind.Compare:
-                    page = new ExcelProcessingPage(inputs[0], labels[0], inputs[1], labels[1],
+                    return new ExcelProcessingPage(inputs[0], labels[0], inputs[1], labels[1],
                         PipelineWork.Clone(node.Settings as ExcelProcessingSettings), r => UseSettings(node, r));
-                    break;
                 case PipelineStepKind.ValueList:
-                    page = new ValueListPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as ValueListSettings), r => UseSettings(node, r));
-                    break;
+                    return new ValueListPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as ValueListSettings), r => UseSettings(node, r));
                 case PipelineStepKind.ListFolder:
-                    page = new FindFilesPage(PipelineWork.Clone(node.Settings as FolderScanSettings), r => UseSettings(node, r));
-                    break;
+                    return new FindFilesPage(PipelineWork.Clone(node.Settings as FolderScanSettings), r => UseSettings(node, r));
                 case PipelineStepKind.FindFiles:
-                    page = new FindFilesPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FindFilesSettings), r => UseSettings(node, r));
-                    break;
+                    return new FindFilesPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FindFilesSettings), r => UseSettings(node, r));
                 case PipelineStepKind.FileAction:
-                    page = new FileActionPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FileActionSettings), r => UseSettings(node, r));
-                    break;
+                    return new FileActionPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FileActionSettings), r => UseSettings(node, r));
                 case PipelineStepKind.MergeFolders:
-                    page = new MergeDuplicatesPage(PipelineWork.Clone(node.Settings as MergeFoldersSettings), r => UseSettings(node, r));
-                    break;
+                    return new MergeDuplicatesPage(PipelineWork.Clone(node.Settings as MergeFoldersSettings), r => UseSettings(node, r));
+                case PipelineStepKind.CleanText:
+                {
+                    var input = inputs[0];
+                    var s = node.Settings as CleanTextSettings;
+                    return new CleanTextPage(input, labels[0], s == null ? null : PipelineWork.CleanTextToLetters(s, input, false),
+                        r => UseSettings(node, PipelineWork.CleanTextToNames(r, input)));
+                }
+                case PipelineStepKind.SplitColumn:
+                {
+                    var input = inputs[0];
+                    var s = node.Settings as SplitColumnSettings;
+                    return new SplitColumnPage(input, labels[0], s == null ? null : PipelineWork.SplitToLetters(s, input, false),
+                        r => UseSettings(node, PipelineWork.SplitToNames(r, input)));
+                }
+                case PipelineStepKind.CombineColumns:
+                {
+                    var input = inputs[0];
+                    var s = node.Settings as CombineColumnsSettings;
+                    return new CombineColumnsPage(input, labels[0], s == null ? null : PipelineWork.CombineToLetters(s, input, false),
+                        r => UseSettings(node, PipelineWork.CombineToNames(r, input)));
+                }
+                case PipelineStepKind.RemoveDuplicates:
+                {
+                    var input = inputs[0];
+                    var s = node.Settings as RemoveDuplicatesSettings;
+                    return new RemoveDuplicatesPage(input, labels[0], s == null ? null : PipelineWork.RemoveDuplicatesToLetters(s, input, false),
+                        r => UseSettings(node, PipelineWork.RemoveDuplicatesToNames(r, input)));
+                }
+                case PipelineStepKind.ArrangeColumns:
+                {
+                    var input = inputs[0];
+                    var s = node.Settings as ArrangeColumnsSettings;
+                    return new ArrangeColumnsPage(input, labels[0], s == null ? null : PipelineWork.ArrangeToLetters(s, input, false),
+                        r => UseSettings(node, PipelineWork.ArrangeToNames(r, input)));
+                }
+                case PipelineStepKind.Append:
+                {
+                    var tables = new List<DataTable>();
+                    var shown = new List<string>();
+                    var names = new List<string>();
+                    for (var i = 0; i < ports.Length; i++)
+                    {
+                        if (inputs[i] == null)
+                            continue;
+                        tables.Add(inputs[i]);
+                        shown.Add(labels[i]);
+                        names.Add(PipelineWork.Find(_def, PipelineWork.InputLink(_def, node.Id, ports[i]).From).Title);
+                    }
+                    if (tables.Count == 0)
+                        return Notice("Link the steps whose rows you want to stack: drag from the right dot of each one to this step's left dot.");
+                    return new AppendPage(tables, shown, names, PipelineWork.Clone(node.Settings as AppendSettings), r => UseSettings(node, r));
+                }
+                case PipelineStepKind.Highlight:
+                {
+                    var input = inputs[0];
+                    var s = node.Settings as HighlightSettings;
+                    return new HighlightPage(input, labels[0], s == null ? null : PipelineWork.HighlightToLetters(s, input, false),
+                        r => UseSettings(node, PipelineWork.HighlightToNames(r, input)));
+                }
+                case PipelineStepKind.FormatSheet:
+                {
+                    var input = inputs[0];
+                    var s = node.Settings as FormatSheetSettings;
+                    return new FormatSheetPage(input, labels[0], s == null ? null : PipelineWork.FormatSheetToLetters(s, input, false),
+                        r => UseSettings(node, PipelineWork.FormatSheetToNames(r, input)));
+                }
                 default:
-                    page = new FillColumnsPage(inputs[0], labels[0], inputs[1], labels[1],
+                    return new FillColumnsPage(inputs[0], labels[0], inputs[1], labels[1],
                         PipelineWork.Clone(node.Settings as FillColumnsSettings), r => UseSettings(node, r));
-                    break;
             }
-            NavigationService.Navigate(page);
         }
 
+        // The editor's Apply to step button: keep the settings and show what the step now gives.
         void UseSettings(PipelineNode node, object settings)
         {
             node.Settings = settings;
             StepChanged(node);
-            _previewOnReturn = node.Id;
+            if (RunPreview(node.Id))
+                SetStatus("Applied to " + node.Title + ".");
         }
-
         // ---------- running ----------
 
         // Runs targetId and what it needs (everything when null). False when a step failed.
         bool RunPreview(string targetId)
         {
-            var result = Execute(targetId, false);
+            var result = Execute(targetId, false, true);
             if (result.Error == null)
                 return true;
             // A failing step is already selected and named in the status line.
@@ -1185,7 +1284,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
             return false;
         }
 
-        PipelineRunResult Execute(string targetId, bool writeFiles)
+        // selectFailed: select the step that failed and redraw the side panel. False while the side panel is
+        // itself being built, which must not select another step or build itself again.
+        PipelineRunResult Execute(string targetId, bool writeFiles, bool selectFailed)
         {
             PipelineRunResult result;
             Mouse.OverrideCursor = Cursors.Wait;
@@ -1210,10 +1311,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
             if (result.FailedNodeId != null)
             {
-                Select(result.FailedNodeId);
+                if (selectFailed)
+                    Select(result.FailedNodeId);
                 SetStatus(PipelineWork.Find(_def, result.FailedNodeId).Title + ": " + result.Error);
             }
-            else
+            else if (selectFailed)
                 ShowSelection();
             return result;
         }

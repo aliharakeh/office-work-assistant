@@ -6,13 +6,13 @@ A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. The 
 
 - **Saved pipelines** (top left) lists the pipelines in `Documents\Office Work Assistant\Pipelines`, newest first. Click one to open it. The last saved pipeline opens when the app starts. New starts an empty pipeline. Duplicate copies the selected one. Delete moves it to the Recycle Bin. Import... copies a pipeline file from elsewhere into the list, and Folder opens the folder in Explorer.
 - **The name box** at the top is the pipeline's name. Save (Ctrl+S) stores the pipeline under that name, with no file dialog. Changing the name and saving renames the saved pipeline. Saving under a name another pipeline already uses asks first. Switching pipelines or closing the app with unsaved changes offers to save them.
-- **Add a step** (bottom left) lists every step in three groups, each with its own colour: Excel data, Files and folders, and Change files. Click a step to add it next to the selected step, linked to it. You can also drag a step onto the canvas to place it.
+- **Add a step** (bottom left) lists every step in five groups, each with its own colour: Excel data, Tidy and reshape, Style, Files and folders, and Change files. Click a step to add it next to the selected step, linked to it. You can also drag a step onto the canvas to place it.
 - **The canvas:**
-  - Link steps by dragging from a step's right dot to another step's left dot. Compare A/B and Fill columns have two inputs, A and B.
+  - Link steps by dragging from a step's right dot to another step's left dot. Compare A/B and Fill columns have two inputs, A and B. Append tables always has one free input dot more than it has links, so you can keep adding tables.
   - One step's result can feed several later steps.
   - Links that would make a loop are refused.
   - To remove a link or step, select it and press Delete.
-- **Editing a step:** double-click it, or select it and click Edit step... This opens the step's editor with the earlier step's result already loaded. Click Use in pipeline to keep the changes, or Back to cancel. Load file and Save file are edited in the Step panel on the right.
+- **Editing a step:** select it. Its settings open in the Step panel on the right, with the earlier step's result already loaded. Click Apply to step to keep the changes (switching to another step discards unapplied ones). Drag the divider to make the panel wider. Double-click a Load file or Save file step to browse for its file.
 - **Run preview** (F5) runs the selected step and the steps it needs, or every step when none is selected, and shows the result below the canvas. A step that worked turns green. A step that failed turns red and shows why.
 - **Run and save files** reads every file again and runs every step without changing anything. It then lists the files it will replace and how many items each Change files step will copy, move, delete or merge, and asks you to confirm. Only then does it carry out those steps in order and write the Save files.
 - **Formula guide** opens the formula lessons and tester. Back returns to the canvas.
@@ -46,6 +46,60 @@ Fills columns of B with values from the matching row of A.
   - `$Price` reads the B row.
   - `$Value` is the cell's current value.
   - `$Matched` is true when an A row matched.
+
+## Tidy and reshape steps
+
+- **Clean text** applies every option you tick to the text cells of the ticked columns, or of every column when none is ticked. The options are:
+  - trim spaces and turn runs of spaces into one
+  - turn line breaks into spaces
+  - remove hidden characters (non-breaking spaces, zero-width marks, control codes)
+  - change case: upper, lower, Proper or Sentence
+  - turn text such as `1,234.50` into a number
+  - leave a cell empty when nothing is left
+
+  Numbers and dates are not touched.
+- **Split column** cuts one column into several, placed right after it. It can split:
+  - on a delimiter (`\t` is a tab)
+  - by fixed widths, such as `3,5,2`
+  - by a regular expression: without `( )` groups it cuts wherever the pattern matches; with groups, each group is one part, for example `(\w+)@(.+)`
+
+  Max parts makes the last part keep the rest. You can name the new columns, and keep or drop the original.
+- **Combine columns** joins the picked columns, in the order you list them, with a separator. It can skip empty values so no separator is doubled. With Remove the joined columns ticked, the result takes the place of the leftmost one; otherwise it goes after the rightmost.
+- **Remove duplicates** compares rows on the ticked columns, or on whole rows when none is ticked. Or choose a formula: rows are duplicates when the formula gives the same result, for example `LEFT($Code, 5)` or `LOWER(TRIM($Name)) & "|" & $City`. It can ignore case and spaces at the start and end. It keeps one of:
+  - the first of each
+  - the last of each
+  - only rows that appear once
+  - only rows that repeat, for review
+
+  An optional count column says how many rows shared the key. Kept rows stay in their original order.
+- **Arrange columns** lists every column in output order. Click a column's name to select it and use Up and Down to reorder; tick its box to keep it, and type a new name to rename it. Columns an earlier step adds later can be kept at the end or dropped.
+- **Append tables** stacks the rows of every linked step, in link order: input 1 first. Columns match by header (the 2nd `Qty` of one table with the 2nd `Qty` of another) or by position. Every column is kept, or only those all tables have. An optional source column holds each row's input step title, so rename the Load steps to label the rows, for example `January`. Deleting a link renumbers the remaining inputs.
+
+## Style steps
+
+These steps decide how the Save file step writes the sheet. The data itself does not change. The result grid shows the colours. **Put them right before Save:** any other step after them drops the styling, because it can move or remove rows. Highlight and Format sheet can follow each other in either order; Highlight colours stay on top.
+
+- **Highlight** colours cells or rows that match a condition. Each rule has a formula, what to style, and a look. What to style is one of:
+  - the whole row
+  - the picked columns in matching rows
+  - each picked cell tested on its own, with `$Value` as that cell
+
+  Examples:
+  - `$Status == "Late"`: whole row light red
+  - `$Value < 0` on Amount and Balance: red bold text
+  - `$Due < $Today`: Due column yellow
+
+  The look can set a fill colour, text colour, bold, italic, underline, strikethrough, border, alignment, wrap and number format. Colours are a name from the list or `#RRGGBB`. Later rules paint over earlier ones, unless a rule is set to stop. Build a condition fills in the formula from a column, an operator and a value.
+- **Format sheet** sets the sheet's look:
+  - header row style (bold on light blue with thin borders by default)
+  - freeze the header row and the first N columns
+  - filter buttons on the header
+  - column widths fitted to their contents
+  - thin borders on every cell
+  - every second row shaded
+  - per-column width, number format (for example `#,##0.00` or `dd/MM/yyyy`), alignment and wrap
+
+Example: Load file -> Clean text -> Remove duplicates -> Highlight (`$Qty == 0` row light red) -> Format sheet -> Save file.
 
 ## File steps
 
@@ -87,7 +141,7 @@ Columns are `$A`, `$B`, `$C`, the first, second and third column of the sheet. S
 
 Operators: `+ - * / ^`, `&` to glue text together, `== != > >= < <=`, `&& || !`, and `IF(condition, then, else)`.
 
-Functions: `TODAY()`, `NOW()`, `DATE()`, `YEAR()`, `MONTH()`, `DAY()`, `WEEKDAY()`, `ADDDAYS()`, `ADDWEEKS()`, `ADDMONTHS()`, `ADDYEARS()`, `STARTOFWEEK()`, `ENDOFWEEK()`, `STARTOFMONTH()`, `ENDOFMONTH()`, `FORMAT(date, fmt)`, `TRIM()`, `REMOVEDIGITS()`, `CLEARSYMBOLS()`, `FIRSTWORD()`, `LASTWORD()`, `CONTAINS()`, `STARTSWITH()`, `ENDSWITH()`.
+Functions: `TODAY()`, `NOW()`, `DATE()`, `YEAR()`, `MONTH()`, `DAY()`, `WEEKDAY()`, `ADDDAYS()`, `ADDWEEKS()`, `ADDMONTHS()`, `ADDYEARS()`, `STARTOFWEEK()`, `ENDOFWEEK()`, `STARTOFMONTH()`, `ENDOFMONTH()`, `FORMAT(date, fmt)`, `TRIM()`, `REMOVEDIGITS()`, `CLEARSYMBOLS()`, `FIRSTWORD()`, `LASTWORD()`, `CONTAINS()`, `STARTSWITH()`, `ENDSWITH()`, `UPPER()`, `LOWER()`, `PROPER()`, `LEN()`, `LEFT(text, n)`, `RIGHT(text, n)`, `MID(text, start, n)`, `SUBSTITUTE(text, old, new)`, `ISBLANK()`.
 
 Date variables: `$Today`, `$Yesterday`, `$Tomorrow`, `$WeekAgo`, `$WeekLater`, `$MonthAgo`, `$MonthLater`, `$StartOfWeek`, `$EndOfWeek`, `$StartOfMonth`, `$EndOfMonth`, `$StartOfYear`, `$EndOfYear`, `$CurrentYear`, `$CurrentMonth`, `$CurrentDay`, `$Now`, plus the start and end of next and previous week and month.
 
@@ -113,10 +167,10 @@ Close a running instance before rebuilding, otherwise MSBuild cannot overwrite t
 ## Project layout
 
 ```
-Views/             MainWindow: a Frame that shows the pipeline page, with step editors opening on top of it.
+Views/             MainWindow: a Frame that shows the pipeline page; step editors live in its right-hand Step panel.
 Features/Pipeline/ The main page: canvas, saved pipelines, running.
-Features/<Name>/   One step per folder: <Name>Page.xaml (the step editor) plus <Name>Work.cs (logic, no WPF).
-Excel/             Shared .xlsx reading and writing.
+Features/<Name>/   One step per folder: <Name>Page.xaml (the step editor, a UserControl shown in the Step panel) plus <Name>Work.cs (logic, no WPF).
+Excel/             Shared .xlsx reading and writing, cell styles (SheetStyle) and the style picker, column letters.
 Expressions/       Shared formula engine and the Variables help window.
 ```
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -21,17 +22,21 @@ namespace OfficeWorkAssistant.Features.Pipeline
         public string Port;
     }
 
-    // One step box on the canvas: a fixed-size card with input ports on the left
-    // and the output port on the right. Code-only, so it needs no XAML entry.
+    // One step box on the canvas: a card with input ports on the left and the output port on
+    // the right. Fixed width; an Append step grows taller with its inputs. Code-only, so it
+    // needs no XAML entry.
     public sealed class PipelineNodeView
     {
         public const double Width = 200;
+        // The usual height; see BoxHeight.
         public const double Height = 80;
         const double PortSize = 14;
+        const double PortGap = 22;
 
-        // Step categories, shared with the palette: data in/out, Excel work, files, disk changes.
+        // Step categories, shared with the palette: data in/out, Excel work, styling, files, disk changes.
         static readonly Brush InOutAccent = Frozen(Color.FromRgb(0x00, 0x89, 0x7B));
         static readonly Brush ExcelAccent = Frozen(Color.FromRgb(0x1E, 0x88, 0xE5));
+        static readonly Brush StyleAccent = Frozen(Color.FromRgb(0x8E, 0x24, 0xAA));
         static readonly Brush FilesAccent = Frozen(Color.FromRgb(0xF5, 0x7C, 0x00));
         static readonly Brush ActionAccent = Frozen(Color.FromRgb(0xD8, 0x1B, 0x60));
 
@@ -41,6 +46,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 return ActionAccent;
             if (PipelineWork.IsFileKind(kind))
                 return FilesAccent;
+            if (PipelineWork.IsStyleKind(kind))
+                return StyleAccent;
             if (kind == PipelineStepKind.Load || kind == PipelineStepKind.Save)
                 return InOutAccent;
             return ExcelAccent;
@@ -57,16 +64,21 @@ namespace OfficeWorkAssistant.Features.Pipeline
         public readonly Border Box;
         public readonly Ellipse Output;
         public readonly Dictionary<string, Ellipse> Inputs = new Dictionary<string, Ellipse>();
+        public readonly double BoxHeight;
+        readonly string[] _ports;
         readonly TextBlock _title;
         readonly TextBlock _kind;
         readonly TextBlock _detail;
         PipelineNodeState _state;
         bool _selected;
 
-        public PipelineNodeView(PipelineNode node)
+        // ports: the step's input ports now (PipelineWork.InputPorts).
+        public PipelineNodeView(PipelineNode node, string[] ports)
         {
             Node = node;
-            Root = new Canvas { Width = Width, Height = Height };
+            _ports = ports;
+            BoxHeight = Math.Max(Height, PortGap * ports.Length + 16);
+            Root = new Canvas { Width = Width, Height = BoxHeight };
             Panel.SetZIndex(Root, 1);
 
             var accent = AccentOf(node.Kind);
@@ -85,7 +97,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             Box = new Border
             {
                 Width = Width,
-                Height = Height,
+                Height = BoxHeight,
                 CornerRadius = new CornerRadius(6),
                 BorderThickness = new Thickness(2),
                 Background = Brushes.White,
@@ -94,18 +106,22 @@ namespace OfficeWorkAssistant.Features.Pipeline
             };
             Root.Children.Add(Box);
 
-            foreach (var port in PipelineWork.Ports(node.Kind))
+            foreach (var port in ports)
             {
                 var dot = Port(port);
-                dot.ToolTip = "Drop a link here: " + PipelineWork.PortLabel(node.Kind, port);
-                var y = InputY(node.Kind, port);
+                int number = PipelineWork.AppendPortNumber(port);
+                dot.ToolTip = number == ports.Length && node.Kind == PipelineStepKind.Append
+                    ? "Drop a link here to add another table"
+                    : "Drop a link here: " + PipelineWork.PortLabel(node.Kind, port);
+                var y = InputY(port);
                 Canvas.SetLeft(dot, -PortSize / 2);
                 Canvas.SetTop(dot, y - PortSize / 2);
                 Root.Children.Add(dot);
                 Inputs[port] = dot;
                 if (port != PipelineWork.PortIn)
                 {
-                    var label = new TextBlock { Text = port, FontSize = 10, FontWeight = FontWeights.Bold, Foreground = PortFill, IsHitTestVisible = false };
+                    var name = number > 0 ? number.ToString(System.Globalization.CultureInfo.InvariantCulture) : port;
+                    var label = new TextBlock { Text = name, FontSize = 10, FontWeight = FontWeights.Bold, Foreground = PortFill, IsHitTestVisible = false };
                     Canvas.SetLeft(label, PortSize / 2 + 1);
                     Canvas.SetTop(label, y - 7);
                     Root.Children.Add(label);
@@ -116,7 +132,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             Output.ToolTip = "Drag from here to the next step's input";
             Output.Cursor = System.Windows.Input.Cursors.Cross;
             Canvas.SetLeft(Output, Width - PortSize / 2);
-            Canvas.SetTop(Output, Height / 2 - PortSize / 2);
+            Canvas.SetTop(Output, BoxHeight / 2 - PortSize / 2);
             Root.Children.Add(Output);
 
             Refresh();
@@ -135,23 +151,26 @@ namespace OfficeWorkAssistant.Features.Pipeline
             };
         }
 
-        static double InputY(PipelineStepKind kind, string port)
+        double InputY(string port)
         {
             if (port == PipelineWork.PortA)
-                return Height * 0.3;
+                return BoxHeight * 0.3;
             if (port == PipelineWork.PortB)
-                return Height * 0.7;
-            return Height / 2;
+                return BoxHeight * 0.7;
+            int number = PipelineWork.AppendPortNumber(port);
+            if (number > 0)
+                return BoxHeight * number / (_ports.Length + 1);
+            return BoxHeight / 2;
         }
 
         public Point InputPoint(string port)
         {
-            return new Point(Node.X, Node.Y + InputY(Node.Kind, port));
+            return new Point(Node.X, Node.Y + InputY(port));
         }
 
         public Point OutputPoint()
         {
-            return new Point(Node.X + Width, Node.Y + Height / 2);
+            return new Point(Node.X + Width, Node.Y + BoxHeight / 2);
         }
 
         public void Place()

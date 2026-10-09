@@ -10,7 +10,7 @@ using OfficeWorkAssistant.Expressions;
 namespace OfficeWorkAssistant.Features.FileOps
 {
     // Pipeline-only: edits a List / set / map step. input is null when no step is connected.
-    public partial class ValueListPage : Page
+    public partial class ValueListPage : UserControl
     {
         const int PreviewRows = 1000;
 
@@ -24,7 +24,6 @@ namespace OfficeWorkAssistant.Features.FileOps
             InitializeComponent();
             _input = input;
             _use = use;
-            ExcelGrid.Hook(ResultGrid);
             FormulaField.Watch(KeyBox, NeedKey);
             FormulaField.Watch(ValueBox, NeedValue);
             StoredGrid.ItemsSource = _items;
@@ -50,7 +49,6 @@ namespace OfficeWorkAssistant.Features.FileOps
                 _items.Add(new ValueListItem { Key = item.Key, Value = item.Value });
             _filling = false;
             UpdateEnabled();
-            Preview_Click(null, null);
         }
 
         static string Headers(DataTable table)
@@ -113,36 +111,6 @@ namespace OfficeWorkAssistant.Features.FileOps
             return s;
         }
 
-        void Preview_Click(object sender, RoutedEventArgs e)
-        {
-            var s = Current();
-            if (s.Source == ValueListSource.Input && _input == null)
-            {
-                ResultGrid.ItemsSource = null;
-                ResultInfo.Text = "Connect an input step, or switch to stored values.";
-                return;
-            }
-            try
-            {
-                var table = FileOpsWork.BuildList(_input, s);
-                var shown = table;
-                if (table.Rows.Count > PreviewRows)
-                {
-                    shown = table.Clone();
-                    for (var i = 0; i < PreviewRows; i++)
-                        shown.ImportRow(table.Rows[i]);
-                }
-                ResultGrid.ItemsSource = shown.DefaultView;
-                ResultInfo.Text = table.Rows.Count.ToString("N0", CultureInfo.InvariantCulture) + " keys" +
-                    (shown != table ? " (showing the first " + PreviewRows.ToString("N0", CultureInfo.InvariantCulture) + ")" : "");
-            }
-            catch (Exception ex)
-            {
-                ResultGrid.ItemsSource = null;
-                ResultInfo.Text = ex.Message;
-            }
-        }
-
         void Capture_Click(object sender, RoutedEventArgs e)
         {
             if (_input == null)
@@ -155,7 +123,6 @@ namespace OfficeWorkAssistant.Features.FileOps
                     _items.Add(item);
                 SrcStored.IsChecked = true;
                 UpdateEnabled();
-                Preview_Click(null, null);
             }
             catch (Exception ex)
             {
@@ -173,13 +140,6 @@ namespace OfficeWorkAssistant.Features.FileOps
                 return;
             }
             _use(s);
-            Back_Click(null, null);
-        }
-
-        void Back_Click(object sender, RoutedEventArgs e)
-        {
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
 
         void Alert(string message, string title, MessageBoxImage icon)

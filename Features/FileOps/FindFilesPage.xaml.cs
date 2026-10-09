@@ -11,7 +11,7 @@ using OfficeWorkAssistant.Expressions;
 namespace OfficeWorkAssistant.Features.FileOps
 {
     // Pipeline-only: edits a Find files step (keys from the input) or a List folder step (no input).
-    public partial class FindFilesPage : Page
+    public partial class FindFilesPage : UserControl
     {
         const int PreviewRows = 1000;
 
@@ -43,8 +43,6 @@ namespace OfficeWorkAssistant.Features.FileOps
         {
             InitializeComponent();
             _useList = use;
-            HeaderTitle.Text = "List folder";
-            Title = "List folder";
             InputInfo.Text = "Lists every file and/or folder that passes the filter. Connect it to Compare, Filter & Sort or File action.";
             MatchPanel.Visibility = Visibility.Collapsed;
             Fill(settings ?? new FolderScanSettings());
@@ -53,7 +51,6 @@ namespace OfficeWorkAssistant.Features.FileOps
 
         void Hook()
         {
-            ExcelGrid.Hook(ResultGrid);
             FormulaField.WatchOptional(FileFilterBox);
             FormulaField.WatchOptional(FolderFilterBox);
             FormulaField.Watch(FileFormulaBox, NeedFileFormula);
@@ -145,44 +142,6 @@ namespace OfficeWorkAssistant.Features.FileOps
             return _useFind != null ? FileOpsWork.Check(CurrentFind()) : FileOpsWork.Check(CurrentScan());
         }
 
-        void Preview_Click(object sender, RoutedEventArgs e)
-        {
-            var error = Check();
-            if (error != null)
-            {
-                ResultGrid.ItemsSource = null;
-                ResultInfo.Text = error;
-                return;
-            }
-            DataTable table;
-            Mouse.OverrideCursor = Cursors.Wait;
-            try
-            {
-                table = _useFind != null ? FileOpsWork.FindFiles(_keys, CurrentFind()) : FileOpsWork.ListFolder(CurrentScan());
-            }
-            catch (Exception ex)
-            {
-                ResultGrid.ItemsSource = null;
-                ResultInfo.Text = ex.Message;
-                return;
-            }
-            finally
-            {
-                Mouse.OverrideCursor = null;
-            }
-            var shown = table;
-            if (table.Rows.Count > PreviewRows)
-            {
-                shown = table.Clone();
-                for (var i = 0; i < PreviewRows; i++)
-                    shown.ImportRow(table.Rows[i]);
-            }
-            ResultGrid.ItemsSource = shown.DefaultView;
-            ResultInfo.Text = table.Rows.Count.ToString("N0", CultureInfo.InvariantCulture) + " rows" +
-                (shown != table ? " (showing the first " + PreviewRows.ToString("N0", CultureInfo.InvariantCulture) + ")" : "") +
-                ". Nothing is changed on disk.";
-        }
-
         void Variables_Click(object sender, RoutedEventArgs e)
         {
             ExpressionHelp.Show(Window.GetWindow(this),
@@ -215,13 +174,6 @@ namespace OfficeWorkAssistant.Features.FileOps
                 _useFind(CurrentFind());
             else
                 _useList(CurrentScan());
-            Back_Click(null, null);
-        }
-
-        void Back_Click(object sender, RoutedEventArgs e)
-        {
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
 
         void Alert(string message, string title, MessageBoxImage icon)

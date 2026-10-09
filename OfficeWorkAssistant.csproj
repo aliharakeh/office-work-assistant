@@ -118,6 +118,42 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Features\CleanText\CleanTextPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Features\SplitCombine\SplitColumnPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Features\SplitCombine\CombineColumnsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Features\RemoveDuplicates\RemoveDuplicatesPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Features\ArrangeColumns\ArrangeColumnsPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Features\Append\AppendPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Features\Highlight\HighlightPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Features\FormatSheet\FormatSheetPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Excel\CellStylePicker.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -165,11 +201,47 @@
       <DependentUpon>FileActionPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\FileOps\FileOpsWork.cs" />
+    <Compile Include="Features\CleanText\CleanTextPage.xaml.cs">
+      <DependentUpon>CleanTextPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\CleanText\CleanTextWork.cs" />
+    <Compile Include="Features\SplitCombine\SplitColumnPage.xaml.cs">
+      <DependentUpon>SplitColumnPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\SplitCombine\CombineColumnsPage.xaml.cs">
+      <DependentUpon>CombineColumnsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\SplitCombine\SplitCombineWork.cs" />
+    <Compile Include="Features\RemoveDuplicates\RemoveDuplicatesPage.xaml.cs">
+      <DependentUpon>RemoveDuplicatesPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\RemoveDuplicates\RemoveDuplicatesWork.cs" />
+    <Compile Include="Features\ArrangeColumns\ArrangeColumnsPage.xaml.cs">
+      <DependentUpon>ArrangeColumnsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\ArrangeColumns\ArrangeColumnsWork.cs" />
+    <Compile Include="Features\Append\AppendPage.xaml.cs">
+      <DependentUpon>AppendPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\Append\AppendWork.cs" />
+    <Compile Include="Features\Highlight\HighlightPage.xaml.cs">
+      <DependentUpon>HighlightPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\Highlight\HighlightWork.cs" />
+    <Compile Include="Features\FormatSheet\FormatSheetPage.xaml.cs">
+      <DependentUpon>FormatSheetPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\FormatSheet\FormatSheetWork.cs" />
     <Compile Include="Expressions\ExpressionEngine.cs" />
     <Compile Include="Expressions\ExpressionHelp.cs" />
     <Compile Include="Expressions\FormulaField.cs" />
     <Compile Include="Excel\ExcelFile.cs" />
     <Compile Include="Excel\ExcelGrid.cs" />
+    <Compile Include="Excel\ExcelColumns.cs" />
+    <Compile Include="Excel\SheetStyle.cs" />
+    <Compile Include="Excel\CellStylePicker.xaml.cs">
+      <DependentUpon>CellStylePicker.xaml</DependentUpon>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">

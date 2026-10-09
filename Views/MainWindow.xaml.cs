@@ -4,7 +4,7 @@ using OfficeWorkAssistant.Features.Pipeline;
 
 namespace OfficeWorkAssistant.Views
 {
-    // The pipeline canvas is the app's main page; step editors open on top of it in the Frame.
+    // The pipeline canvas is the app's main page; step editors are shown in its right-hand Step panel.
     public partial class MainWindow : Window
     {
         readonly PipelinePage _pipeline = new PipelinePage();

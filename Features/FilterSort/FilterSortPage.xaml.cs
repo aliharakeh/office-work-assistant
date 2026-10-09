@@ -9,7 +9,7 @@ using OfficeWorkAssistant.Expressions;
 
 namespace OfficeWorkAssistant.Features.FilterSort
 {
-    public partial class FilterSortPage : Page
+    public partial class FilterSortPage : UserControl
     {
         DataTable _source;
         int _totalRows;
@@ -70,12 +70,6 @@ namespace OfficeWorkAssistant.Features.FilterSort
             InfoSource.Text = RowInfo(_source.Rows.Count, _totalRows, cut);
             RebuildPicks();
             RefreshColumnCombos();
-        }
-
-        void Back_Click(object sender, RoutedEventArgs e)
-        {
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
 
         void PreviewBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -596,8 +590,6 @@ namespace OfficeWorkAssistant.Features.FilterSort
             if (!TryBuildOutput(out output))
                 return;
             _use(CurrentSettings());
-            if (NavigationService != null && NavigationService.CanGoBack)
-                NavigationService.GoBack();
         }
 
         FilterSortSettings CurrentSettings()

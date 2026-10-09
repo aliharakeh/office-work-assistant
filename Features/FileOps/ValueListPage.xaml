@@ -1,13 +1,10 @@
-<Page x:Class="OfficeWorkAssistant.Features.FileOps.ValueListPage"
+<UserControl x:Class="OfficeWorkAssistant.Features.FileOps.ValueListPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Title="List / set / map"
       Background="White">
-    <DockPanel Margin="10">
+    <DockPanel Margin="0,4,0,0">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
-            <Button DockPanel.Dock="Left" Content="Back" Width="72" Margin="0,0,12,0" Click="Back_Click" />
-            <Button DockPanel.Dock="Right" Content="Use in pipeline" Padding="10,1" Click="Use_Click" />
-            <TextBlock Text="List / set / map" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button DockPanel.Dock="Right" Content="Apply to step" Padding="10,1" Click="Use_Click" />
         </DockPanel>
 
         <GroupBox DockPanel.Dock="Top" Header="Build" Margin="0,0,0,8">
@@ -59,7 +56,6 @@
                     </ComboBox>
                     <Button x:Name="CaptureBtn" Content="Capture from input" Padding="8,1" Margin="0,0,6,0" Click="Capture_Click"
                             ToolTip="Store what the input gives now, and switch to stored values." />
-                    <Button Content="Preview" Width="80" Click="Preview_Click" />
                 </WrapPanel>
             </StackPanel>
         </GroupBox>
@@ -67,9 +63,8 @@
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <GroupBox x:Name="StoredGroup" Header="Stored values (type or paste; new row at the bottom)" Margin="0,0,6,0">
+            <GroupBox x:Name="StoredGroup" Header="Stored values (type or paste; new row at the bottom)">
                 <DataGrid x:Name="StoredGrid" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True"
                           HeadersVisibility="Column" Margin="6">
                     <DataGrid.Columns>
@@ -78,12 +73,6 @@
                     </DataGrid.Columns>
                 </DataGrid>
             </GroupBox>
-            <GroupBox Header="Result" Grid.Column="1" Margin="6,0,0,0">
-                <DockPanel Margin="6">
-                    <TextBlock x:Name="ResultInfo" DockPanel.Dock="Top" Foreground="#777" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap" />
-                    <DataGrid x:Name="ResultGrid" AutoGenerateColumns="True" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" />
-                </DockPanel>
-            </GroupBox>
         </Grid>
     </DockPanel>
-</Page>
+</UserControl>

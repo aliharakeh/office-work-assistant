@@ -5,15 +5,23 @@ using System.Globalization;
 using System.IO;
 using System.Xml.Serialization;
 using OfficeWorkAssistant.Excel;
+using OfficeWorkAssistant.Features.Append;
+using OfficeWorkAssistant.Features.ArrangeColumns;
+using OfficeWorkAssistant.Features.CleanText;
 using OfficeWorkAssistant.Features.ExcelProcessing;
 using OfficeWorkAssistant.Features.FileOps;
+using OfficeWorkAssistant.Features.FormatSheet;
+using OfficeWorkAssistant.Features.Highlight;
 using OfficeWorkAssistant.Features.MergeDuplicates;
 using OfficeWorkAssistant.Features.FilterSort;
 using OfficeWorkAssistant.Features.FillColumns;
+using OfficeWorkAssistant.Features.RemoveDuplicates;
+using OfficeWorkAssistant.Features.SplitCombine;
 using OfficeWorkAssistant.Features.Templates;
 
 namespace OfficeWorkAssistant.Features.Pipeline
 {
+    // Saved by name, so new kinds are appended. IsFileKind / IsStyleKind list their kinds.
     public enum PipelineStepKind
     {
         Load,
@@ -26,7 +34,15 @@ namespace OfficeWorkAssistant.Features.Pipeline
         ListFolder,
         FindFiles,
         FileAction,
-        MergeFolders
+        MergeFolders,
+        CleanText,
+        SplitColumn,
+        CombineColumns,
+        RemoveDuplicates,
+        ArrangeColumns,
+        Append,
+        Highlight,
+        FormatSheet
     }
 
     public enum SaveStepMode
@@ -99,10 +115,18 @@ namespace OfficeWorkAssistant.Features.Pipeline
         [XmlElement("FindFiles", typeof(FindFilesSettings))]
         [XmlElement("FileAction", typeof(FileActionSettings))]
         [XmlElement("MergeFolders", typeof(MergeFoldersSettings))]
+        [XmlElement("CleanText", typeof(CleanTextSettings))]
+        [XmlElement("SplitColumn", typeof(SplitColumnSettings))]
+        [XmlElement("CombineColumns", typeof(CombineColumnsSettings))]
+        [XmlElement("RemoveDuplicates", typeof(RemoveDuplicatesSettings))]
+        [XmlElement("ArrangeColumns", typeof(ArrangeColumnsSettings))]
+        [XmlElement("Append", typeof(AppendSettings))]
+        [XmlElement("Highlight", typeof(HighlightSettings))]
+        [XmlElement("FormatSheet", typeof(FormatSheetSettings))]
         public object Settings { get; set; }
     }
 
-    // The output of From feeds input Port ("In", "A" or "B") of To.
+    // The output of From feeds input Port ("In", "A", "B", or "In1", "In2", ... of Append) of To.
     public sealed class PipelineLink
     {
         [XmlAttribute]
@@ -139,13 +163,77 @@ namespace OfficeWorkAssistant.Features.Pipeline
         static readonly string[] OnePort = { PortIn };
         static readonly string[] TwoPorts = { PortA, PortB };
 
+        // The ports a kind starts with. Append grows: see InputPorts.
         public static string[] Ports(PipelineStepKind kind)
         {
             if (kind == PipelineStepKind.Load || kind == PipelineStepKind.ListFolder || kind == PipelineStepKind.MergeFolders)
                 return NoPorts;
             if (kind == PipelineStepKind.Compare || kind == PipelineStepKind.FillColumns)
                 return TwoPorts;
+            if (kind == PipelineStepKind.Append)
+                return new[] { AppendPort(1) };
             return OnePort;
+        }
+
+        // The ports a step on the canvas has now. Append has one per linked table plus a free one.
+        public static string[] InputPorts(PipelineDefinition def, PipelineNode node)
+        {
+            if (node.Kind != PipelineStepKind.Append)
+                return Ports(node.Kind);
+            var count = AppendLinks(def, node.Id).Count;
+            var ports = new string[count + 1];
+            for (var i = 0; i < ports.Length; i++)
+                ports[i] = AppendPort(i + 1);
+            return ports;
+        }
+
+        static string AppendPort(int n)
+        {
+            return "In" + n.ToString(CultureInfo.InvariantCulture);
+        }
+
+        // 1 for "In1", ...; 0 when the name is not an Append port.
+        public static int AppendPortNumber(string port)
+        {
+            int n;
+            if (port == null || port.Length < 3 || !port.StartsWith("In", StringComparison.Ordinal) ||
+                !int.TryParse(port.Substring(2), NumberStyles.None, CultureInfo.InvariantCulture, out n) || n < 1)
+                return 0;
+            return n;
+        }
+
+        // The links into an Append step, in port order.
+        public static List<PipelineLink> AppendLinks(PipelineDefinition def, string nodeId)
+        {
+            var links = new List<PipelineLink>();
+            foreach (var link in def.Links)
+            {
+                if (link.To == nodeId && AppendPortNumber(link.Port) > 0)
+                    links.Add(link);
+            }
+            links.Sort((a, b) => AppendPortNumber(a.Port).CompareTo(AppendPortNumber(b.Port)));
+            return links;
+        }
+
+        // Numbers an Append step's links In1, In2, ... again with no gaps, keeping their order.
+        // True when a port changed.
+        public static bool CompactPorts(PipelineDefinition def, string nodeId)
+        {
+            var node = Find(def, nodeId);
+            if (node == null || node.Kind != PipelineStepKind.Append)
+                return false;
+            var changed = false;
+            var links = AppendLinks(def, nodeId);
+            for (var i = 0; i < links.Count; i++)
+            {
+                var port = AppendPort(i + 1);
+                if (links[i].Port != port)
+                {
+                    links[i].Port = port;
+                    changed = true;
+                }
+            }
+            return changed;
         }
 
         public static string KindLabel(PipelineStepKind kind)
@@ -162,6 +250,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.FindFiles: return "Find files";
                 case PipelineStepKind.FileAction: return "File action";
                 case PipelineStepKind.MergeFolders: return "Merge folders";
+                case PipelineStepKind.CleanText: return "Clean text";
+                case PipelineStepKind.SplitColumn: return "Split column";
+                case PipelineStepKind.CombineColumns: return "Combine columns";
+                case PipelineStepKind.RemoveDuplicates: return "Remove duplicates";
+                case PipelineStepKind.ArrangeColumns: return "Arrange columns";
+                case PipelineStepKind.Append: return "Append tables";
+                case PipelineStepKind.Highlight: return "Highlight";
+                case PipelineStepKind.FormatSheet: return "Format sheet";
                 default: return "Save file";
             }
         }
@@ -181,6 +277,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.FindFiles: return "Files and folders that match the keys.";
                 case PipelineStepKind.FileAction: return "Copy, move or delete the listed paths.";
                 case PipelineStepKind.MergeFolders: return "Merge subfolders that belong together.";
+                case PipelineStepKind.CleanText: return "Trim spaces, fix case, remove hidden characters.";
+                case PipelineStepKind.SplitColumn: return "Cut one column into several.";
+                case PipelineStepKind.CombineColumns: return "Join several columns into one.";
+                case PipelineStepKind.RemoveDuplicates: return "Keep one row per key, or show the repeats.";
+                case PipelineStepKind.ArrangeColumns: return "Pick, reorder and rename columns.";
+                case PipelineStepKind.Append: return "Stack the rows of several tables.";
+                case PipelineStepKind.Highlight: return "Colour cells or rows that match a condition.";
+                case PipelineStepKind.FormatSheet: return "Header style, widths, freeze, filter, formats.";
                 default: return "Write the result to an Excel file.";
             }
         }
@@ -188,7 +292,23 @@ namespace OfficeWorkAssistant.Features.Pipeline
         // Steps that work on files and folders rather than Excel data.
         public static bool IsFileKind(PipelineStepKind kind)
         {
-            return kind >= PipelineStepKind.ValueList;
+            switch (kind)
+            {
+                case PipelineStepKind.ValueList:
+                case PipelineStepKind.ListFolder:
+                case PipelineStepKind.FindFiles:
+                case PipelineStepKind.FileAction:
+                case PipelineStepKind.MergeFolders:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        // Steps that style the table for Save. Their result keeps the style; every other step drops it.
+        public static bool IsStyleKind(PipelineStepKind kind)
+        {
+            return kind == PipelineStepKind.Highlight || kind == PipelineStepKind.FormatSheet;
         }
 
         // Steps that change the disk. They only plan until Run and save files.
@@ -214,6 +334,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 return port == PortA ? "File A" : "File B";
             if (kind == PipelineStepKind.FindFiles)
                 return "keys input";
+            if (kind == PipelineStepKind.Append)
+                return "table " + AppendPortNumber(port).ToString(CultureInfo.InvariantCulture);
             return "input";
         }
 
@@ -264,10 +386,21 @@ namespace OfficeWorkAssistant.Features.Pipeline
             return "n" + (max + 1).ToString(CultureInfo.InvariantCulture);
         }
 
-        public static void RemoveNode(PipelineDefinition def, string id)
+        // Returns the Append steps that lost an input; their ports are numbered again.
+        public static List<string> RemoveNode(PipelineDefinition def, string id)
         {
+            var fed = new List<string>();
+            foreach (var l in def.Links)
+            {
+                var to = Find(def, l.To);
+                if (l.From == id && l.To != id && to != null && to.Kind == PipelineStepKind.Append && !fed.Contains(l.To))
+                    fed.Add(l.To);
+            }
             def.Nodes.RemoveAll(n => n.Id == id);
             def.Links.RemoveAll(l => l.From == id || l.To == id);
+            foreach (var to in fed)
+                CompactPorts(def, to);
+            return fed;
         }
 
         public static PipelineLink InputLink(PipelineDefinition def, string nodeId, string port)
@@ -403,9 +536,18 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
             var ports = new HashSet<string>();
             def.Links.RemoveAll(l => l == null || !ids.Contains(l.From) || !ids.Contains(l.To) ||
-                Array.IndexOf(Ports(Find(def, l.To).Kind), l.Port) < 0 || !ports.Add(l.To + "|" + l.Port));
+                !PortFits(Find(def, l.To).Kind, l.Port) || !ports.Add(l.To + "|" + l.Port));
+            foreach (var node in def.Nodes)
+                CompactPorts(def, node.Id);
             Order(def); // throws on a loop
             return def;
+        }
+
+        static bool PortFits(PipelineStepKind kind, string port)
+        {
+            if (kind == PipelineStepKind.Append)
+                return AppendPortNumber(port) > 0;
+            return Array.IndexOf(Ports(kind), port) >= 0;
         }
 
         static bool SettingsFit(PipelineStepKind kind, object settings)
@@ -424,6 +566,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.FindFiles: return settings is FindFilesSettings;
                 case PipelineStepKind.FileAction: return settings is FileActionSettings;
                 case PipelineStepKind.MergeFolders: return settings is MergeFoldersSettings;
+                case PipelineStepKind.CleanText: return settings is CleanTextSettings;
+                case PipelineStepKind.SplitColumn: return settings is SplitColumnSettings;
+                case PipelineStepKind.CombineColumns: return settings is CombineColumnsSettings;
+                case PipelineStepKind.RemoveDuplicates: return settings is RemoveDuplicatesSettings;
+                case PipelineStepKind.ArrangeColumns: return settings is ArrangeColumnsSettings;
+                case PipelineStepKind.Append: return settings is AppendSettings;
+                case PipelineStepKind.Highlight: return settings is HighlightSettings;
+                case PipelineStepKind.FormatSheet: return settings is FormatSheetSettings;
                 default: return settings is SaveStepSettings;
             }
         }
@@ -505,6 +655,34 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (merge != null)
                 return string.IsNullOrWhiteSpace(merge.Folder) ? "Choose a folder."
                     : "In " + merge.Folder + " when " + merge.Condition + ", keep " + MergeDuplicatesWork.KeepLabel(merge.Keep);
+            var clean = s as CleanTextSettings;
+            if (clean != null)
+                return clean.Describe();
+            var split = s as SplitColumnSettings;
+            if (split != null)
+                return "Split " + split.Column + (split.Mode == SplitMode.FixedWidths ? " by widths " + split.Widths
+                    : split.Mode == SplitMode.Pattern ? " by pattern" : " on \"" + split.Delimiter + "\"");
+            var combine = s as CombineColumnsSettings;
+            if (combine != null)
+                return string.Join(" + ", combine.Columns.ToArray()) + " -> " + combine.Header;
+            var dedupe = s as RemoveDuplicatesSettings;
+            if (dedupe != null)
+                return RemoveDuplicatesWork.KeepLabel(dedupe.Keep) + (dedupe.UseFormula ? " by " + dedupe.KeyFormula
+                    : dedupe.Keys.Count == 0 ? " (whole rows)" : " by " + string.Join(", ", dedupe.Keys.ToArray()));
+            var arrange = s as ArrangeColumnsSettings;
+            if (arrange != null)
+                return ArrangeColumnsWork.Summary(arrange);
+            var append = s as AppendSettings;
+            if (append != null)
+                return "Match by " + (append.Match == AppendMatch.ByHeader ? "header" : "position") +
+                    (append.CommonOnly ? ", common columns only" : "") +
+                    (string.IsNullOrWhiteSpace(append.SourceHeader) ? "" : ", source in " + append.SourceHeader);
+            var highlight = s as HighlightSettings;
+            if (highlight != null)
+                return highlight.Rules.Count == 1 ? highlight.Rules[0].ToString() : Count(highlight.Rules.Count, "rule");
+            var format = s as FormatSheetSettings;
+            if (format != null)
+                return FormatSheetWork.Summary(format);
             return "";
         }
 
@@ -567,7 +745,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     continue;
                 try
                 {
-                    cache[node.Id] = RunNode(def, node, cache);
+                    cache[node.Id] = RunStep(def, node, cache);
                 }
                 catch (Exception ex)
                 {
@@ -613,7 +791,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                         }
                     }
                     else
-                        cache[node.Id] = RunNode(def, node, cache);
+                        cache[node.Id] = RunStep(def, node, cache);
                 }
                 catch (Exception ex)
                 {
@@ -681,6 +859,17 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
         }
 
+        // A step's result. Only style steps and Save keep a style from Highlight / Format sheet:
+        // any other step may move or drop rows, so the old style would land on the wrong cells.
+        static DataTable RunStep(PipelineDefinition def, PipelineNode node, IDictionary<string, DataTable> cache)
+        {
+            var table = RunNode(def, node, cache);
+            // Save passes its input through; that table belongs to the step before it.
+            if (!IsStyleKind(node.Kind) && node.Kind != PipelineStepKind.Save)
+                ExcelFile.ClearStyle(table);
+            return table;
+        }
+
         static DataTable RunNode(PipelineDefinition def, PipelineNode node, IDictionary<string, DataTable> cache)
         {
             if (node.Settings == null)
@@ -725,6 +914,55 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     return FileOpsWork.PlanActions(Input(def, node, PortIn, cache), (FileActionSettings)node.Settings);
                 case PipelineStepKind.MergeFolders:
                     return MergeDuplicatesWork.Plan((MergeFoldersSettings)node.Settings);
+                case PipelineStepKind.CleanText:
+                {
+                    var input = Input(def, node, PortIn, cache);
+                    return CleanTextWork.Run(input, CleanTextToLetters((CleanTextSettings)node.Settings, input, true));
+                }
+                case PipelineStepKind.SplitColumn:
+                {
+                    var input = Input(def, node, PortIn, cache);
+                    return SplitCombineWork.Split(input, SplitToLetters((SplitColumnSettings)node.Settings, input, true));
+                }
+                case PipelineStepKind.CombineColumns:
+                {
+                    var input = Input(def, node, PortIn, cache);
+                    return SplitCombineWork.Combine(input, CombineToLetters((CombineColumnsSettings)node.Settings, input, true));
+                }
+                case PipelineStepKind.RemoveDuplicates:
+                {
+                    var input = Input(def, node, PortIn, cache);
+                    return RemoveDuplicatesWork.Run(input, RemoveDuplicatesToLetters((RemoveDuplicatesSettings)node.Settings, input, true));
+                }
+                case PipelineStepKind.ArrangeColumns:
+                {
+                    var input = Input(def, node, PortIn, cache);
+                    return ArrangeColumnsWork.Run(input, ArrangeToLetters((ArrangeColumnsSettings)node.Settings, input, true));
+                }
+                case PipelineStepKind.Append:
+                {
+                    var links = AppendLinks(def, node.Id);
+                    if (links.Count < 2)
+                        throw new InvalidOperationException("Link at least two steps to this step's input dots.");
+                    var tables = new List<DataTable>();
+                    var names = new List<string>();
+                    foreach (var link in links)
+                    {
+                        tables.Add(Input(def, node, link.Port, cache));
+                        names.Add(Find(def, link.From).Title);
+                    }
+                    return AppendWork.Run(tables, names, (AppendSettings)node.Settings);
+                }
+                case PipelineStepKind.Highlight:
+                {
+                    var input = Input(def, node, PortIn, cache);
+                    return HighlightWork.Run(input, HighlightToLetters((HighlightSettings)node.Settings, input, true));
+                }
+                case PipelineStepKind.FormatSheet:
+                {
+                    var input = Input(def, node, PortIn, cache);
+                    return FormatSheetWork.Run(input, FormatSheetToLetters((FormatSheetSettings)node.Settings, input, true));
+                }
                 default:
                 {
                     // Files are written after every step worked; see WriteSaves.
@@ -826,6 +1064,133 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     c.SourceColumn = LetterOf(input, c.SourceColumn, strict) ?? c.SourceColumn;
             }
             return t;
+        }
+
+        public static CleanTextSettings CleanTextToNames(CleanTextSettings settings, DataTable input)
+        {
+            var s = Clone(settings);
+            Names(input, s.Columns);
+            return s;
+        }
+
+        public static CleanTextSettings CleanTextToLetters(CleanTextSettings settings, DataTable input, bool strict)
+        {
+            var s = Clone(settings);
+            var had = s.Columns.Count;
+            s.Columns = Letters(input, s.Columns, strict);
+            // Every chosen column is gone: cleaning all columns instead would change cells nobody picked.
+            if (strict && had > 0 && s.Columns.Count == 0)
+                throw new InvalidOperationException("The columns this step cleans are not in its input any more. Set it up again.");
+            return s;
+        }
+
+        public static SplitColumnSettings SplitToNames(SplitColumnSettings settings, DataTable input)
+        {
+            var s = Clone(settings);
+            s.Column = NameOf(input, s.Column);
+            return s;
+        }
+
+        public static SplitColumnSettings SplitToLetters(SplitColumnSettings settings, DataTable input, bool strict)
+        {
+            var s = Clone(settings);
+            s.Column = LetterOf(input, s.Column, strict) ?? "";
+            return s;
+        }
+
+        public static CombineColumnsSettings CombineToNames(CombineColumnsSettings settings, DataTable input)
+        {
+            var s = Clone(settings);
+            Names(input, s.Columns);
+            return s;
+        }
+
+        public static CombineColumnsSettings CombineToLetters(CombineColumnsSettings settings, DataTable input, bool strict)
+        {
+            var s = Clone(settings);
+            s.Columns = Letters(input, s.Columns, strict);
+            return s;
+        }
+
+        public static RemoveDuplicatesSettings RemoveDuplicatesToNames(RemoveDuplicatesSettings settings, DataTable input)
+        {
+            var s = Clone(settings);
+            Names(input, s.Keys);
+            return s;
+        }
+
+        public static RemoveDuplicatesSettings RemoveDuplicatesToLetters(RemoveDuplicatesSettings settings, DataTable input, bool strict)
+        {
+            var s = Clone(settings);
+            s.Keys = Letters(input, s.Keys, strict);
+            return s;
+        }
+
+        public static ArrangeColumnsSettings ArrangeToNames(ArrangeColumnsSettings settings, DataTable input)
+        {
+            var s = Clone(settings);
+            foreach (var c in s.Columns)
+                c.Source = NameOf(input, c.Source);
+            return s;
+        }
+
+        // A dropped column that is gone upstream is no loss, even when running.
+        public static ArrangeColumnsSettings ArrangeToLetters(ArrangeColumnsSettings settings, DataTable input, bool strict)
+        {
+            var s = Clone(settings);
+            s.Columns.RemoveAll(c =>
+            {
+                var letter = LetterOf(input, c.Source, strict && c.Keep);
+                if (letter == null)
+                    return true;
+                c.Source = letter;
+                return false;
+            });
+            return s;
+        }
+
+        public static HighlightSettings HighlightToNames(HighlightSettings settings, DataTable input)
+        {
+            var s = Clone(settings);
+            foreach (var r in s.Rules)
+                Names(input, r.Columns);
+            return s;
+        }
+
+        public static HighlightSettings HighlightToLetters(HighlightSettings settings, DataTable input, bool strict)
+        {
+            var s = Clone(settings);
+            foreach (var r in s.Rules)
+                r.Columns = Letters(input, r.Columns, strict);
+            return s;
+        }
+
+        public static FormatSheetSettings FormatSheetToNames(FormatSheetSettings settings, DataTable input)
+        {
+            var s = Clone(settings);
+            foreach (var c in s.Columns)
+                c.Column = NameOf(input, c.Column);
+            return s;
+        }
+
+        public static FormatSheetSettings FormatSheetToLetters(FormatSheetSettings settings, DataTable input, bool strict)
+        {
+            var s = Clone(settings);
+            s.Columns.RemoveAll(c =>
+            {
+                var letter = LetterOf(input, c.Column, strict);
+                if (letter == null)
+                    return true;
+                c.Column = letter;
+                return false;
+            });
+            return s;
+        }
+
+        static void Names(DataTable input, List<string> letters)
+        {
+            for (var i = 0; i < letters.Count; i++)
+                letters[i] = NameOf(input, letters[i]);
         }
 
         static List<string> Letters(DataTable input, List<string> names, bool strict)
