@@ -378,58 +378,6 @@ namespace OfficeWorkAssistant.Features.Templates
             GridOut.ItemsSource = Capped(output, _previewRows).DefaultView;
         }
 
-        void SaveTemplate_Click(object sender, RoutedEventArgs e)
-        {
-            TemplateDefinition template = BuildTemplate();
-            string error = TemplatesWork.Validate(template, true);
-            if (error != null)
-            {
-                Alert(error, "Template", MessageBoxImage.Warning);
-                return;
-            }
-
-            var dlg = new SaveFileDialog
-            {
-                Filter = "Template files (*.xml)|*.xml",
-                FileName = (string.IsNullOrWhiteSpace(template.Name) ? "template" : template.Name.Trim()) + ".xml"
-            };
-            if (dlg.ShowDialog() != true)
-                return;
-
-            try
-            {
-                TemplatesWork.SaveTemplate(template, dlg.FileName);
-                Alert("Template saved.", "Done", MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not save template", MessageBoxImage.Error);
-            }
-        }
-
-        void LoadTemplate_Click(object sender, RoutedEventArgs e)
-        {
-            var dlg = new OpenFileDialog
-            {
-                Filter = "Template files (*.xml)|*.xml",
-                Title = "Load template"
-            };
-            if (dlg.ShowDialog() != true)
-                return;
-
-            try
-            {
-                ApplyTemplateDefinition(TemplatesWork.LoadTemplate(dlg.FileName));
-                DataTable output;
-                if (_source != null && TryBuildOutput(out output))
-                    GridOut.ItemsSource = Capped(output, _previewRows).DefaultView;
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not load template", MessageBoxImage.Error);
-            }
-        }
-
         void ApplyTemplateDefinition(TemplateDefinition template)
         {
             TemplateName.Text = template.Name;
@@ -465,7 +413,7 @@ namespace OfficeWorkAssistant.Features.Templates
             string error = TemplatesWork.Validate(template, true);
             if (error != null)
             {
-                Alert(error, "Template", MessageBoxImage.Warning);
+                Alert(error, "Add columns", MessageBoxImage.Warning);
                 return false;
             }
             try

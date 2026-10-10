@@ -112,37 +112,6 @@ namespace OfficeWorkAssistant.Features.Templates
             return ExpressionEngine.IsDateLike(value);
         }
 
-        public static void SaveTemplate(TemplateDefinition template, string path)
-        {
-            string error = Validate(template, false);
-            if (error != null)
-                throw new InvalidOperationException(error);
-            var ser = new XmlSerializer(typeof(TemplateDefinition));
-            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
-                ser.Serialize(fs, template);
-        }
-
-        public static TemplateDefinition LoadTemplate(string path)
-        {
-            var ser = new XmlSerializer(typeof(TemplateDefinition));
-            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                var template = ser.Deserialize(fs) as TemplateDefinition;
-                if (template == null)
-                    throw new InvalidOperationException("Not a template file.");
-                if (template.Columns == null)
-                    template.Columns = new List<TemplateColumn>();
-                if (template.SourceColumns == null)
-                    template.SourceColumns = new List<string>();
-                if (template.Name == null)
-                    template.Name = "";
-                string error = Validate(template, false);
-                if (error != null)
-                    throw new InvalidOperationException(error);
-                return template;
-            }
-        }
-
         public static string Validate(TemplateDefinition template, bool requireColumns)
         {
             if (template == null)

@@ -60,17 +60,20 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         static readonly PipelineStepKind[][] PaletteGroups =
         {
-            new[] { PipelineStepKind.Load, PipelineStepKind.FilterSort, PipelineStepKind.Templates, PipelineStepKind.Compare,
-                PipelineStepKind.FillColumns, PipelineStepKind.Save },
-            new[] { PipelineStepKind.CleanText, PipelineStepKind.SplitColumn, PipelineStepKind.CombineColumns,
-                PipelineStepKind.RemoveDuplicates, PipelineStepKind.ArrangeColumns, PipelineStepKind.Append },
-            new[] { PipelineStepKind.Highlight, PipelineStepKind.FormatSheet },
-            new[] { PipelineStepKind.ValueList, PipelineStepKind.ListFolder, PipelineStepKind.FindFiles },
-            new[] { PipelineStepKind.FileAction, PipelineStepKind.MergeFolders }
+            // Excel, in the order a pipeline usually runs: load, rows, text and columns, two-table steps, style, save.
+            new[] { PipelineStepKind.Load,
+                PipelineStepKind.FilterSort, PipelineStepKind.RemoveDuplicates,
+                PipelineStepKind.CleanText, PipelineStepKind.Templates, PipelineStepKind.SplitColumn,
+                PipelineStepKind.CombineColumns, PipelineStepKind.ArrangeColumns,
+                PipelineStepKind.Compare, PipelineStepKind.Append, PipelineStepKind.FillColumns,
+                PipelineStepKind.Highlight, PipelineStepKind.FormatSheet,
+                PipelineStepKind.Save },
+            new[] { PipelineStepKind.ValueList, PipelineStepKind.ListFolder, PipelineStepKind.FindFiles,
+                PipelineStepKind.FileAction, PipelineStepKind.MergeFolders }
         };
         static readonly string[] PaletteHeaders =
         {
-            "Excel data", "Tidy and reshape", "Style (put right before Save)", "Files and folders", "Change files (on Run and save)"
+            "Excel", "Files and folders"
         };
 
         public PipelinePage()
@@ -338,8 +341,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
             text.Children.Add(new TextBlock { Text = PipelineWork.KindDescription(kind), FontSize = 11, Foreground = Brushes.DimGray, TextWrapping = TextWrapping.Wrap });
             var stripe = new Border { Width = 4, Background = PipelineNodeView.AccentOf(kind), CornerRadius = new CornerRadius(3, 0, 0, 3) };
             DockPanel.SetDock(stripe, Dock.Left);
+            var icon = PipelineIcons.Create(kind, 30);
+            icon.Margin = new Thickness(8, 0, 0, 0);
+            icon.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(icon, Dock.Left);
             var inner = new DockPanel();
             inner.Children.Add(stripe);
+            inner.Children.Add(icon);
             inner.Children.Add(text);
             var item = new Border
             {
@@ -497,7 +505,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
             else if (from != null)
             {
-                x = from.X + PipelineNodeView.Width + 60;
+                x = from.X + PipelineNodeView.Width + 100;
                 y = from.Y;
             }
             else

@@ -27,30 +27,20 @@ namespace OfficeWorkAssistant.Features.Pipeline
     // needs no XAML entry.
     public sealed class PipelineNodeView
     {
-        public const double Width = 200;
-        // The usual height; see BoxHeight.
-        public const double Height = 80;
+        public const double Width = 72;
+        // The usual height of the icon box; see BoxHeight.
+        public const double Height = 72;
+        const double LabelWidth = 150;
         const double PortSize = 14;
         const double PortGap = 22;
 
-        // Step categories, shared with the palette: data in/out, Excel work, styling, files, disk changes.
-        static readonly Brush InOutAccent = Frozen(Color.FromRgb(0x00, 0x89, 0x7B));
-        static readonly Brush ExcelAccent = Frozen(Color.FromRgb(0x1E, 0x88, 0xE5));
-        static readonly Brush StyleAccent = Frozen(Color.FromRgb(0x8E, 0x24, 0xAA));
+        // Two colours, shared with the palette: green for Excel steps, orange for files and folders.
+        static readonly Brush ExcelAccent = Frozen(Color.FromRgb(0x2E, 0x7D, 0x32));
         static readonly Brush FilesAccent = Frozen(Color.FromRgb(0xF5, 0x7C, 0x00));
-        static readonly Brush ActionAccent = Frozen(Color.FromRgb(0xD8, 0x1B, 0x60));
 
         public static Brush AccentOf(PipelineStepKind kind)
         {
-            if (PipelineWork.IsActionKind(kind))
-                return ActionAccent;
-            if (PipelineWork.IsFileKind(kind))
-                return FilesAccent;
-            if (PipelineWork.IsStyleKind(kind))
-                return StyleAccent;
-            if (kind == PipelineStepKind.Load || kind == PipelineStepKind.Save)
-                return InOutAccent;
-            return ExcelAccent;
+            return PipelineWork.IsFileKind(kind) ? FilesAccent : ExcelAccent;
         }
 
         static readonly Brush IdleBrush = Frozen(Color.FromRgb(0xBD, 0xBD, 0xBD));
@@ -67,7 +57,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
         public readonly double BoxHeight;
         readonly string[] _ports;
         readonly TextBlock _title;
-        readonly TextBlock _kind;
         readonly TextBlock _detail;
         PipelineNodeState _state;
         bool _selected;
@@ -78,33 +67,30 @@ namespace OfficeWorkAssistant.Features.Pipeline
             Node = node;
             _ports = ports;
             BoxHeight = Math.Max(Height, PortGap * ports.Length + 16);
-            Root = new Canvas { Width = Width, Height = BoxHeight };
+            Root = new Canvas { Width = Width, Height = BoxHeight + 44 };
             Panel.SetZIndex(Root, 1);
 
-            var accent = AccentOf(node.Kind);
-            _kind = new TextBlock { FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = accent };
-            _title = new TextBlock { FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
-            _detail = new TextBlock { FontSize = 11, Foreground = Brushes.DimGray, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 30 };
-            var text = new StackPanel { Margin = new Thickness(10, 5, 12, 4) };
-            text.Children.Add(_kind);
-            text.Children.Add(_title);
-            text.Children.Add(_detail);
-            var stripe = new Border { Width = 6, Background = accent, CornerRadius = new CornerRadius(4, 0, 0, 4) };
-            DockPanel.SetDock(stripe, Dock.Left);
-            var inner = new DockPanel();
-            inner.Children.Add(stripe);
-            inner.Children.Add(text);
+            // The icon is the node. Its name and summary sit centred below it, outside the box.
+            _title = new TextBlock { FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            _detail = new TextBlock { FontSize = 11, Foreground = Brushes.DimGray, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 30 };
+            var caption = new StackPanel { Width = LabelWidth, IsHitTestVisible = false };
+            caption.Children.Add(_title);
+            caption.Children.Add(_detail);
+            Canvas.SetLeft(caption, (Width - LabelWidth) / 2);
+            Canvas.SetTop(caption, BoxHeight + 4);
+
             Box = new Border
             {
                 Width = Width,
                 Height = BoxHeight,
-                CornerRadius = new CornerRadius(6),
+                CornerRadius = new CornerRadius(14),
                 BorderThickness = new Thickness(2),
                 Background = Brushes.White,
-                Child = inner,
+                Child = PipelineIcons.Glyph(node.Kind, 40),
                 Cursor = System.Windows.Input.Cursors.SizeAll
             };
             Root.Children.Add(Box);
+            Root.Children.Add(caption);
 
             foreach (var port in ports)
             {
@@ -195,10 +181,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
         // Re-read the title and summary after the node changed.
         public void Refresh()
         {
-            _kind.Text = PipelineWork.KindLabel(Node.Kind).ToUpperInvariant() +
-                (PipelineWork.IsActionKind(Node.Kind) ? "  -  CHANGES FILES" : "");
             _title.Text = Node.Title;
-            _detail.Text = PipelineWork.Summary(Node);
+            _detail.Text = (PipelineWork.IsActionKind(Node.Kind) ? "Changes files. " : "") + PipelineWork.Summary(Node);
             Box.BorderBrush = _state == PipelineNodeState.Ok ? OkBrush : _state == PipelineNodeState.Error ? ErrorBrush : IdleBrush;
             Box.BorderThickness = new Thickness(_selected ? 3 : 2);
             Box.Background = _selected ? SelectedFill : Brushes.White;

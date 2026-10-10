@@ -190,6 +190,7 @@
     </Compile>
     <Compile Include="Features\Pipeline\PipelineWork.cs" />
     <Compile Include="Features\Pipeline\PipelineNodeView.cs" />
+    <Compile Include="Features\Pipeline\PipelineIcons.cs" />
     <Compile Include="Features\Pipeline\PipelineStore.cs" />
     <Compile Include="Features\FileOps\ValueListPage.xaml.cs">
       <DependentUpon>ValueListPage.xaml</DependentUpon>

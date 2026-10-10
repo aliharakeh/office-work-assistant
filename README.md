@@ -6,7 +6,7 @@ A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. The 
 
 - **Saved pipelines** (top left) lists the pipelines in `Documents\Office Work Assistant\Pipelines`, newest first. Click one to open it. The last saved pipeline opens when the app starts. New starts an empty pipeline. Duplicate copies the selected one. Delete moves it to the Recycle Bin. Import... copies a pipeline file from elsewhere into the list, and Folder opens the folder in Explorer.
 - **The name box** at the top is the pipeline's name. Save (Ctrl+S) stores the pipeline under that name, with no file dialog. Changing the name and saving renames the saved pipeline. Saving under a name another pipeline already uses asks first. Switching pipelines or closing the app with unsaved changes offers to save them.
-- **Add a step** (bottom left) lists every step in five groups, each with its own colour: Excel data, Tidy and reshape, Style, Files and folders, and Change files. Click a step to add it next to the selected step, linked to it. You can also drag a step onto the canvas to place it.
+- **Add a step** (bottom left) lists every step in two groups, Excel and Files and folders. Each step has its own icon and a colour for its kind (data in/out, Excel work, style, files, steps that change files). Click a step to add it next to the selected step, linked to it. You can also drag a step onto the canvas to place it.
 - **The canvas:**
   - Link steps by dragging from a step's right dot to another step's left dot. Compare A/B and Fill columns have two inputs, A and B. Append tables always has one free input dot more than it has links, so you can keep adding tables.
   - One step's result can feed several later steps.
@@ -29,9 +29,8 @@ Load file reads one sheet of an `.xlsx` or `.xlsm` file, even when it is open in
 - Unchecked columns are dropped from the result.
 - Add any number of sort keys, each ascending or descending, and move them up or down to set priority. Ties keep the original row order.
 
-### Template
-Keep all source columns, or tick only the ones you want, and add extra columns. An extra column can be a fixed value, a copy of a column, combined text (`$A $B`), math (`$A * $B`, `ADDDAYS($Today, 7)`) or a condition (`IF($A > 10, "Big", "Small")`). Save template... and Load template... share a template between pipelines as an XML file.
-
+### Add columns
+Keep all source columns, or tick only the ones you want, and add extra columns. An extra column can be a fixed value, a copy of a column, combined text (`$A $B`), math (`$A * $B`, `ADDDAYS($Today, 7)`) or a condition (`IF($A > 10, "Big", "Small")`).
 ### Compare A/B
 Two inputs, A and B.
 - Match rules compare a formula on A with a formula on B, using `==`, `!=`, `>`, `>=`, `<` or `<=`. A column can be split on a separator, and its parts compared as `$1`, `$2` and so on.

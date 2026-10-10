@@ -242,7 +242,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 case PipelineStepKind.Load: return "Load file";
                 case PipelineStepKind.FilterSort: return "Filter & Sort";
-                case PipelineStepKind.Templates: return "Template";
+                case PipelineStepKind.Templates: return "Add columns";
                 case PipelineStepKind.Compare: return "Compare A/B";
                 case PipelineStepKind.FillColumns: return "Fill columns";
                 case PipelineStepKind.ValueList: return "List / set / map";
