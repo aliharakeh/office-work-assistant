@@ -38,49 +38,11 @@
             </StackPanel>
         </GroupBox>
         <GroupBox Header="Column formats" Margin="0,8,0,0">
-            <StackPanel Margin="6">
-                <ListBox x:Name="FormatList" Height="66" Margin="0,0,0,6" SelectionChanged="FormatList_SelectionChanged" />
-                <Grid Margin="0,0,0,4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="90" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Column" VerticalAlignment="Center" />
-                    <ComboBox x:Name="ColumnBox" Grid.Column="1" />
-                </Grid>
-                <Grid Margin="0,0,0,4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="90" />
-                        <ColumnDefinition Width="60" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Width" VerticalAlignment="Center" />
-                    <TextBox x:Name="WidthBox" Grid.Column="1" ToolTip="About one character per unit. Blank or 0 = leave it." />
-                    <TextBlock Grid.Column="2" Text="  Format " VerticalAlignment="Center" />
-                    <ComboBox x:Name="NumberBox" Grid.Column="3" IsEditable="True" ToolTip="An Excel number format, e.g. #,##0.00 or dd/MM/yyyy." />
-                </Grid>
-                <Grid Margin="0,0,0,6">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="90" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Align" VerticalAlignment="Center" />
-                    <ComboBox x:Name="AlignBox" Grid.Column="1" Margin="0,0,8,0">
-                        <ComboBoxItem Content="As Excel does" />
-                        <ComboBoxItem Content="Left" />
-                        <ComboBoxItem Content="Center" />
-                        <ComboBoxItem Content="Right" />
-                    </ComboBox>
-                    <CheckBox x:Name="WrapBox" Grid.Column="2" Content="Wrap text" VerticalAlignment="Center" />
-                </Grid>
-                <WrapPanel>
-                    <Button x:Name="AddBtn" Content="Add format" Width="100" Margin="0,0,6,4" Click="Add_Click" />
-                    <Button Content="Remove" Width="70" Margin="0,0,6,4" Click="Remove_Click" />
-                    <Button Content="New" Width="50" Margin="0,0,6,4" Click="New_Click" />
-                </WrapPanel>
-            </StackPanel>
+            <DockPanel LastChildFill="True" Margin="6">
+                <Button DockPanel.Dock="Top" Content="Add format" Width="100" HorizontalAlignment="Left"
+                        Margin="0,0,0,4" Click="Add_Click" />
+                <StackPanel x:Name="FormatPanel" />
+            </DockPanel>
         </GroupBox>
         <Button Content="Apply to step" Width="120" HorizontalAlignment="Left" Margin="0,8,0,6" Click="Apply_Click" />
         <TextBlock x:Name="Status" Foreground="#777" FontSize="11" TextWrapping="Wrap" />

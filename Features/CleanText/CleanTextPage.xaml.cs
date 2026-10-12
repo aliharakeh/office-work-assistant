@@ -63,7 +63,7 @@ namespace OfficeWorkAssistant.Features.CleanText
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), ex.Message, "Clean text", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Notices.Show(this, ex.Message, "Clean text", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             Status.Text = s.Describe();

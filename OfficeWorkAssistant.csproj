@@ -165,6 +165,7 @@
       <DependentUpon>ExcelProcessingPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\ExcelProcessing\ExcelProcessingWork.cs" />
+    <Compile Include="Features\ExcelProcessing\MatchRuleWindow.cs" />
     <Compile Include="Features\MergeDuplicates\MergeDuplicatesPage.xaml.cs">
       <DependentUpon>MergeDuplicatesPage.xaml</DependentUpon>
     </Compile>
@@ -173,6 +174,7 @@
       <DependentUpon>TemplatesPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\Templates\TemplatesWork.cs" />
+    <Compile Include="Features\Templates\TemplateColumnWindow.cs" />
     <Compile Include="Features\FilterSort\FilterSortPage.xaml.cs">
       <DependentUpon>FilterSortPage.xaml</DependentUpon>
     </Compile>
@@ -185,7 +187,12 @@
       <DependentUpon>FillColumnsPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\FillColumns\FillColumnsWork.cs" />
+    <Compile Include="Features\FillColumns\MatchKeyWindow.cs" />
+    <Compile Include="Features\FillColumns\FillRuleWindow.cs" />
     <Compile Include="Features\Pipeline\PipelinePage.xaml.cs">
+      <DependentUpon>PipelinePage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\Pipeline\PipelinePage.Steps.cs">
       <DependentUpon>PipelinePage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\Pipeline\PipelineWork.cs" />
@@ -229,15 +236,18 @@
       <DependentUpon>HighlightPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\Highlight\HighlightWork.cs" />
+    <Compile Include="Features\Highlight\HighlightRuleWindow.cs" />
     <Compile Include="Features\FormatSheet\FormatSheetPage.xaml.cs">
       <DependentUpon>FormatSheetPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\FormatSheet\FormatSheetWork.cs" />
+    <Compile Include="Features\FormatSheet\ColumnFormatWindow.cs" />
     <Compile Include="Expressions\ExpressionEngine.cs" />
     <Compile Include="Expressions\ExpressionHelp.cs" />
     <Compile Include="Expressions\FormulaField.cs" />
     <Compile Include="Excel\ExcelFile.cs" />
     <Compile Include="Excel\ExcelGrid.cs" />
+    <Compile Include="Excel\Notices.cs" />
     <Compile Include="Excel\ExcelColumns.cs" />
     <Compile Include="Excel\SheetStyle.cs" />
     <Compile Include="Excel\CellStylePicker.xaml.cs">

@@ -150,60 +150,18 @@
 
                 <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" />
 
-                <!-- Step sidebar: the selected step's name and its settings, edited right here. -->
+                <!-- Step sidebar: one tab for each branch of the pipeline, one section for each step with all its settings. -->
                 <Border Grid.Column="2" Background="White" BorderBrush="#DDE3E8" BorderThickness="1" CornerRadius="4" Padding="8">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="STEP" Style="{StaticResource SideHeader}" />
-                            <TextBlock x:Name="NoSelection" Foreground="#777" TextWrapping="Wrap"
-                                       Text="Select a step to set it up here and see its result. Click a link and press Delete to remove it." />
-                            <StackPanel x:Name="StepPanel" Visibility="Collapsed">
-                                <TextBlock x:Name="StepKind" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                <TextBlock x:Name="StepAbout" Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8" />
-                                <DockPanel Margin="0,0,0,8">
-                                    <Button DockPanel.Dock="Right" Content="Delete step" Margin="6,0,0,0" Padding="8,1" Click="Delete_Click" />
-                                    <TextBox x:Name="StepTitle" TextChanged="StepTitle_TextChanged" ToolTip="The step's name" />
-                                </DockPanel>
-
-                                <StackPanel x:Name="LoadPanel">
-                                    <TextBlock Text="File" Margin="0,0,0,2" />
-                                    <DockPanel Margin="0,0,0,6">
-                                        <Button DockPanel.Dock="Right" Content="Browse..." Width="72" Margin="6,0,0,0" Click="LoadBrowse_Click" />
-                                        <TextBox x:Name="LoadPath" IsReadOnly="True" />
-                                    </DockPanel>
-                                    <TextBlock Text="Sheet" Margin="0,0,0,2" />
-                                    <ComboBox x:Name="LoadSheet" Margin="0,0,0,8" SelectionChanged="LoadSheet_SelectionChanged" />
-                                </StackPanel>
-
-                                <StackPanel x:Name="SavePanel">
-                                    <RadioButton x:Name="SaveNewFile" Content="New file (replaces it)" Margin="0,0,0,2" Checked="SaveMode_Changed" />
-                                    <RadioButton x:Name="SaveNewSheet" Content="New sheet in a workbook" Margin="0,0,0,6" Checked="SaveMode_Changed" />
-                                    <TextBlock Text="File (.xlsx)" Margin="0,0,0,2" />
-                                    <DockPanel Margin="0,0,0,6">
-                                        <Button DockPanel.Dock="Right" Content="Browse..." Width="72" Margin="6,0,0,0" Click="SaveBrowse_Click" />
-                                        <TextBox x:Name="SavePath" IsReadOnly="True" />
-                                    </DockPanel>
-                                    <TextBlock Text="Sheet name" Margin="0,0,0,2" />
-                                    <TextBox x:Name="SaveSheet" Margin="0,0,0,4" TextChanged="SaveSheet_TextChanged" />
-                                    <TextBlock Text="Files are written only by Run and save files. A new sheet must not exist yet." Foreground="#777"
-                                               FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8" />
-                                </StackPanel>
-
-                                <TextBlock x:Name="StepError" Foreground="#C62828" TextWrapping="Wrap" Margin="0,0,0,6" />
-                            </StackPanel>
-                            <StackPanel x:Name="LinkPanel" Visibility="Collapsed">
-                                <TextBlock x:Name="LinkText" TextWrapping="Wrap" Margin="0,0,0,8" />
-                                <Button Content="Delete link" Click="Delete_Click" />
-                            </StackPanel>
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="STEPS" Style="{StaticResource SideHeader}" />
+                        <TextBlock x:Name="NoSelection" DockPanel.Dock="Top" Foreground="#777" TextWrapping="Wrap"
+                                   Text="Add a step and its settings appear here. Every step of the pipeline is set up in this panel, one tab for each branch (a last step and the steps that lead to it). Click a link and press Delete to remove it." />
+                        <StackPanel x:Name="LinkPanel" DockPanel.Dock="Top" Visibility="Collapsed" Margin="0,0,0,8">
+                            <TextBlock x:Name="LinkText" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <Button Content="Delete link" HorizontalAlignment="Left" Padding="8,1" Click="Delete_Click" />
                         </StackPanel>
-
-                        <!-- The step's own editor (or why it cannot be shown yet). -->
-                        <Border x:Name="EditorHost" Grid.Row="1" />
-                    </Grid>
+                        <TabControl x:Name="StepTabs" Visibility="Collapsed" SelectionChanged="StepTabs_SelectionChanged" />
+                    </DockPanel>
                 </Border>
             </Grid>
         </Grid>

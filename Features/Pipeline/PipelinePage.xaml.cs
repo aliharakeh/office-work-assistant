@@ -45,7 +45,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
         string _filePath;
         bool _dirty;
         bool _filling;
-        string _editorFor;
 
         PipelineNodeView _dragNode;
         Point _dragOffset;
@@ -525,10 +524,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
             MarkDirty();
             GrowBoard();
             UpdateEmptyHint();
+            RebuildSidebar(new[] { node.Id });
             Select(node.Id);
             BringIntoView(node);
             if (kind == PipelineStepKind.Load)
-                LoadBrowse_Click(null, null);
+                BrowseLoad(node);
             else if (PipelineWork.Ports(kind).Length == 0 || from != null)
                 SetStatus("Added " + node.Title + ". Set it up in the panel on the right.");
             else
@@ -568,7 +568,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
             RedrawWires();
             GrowBoard();
             UpdateEmptyHint();
-            ShowSelection();
+            _sections.Clear();
+            RebuildSidebar(null);
+            ShowSelection(false);
             _filling = true;
             NameBox.Text = _def.Name ?? "";
             _filling = false;
@@ -609,12 +611,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
             Select(id);
             if (e.ClickCount == 2 && view.Node.Kind == PipelineStepKind.Load)
             {
-                LoadBrowse_Click(null, null);
+                BrowseLoad(view.Node);
                 return;
             }
             if (e.ClickCount == 2 && view.Node.Kind == PipelineStepKind.Save)
             {
-                SaveBrowse_Click(null, null);
+                BrowseSave(view.Node);
                 return;
             }
             _dragNode = view;
@@ -757,12 +759,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
             MarkDirty();
             RebuildView(to);
             RedrawWires();
-            if (_selected == to)
-            {
-                // Its editor was built for the old input.
-                _editorFor = null;
-                ShowSelection();
-            }
+            // The editors of the step and of what follows it were built for the old input.
+            RebuildSidebar(new[] { to });
+            ShowSelection(false);
             var node = PipelineWork.Find(_def, to);
             SetStatus("Linked " + PipelineWork.Find(_def, from).Title + " to " + node.Title +
                 (port == PipelineWork.PortIn ? "." : " (" + PipelineWork.PortLabel(node.Kind, port) + ")."));
@@ -861,6 +860,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         void DeleteSelected()
         {
+            string[] changed;
             if (_selectedLink != null)
             {
                 var to = _selectedLink.To;
@@ -869,8 +869,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 _selectedLink = null;
                 PipelineWork.CompactPorts(_def, to);
                 RebuildView(to);
-                if (_editorFor == to)
-                    _editorFor = null;
+                changed = new[] { to };
             }
             else if (_selected != null)
             {
@@ -882,399 +881,17 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 _selected = null;
                 foreach (var id in fed)
                     RebuildView(id);
+                changed = new List<string>(fed).ToArray();
             }
             else
                 return;
             MarkDirty();
             RedrawWires();
             UpdateEmptyHint();
-            ShowSelection();
+            RebuildSidebar(changed);
+            ShowSelection(false);
         }
 
-        // ---------- selection and side panel ----------
-
-        void Select(string id)
-        {
-            _selected = id;
-            _selectedLink = null;
-            foreach (var view in _views.Values)
-                view.Selected = view.Node.Id == id;
-            UpdateWireShapes();
-            ShowSelection();
-        }
-
-        void SelectLink(PipelineLink link)
-        {
-            _selected = null;
-            _selectedLink = link;
-            foreach (var view in _views.Values)
-                view.Selected = false;
-            UpdateWireShapes();
-            ShowSelection();
-        }
-
-        void ShowSelection()
-        {
-            _filling = true;
-            try
-            {
-                var node = _selected != null ? PipelineWork.Find(_def, _selected) : null;
-                NoSelection.Visibility = node == null && _selectedLink == null ? Visibility.Visible : Visibility.Collapsed;
-                StepPanel.Visibility = node != null ? Visibility.Visible : Visibility.Collapsed;
-                LinkPanel.Visibility = _selectedLink != null ? Visibility.Visible : Visibility.Collapsed;
-
-                if (_selectedLink != null)
-                {
-                    var to = PipelineWork.Find(_def, _selectedLink.To);
-                    LinkText.Text = PipelineWork.Find(_def, _selectedLink.From).Title + "  ->  " + to.Title +
-                        (_selectedLink.Port == PipelineWork.PortIn ? "" : " (" + PipelineWork.PortLabel(to.Kind, _selectedLink.Port) + ")");
-                }
-
-                if (node == null)
-                {
-                    ShowResult(null);
-                    ShowEditor(null);
-                    return;
-                }
-
-                StepKind.Text = PipelineWork.KindLabel(node.Kind).ToUpperInvariant();
-                StepKind.Foreground = PipelineNodeView.AccentOf(node.Kind);
-                StepAbout.Text = PipelineWork.KindDescription(node.Kind) +
-                    (PipelineWork.IsActionKind(node.Kind) ? " Preview only shows the plan; files change on Run and save files." : "");
-                StepTitle.Text = node.Title;
-                LoadPanel.Visibility = node.Kind == PipelineStepKind.Load ? Visibility.Visible : Visibility.Collapsed;
-                SavePanel.Visibility = node.Kind == PipelineStepKind.Save ? Visibility.Visible : Visibility.Collapsed;
-
-                StepError.Text = _views[node.Id].Box.ToolTip as string ?? "";
-
-                var load = node.Settings as LoadStepSettings;
-                if (load != null)
-                {
-                    LoadPath.Text = load.Path ?? "";
-                    LoadSheet.ItemsSource = SheetsOf(load);
-                    LoadSheet.SelectedItem = load.Sheet;
-                }
-                var save = node.Settings as SaveStepSettings;
-                if (save != null)
-                {
-                    SavePath.Text = save.Path ?? "";
-                    SaveSheet.Text = save.SheetName ?? "";
-                    SaveNewFile.IsChecked = save.Mode == SaveStepMode.NewFile;
-                    SaveNewSheet.IsChecked = save.Mode == SaveStepMode.NewSheet;
-                }
-                ShowResult(node);
-                ShowEditor(node);
-            }
-            finally
-            {
-                _filling = false;
-            }
-        }
-
-        void ShowResult(PipelineNode node)
-        {
-            DataTable table;
-            if (node == null || !_cache.TryGetValue(node.Id, out table))
-            {
-                GridOut.ItemsSource = null;
-                InfoOut.Text = node == null ? "Select a step to see its result." : "Click Run preview to see this step's result.";
-                return;
-            }
-            var shown = table;
-            if (table.Rows.Count > PreviewRows)
-            {
-                shown = table.Clone();
-                for (var i = 0; i < PreviewRows; i++)
-                    shown.ImportRow(table.Rows[i]);
-            }
-            GridOut.ItemsSource = shown.DefaultView;
-            var rows = table.Rows.Count.ToString("N0", CultureInfo.InvariantCulture);
-            InfoOut.Text = node.Title + ": " + rows + " rows, " + table.Columns.Count.ToString(CultureInfo.InvariantCulture) + " columns" +
-                (shown != table ? " (showing the first " + PreviewRows.ToString("N0", CultureInfo.InvariantCulture) + ")" : "");
-        }
-
-        // Sheet names for the combo; read once per file because opening a workbook is slow.
-        string[] SheetsOf(LoadStepSettings load)
-        {
-            if (string.IsNullOrWhiteSpace(load.Path))
-                return new string[0];
-            string[] sheets;
-            if (_sheets.TryGetValue(load.Path, out sheets))
-                return sheets;
-            try
-            {
-                sheets = ExcelFile.Load(load.Path, null, 1).Sheets;
-                _sheets[load.Path] = sheets;
-                return sheets;
-            }
-            catch (Exception ex)
-            {
-                StepError.Text = ex.Message;
-                return string.IsNullOrEmpty(load.Sheet) ? new string[0] : new[] { load.Sheet };
-            }
-        }
-
-        PipelineNode SelectedNode()
-        {
-            return _selected != null ? PipelineWork.Find(_def, _selected) : null;
-        }
-
-        void StepTitle_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            var node = SelectedNode();
-            if (_filling || node == null)
-                return;
-            node.Title = StepTitle.Text;
-            _views[node.Id].Refresh();
-            MarkDirty();
-        }
-
-        void LoadBrowse_Click(object sender, RoutedEventArgs e)
-        {
-            var node = SelectedNode();
-            var load = node != null ? node.Settings as LoadStepSettings : null;
-            if (load == null)
-                return;
-            var dlg = new OpenFileDialog
-            {
-                Filter = "Excel files (*.xlsx;*.xlsm)|*.xlsx;*.xlsm",
-                Title = "Choose the file for " + node.Title
-            };
-            if (dlg.ShowDialog() != true)
-                return;
-            try
-            {
-                var loaded = ExcelFile.Load(dlg.FileName, null, 1);
-                _sheets[dlg.FileName] = loaded.Sheets;
-                load.Path = dlg.FileName;
-                load.Sheet = loaded.Sheet;
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not open file", MessageBoxImage.Error);
-                return;
-            }
-            StepChanged(node);
-            ShowSelection();
-        }
-
-        void LoadSheet_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            var node = SelectedNode();
-            var load = node != null ? node.Settings as LoadStepSettings : null;
-            var sheet = LoadSheet.SelectedItem as string;
-            if (_filling || load == null || sheet == null || sheet == load.Sheet)
-                return;
-            load.Sheet = sheet;
-            StepChanged(node);
-        }
-
-        void SaveBrowse_Click(object sender, RoutedEventArgs e)
-        {
-            var node = SelectedNode();
-            var save = node != null ? node.Settings as SaveStepSettings : null;
-            if (save == null)
-                return;
-            var dlg = new SaveFileDialog
-            {
-                Filter = "Excel workbook (*.xlsx)|*.xlsx",
-                Title = "Where should " + node.Title + " write?",
-                // Adding a sheet to an existing workbook is not a replace.
-                OverwritePrompt = false,
-                FileName = string.IsNullOrWhiteSpace(save.Path) ? "result.xlsx" : System.IO.Path.GetFileName(save.Path)
-            };
-            if (dlg.ShowDialog() != true)
-                return;
-            save.Path = dlg.FileName;
-            StepChanged(node);
-            ShowSelection();
-        }
-
-        void SaveMode_Changed(object sender, RoutedEventArgs e)
-        {
-            var node = SelectedNode();
-            var save = node != null ? node.Settings as SaveStepSettings : null;
-            if (_filling || save == null)
-                return;
-            save.Mode = SaveNewSheet.IsChecked == true ? SaveStepMode.NewSheet : SaveStepMode.NewFile;
-            StepChanged(node);
-        }
-
-        void SaveSheet_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            var node = SelectedNode();
-            var save = node != null ? node.Settings as SaveStepSettings : null;
-            if (_filling || save == null)
-                return;
-            save.SheetName = SaveSheet.Text;
-            StepChanged(node);
-        }
-
-        void StepChanged(PipelineNode node)
-        {
-            Invalidate(node.Id);
-            _views[node.Id].Refresh();
-            MarkDirty();
-        }
-
-        // ---------- editing a step in the sidebar ----------
-
-        // The editor stays while the same step is selected, so edits are not lost when a run
-        // redraws the selection. It is built again when another step is selected.
-        void ShowEditor(PipelineNode node)
-        {
-            if (node == null || node.Kind == PipelineStepKind.Load || node.Kind == PipelineStepKind.Save)
-            {
-                EditorHost.Child = null;
-                _editorFor = null;
-                return;
-            }
-            if (_editorFor == node.Id && EditorHost.Child != null)
-                return;
-            _editorFor = node.Id;
-            EditorHost.Child = BuildEditor(node);
-        }
-
-        static FrameworkElement Notice(string text)
-        {
-            return new TextBlock { Text = text, Foreground = Brushes.DimGray, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
-        }
-
-        FrameworkElement BuildEditor(PipelineNode node)
-        {
-            // The editor needs the real inputs, so run the steps before this one first.
-            var ports = PipelineWork.InputPorts(_def, node);
-            var inputs = new DataTable[ports.Length];
-            var labels = new string[ports.Length];
-            for (var i = 0; i < ports.Length; i++)
-            {
-                var link = PipelineWork.InputLink(_def, node.Id, ports[i]);
-                // A list can be typed in without an input; Append always has a free port.
-                if (link == null && (node.Kind == PipelineStepKind.ValueList || node.Kind == PipelineStepKind.Append))
-                    continue;
-                if (link == null)
-                    return Notice("Connect " + PipelineWork.PortLabel(node.Kind, ports[i]) +
-                        " of this step first: drag from the right dot of an earlier step to this step's left dot.");
-                var result = Execute(link.From, false, false);
-                if (result.Error != null)
-                {
-                    var failed = result.FailedNodeId != null ? PipelineWork.Find(_def, result.FailedNodeId) : null;
-                    return Notice("This step cannot be set up until the steps before it work.\n\n" +
-                        (failed != null ? failed.Title + ": " : "") + result.Error);
-                }
-                inputs[i] = _cache[link.From];
-                labels[i] = "From step: " + PipelineWork.Find(_def, link.From).Title;
-            }
-
-            switch (node.Kind)
-            {
-                case PipelineStepKind.FilterSort:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as FilterSortSettings;
-                    return new FilterSortPage(input, labels[0], s == null ? null : PipelineWork.FilterSortToLetters(s, input, false),
-                        r => UseSettings(node, PipelineWork.FilterSortToNames(r, input)));
-                }
-                case PipelineStepKind.Templates:
-                {
-                    var input = inputs[0];
-                    var t = node.Settings as TemplateDefinition;
-                    return new TemplatesPage(input, labels[0], t == null ? null : PipelineWork.TemplateToLetters(t, input, false),
-                        r => UseSettings(node, PipelineWork.TemplateToNames(r, input)));
-                }
-                case PipelineStepKind.Compare:
-                    return new ExcelProcessingPage(inputs[0], labels[0], inputs[1], labels[1],
-                        PipelineWork.Clone(node.Settings as ExcelProcessingSettings), r => UseSettings(node, r));
-                case PipelineStepKind.ValueList:
-                    return new ValueListPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as ValueListSettings), r => UseSettings(node, r));
-                case PipelineStepKind.ListFolder:
-                    return new FindFilesPage(PipelineWork.Clone(node.Settings as FolderScanSettings), r => UseSettings(node, r));
-                case PipelineStepKind.FindFiles:
-                    return new FindFilesPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FindFilesSettings), r => UseSettings(node, r));
-                case PipelineStepKind.FileAction:
-                    return new FileActionPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FileActionSettings), r => UseSettings(node, r));
-                case PipelineStepKind.MergeFolders:
-                    return new MergeDuplicatesPage(PipelineWork.Clone(node.Settings as MergeFoldersSettings), r => UseSettings(node, r));
-                case PipelineStepKind.CleanText:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as CleanTextSettings;
-                    return new CleanTextPage(input, labels[0], s == null ? null : PipelineWork.CleanTextToLetters(s, input, false),
-                        r => UseSettings(node, PipelineWork.CleanTextToNames(r, input)));
-                }
-                case PipelineStepKind.SplitColumn:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as SplitColumnSettings;
-                    return new SplitColumnPage(input, labels[0], s == null ? null : PipelineWork.SplitToLetters(s, input, false),
-                        r => UseSettings(node, PipelineWork.SplitToNames(r, input)));
-                }
-                case PipelineStepKind.CombineColumns:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as CombineColumnsSettings;
-                    return new CombineColumnsPage(input, labels[0], s == null ? null : PipelineWork.CombineToLetters(s, input, false),
-                        r => UseSettings(node, PipelineWork.CombineToNames(r, input)));
-                }
-                case PipelineStepKind.RemoveDuplicates:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as RemoveDuplicatesSettings;
-                    return new RemoveDuplicatesPage(input, labels[0], s == null ? null : PipelineWork.RemoveDuplicatesToLetters(s, input, false),
-                        r => UseSettings(node, PipelineWork.RemoveDuplicatesToNames(r, input)));
-                }
-                case PipelineStepKind.ArrangeColumns:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as ArrangeColumnsSettings;
-                    return new ArrangeColumnsPage(input, labels[0], s == null ? null : PipelineWork.ArrangeToLetters(s, input, false),
-                        r => UseSettings(node, PipelineWork.ArrangeToNames(r, input)));
-                }
-                case PipelineStepKind.Append:
-                {
-                    var tables = new List<DataTable>();
-                    var shown = new List<string>();
-                    var names = new List<string>();
-                    for (var i = 0; i < ports.Length; i++)
-                    {
-                        if (inputs[i] == null)
-                            continue;
-                        tables.Add(inputs[i]);
-                        shown.Add(labels[i]);
-                        names.Add(PipelineWork.Find(_def, PipelineWork.InputLink(_def, node.Id, ports[i]).From).Title);
-                    }
-                    if (tables.Count == 0)
-                        return Notice("Link the steps whose rows you want to stack: drag from the right dot of each one to this step's left dot.");
-                    return new AppendPage(tables, shown, names, PipelineWork.Clone(node.Settings as AppendSettings), r => UseSettings(node, r));
-                }
-                case PipelineStepKind.Highlight:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as HighlightSettings;
-                    return new HighlightPage(input, labels[0], s == null ? null : PipelineWork.HighlightToLetters(s, input, false),
-                        r => UseSettings(node, PipelineWork.HighlightToNames(r, input)));
-                }
-                case PipelineStepKind.FormatSheet:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as FormatSheetSettings;
-                    return new FormatSheetPage(input, labels[0], s == null ? null : PipelineWork.FormatSheetToLetters(s, input, false),
-                        r => UseSettings(node, PipelineWork.FormatSheetToNames(r, input)));
-                }
-                default:
-                    return new FillColumnsPage(inputs[0], labels[0], inputs[1], labels[1],
-                        PipelineWork.Clone(node.Settings as FillColumnsSettings), r => UseSettings(node, r));
-            }
-        }
-
-        // The editor's Apply to step button: keep the settings and show what the step now gives.
-        void UseSettings(PipelineNode node, object settings)
-        {
-            node.Settings = settings;
-            StepChanged(node);
-            if (RunPreview(node.Id))
-                SetStatus("Applied to " + node.Title + ".");
-        }
         // ---------- running ----------
 
         // Runs targetId and what it needs (everything when null). False when a step failed.
@@ -1324,7 +941,17 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 SetStatus(PipelineWork.Find(_def, result.FailedNodeId).Title + ": " + result.Error);
             }
             else if (selectFailed)
-                ShowSelection();
+                ShowSelection(false);
+            UpdateSections();
+            if (selectFailed && result.Error == null)
+            {
+                // Steps that could not be set up before may be able to now.
+                foreach (var section in new List<StepSection>(_sections.Values))
+                {
+                    if (section.Placeholder)
+                        RebuildEditor(section);
+                }
+            }
             return result;
         }
 

@@ -351,12 +351,10 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         public static PipelineNode AddNode(PipelineDefinition def, PipelineStepKind kind, double x, double y)
         {
+            // The first number not used by a step of this kind, so names stay different after a step is deleted.
             var count = 1;
-            foreach (var n in def.Nodes)
-            {
-                if (n.Kind == kind)
-                    count++;
-            }
+            while (def.Nodes.Exists(n => n.Kind == kind && n.Title == KindLabel(kind) + " " + count.ToString(CultureInfo.InvariantCulture)))
+                count++;
             var node = new PipelineNode
             {
                 Id = NextId(def),

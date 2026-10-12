@@ -12,7 +12,7 @@ A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. The 
   - One step's result can feed several later steps.
   - Links that would make a loop are refused.
   - To remove a link or step, select it and press Delete.
-- **Editing a step:** select it. Its settings open in the Step panel on the right, with the earlier step's result already loaded. Click Apply to step to keep the changes (switching to another step discards unapplied ones). Drag the divider to make the panel wider. Double-click a Load file or Save file step to browse for its file.
+- **Editing steps:** the Steps sidebar on the right shows every step's settings at once, one section per step in running order, with the earlier step's result already loaded. A pipeline that splits (one file feeding two branches) gets one tab per branch, so each branch's settings stay separate; a shared step appears in each tab. Selecting a step on the canvas jumps to its section; clicking a section selects its step. Changes apply by themselves a moment after you edit (there is no Apply button); a step that cannot apply yet shows why in its section. Steps are named automatically (Filter / Sort 1, 2, ...). Double-click a Load file or Save file step to browse for its file.
 - **Run preview** (F5) runs the selected step and the steps it needs, or every step when none is selected, and shows the result below the canvas. A step that worked turns green. A step that failed turns red and shows why.
 - **Run and save files** reads every file again and runs every step without changing anything. It then lists the files it will replace and how many items each Change files step will copy, move, delete or merge, and asks you to confirm. Only then does it carry out those steps in order and write the Save files.
 - **Formula guide** opens the formula lessons and tester. Back returns to the canvas.
@@ -30,16 +30,16 @@ Load file reads one sheet of an `.xlsx` or `.xlsm` file, even when it is open in
 - Add any number of sort keys, each ascending or descending, and move them up or down to set priority. Ties keep the original row order.
 
 ### Add columns
-Keep all source columns, or tick only the ones you want, and add extra columns. An extra column can be a fixed value, a copy of a column, combined text (`$A $B`), math (`$A * $B`, `ADDDAYS($Today, 7)`) or a condition (`IF($A > 10, "Big", "Small")`).
+Keep all source columns, or tick only the ones you want, and add extra columns. An extra column can be a fixed value, a copy of a column, combined text (`$A $B`), math (`$A * $B`, `ADDDAYS($Today, 7)`) or a condition (`IF($A > 10, "Big", "Small")`). **Add column** opens a window for one column; the step lists each added column with **Edit** and **Remove**.
 ### Compare A/B
 Two inputs, A and B.
-- Match rules compare a formula on A with a formula on B, using `==`, `!=`, `>`, `>=`, `<` or `<=`. A column can be split on a separator, and its parts compared as `$1`, `$2` and so on.
+- Match rules compare a formula on A with a formula on B, using `==`, `!=`, `>`, `>=`, `<` or `<=`. A column can be split on a separator, and its parts compared as `$1`, `$2` and so on. **Add** opens a window for one rule; the step lists each rule with **Edit** and **Remove**.
 - The result is the rows only in A, the rows only in B, or the rows common to both. When both sides have a column with the same name, the result keeps both, with `_A` and `_B` suffixes.
 
 ### Fill columns
 Fills columns of B with values from the matching row of A.
-- **Match rules** compare a formula on the A row with a formula on the B row, for example `TRIM($ID)` == `$Code`. All rules must match, text compares ignore case, and the first matching A row is used.
-- **Fill rules** each have a target column (one of B's columns, or a new name to add a column), an optional When condition, and a Value formula. For each column, the first rule that fires fills the cell.
+- **Match rules** compare a formula on the A row with a formula on the B row, for example `TRIM($ID)` == `$Code`. All rules must match, text compares ignore case, and the first matching A row is used. **Add** opens a window for one key; the step lists each key with **Edit** and **Remove**.
+- **Fill rules** each have a target column (one of B's columns, or a new name to add a column), an optional When condition, and a Value formula. For each column, the first rule that fires fills the cell. **Add** opens a window for one rule; the step lists each rule with **Edit**, **Up** and **Remove**.
 - **Variables:**
   - `$A_Price` reads the matched A row.
   - `$Price` reads the B row.
@@ -78,7 +78,7 @@ Fills columns of B with values from the matching row of A.
 
 These steps decide how the Save file step writes the sheet. The data itself does not change. The result grid shows the colours. **Put them right before Save:** any other step after them drops the styling, because it can move or remove rows. Highlight and Format sheet can follow each other in either order; Highlight colours stay on top.
 
-- **Highlight** colours cells or rows that match a condition. Each rule has a formula, what to style, and a look. What to style is one of:
+    - **Highlight** colours cells or rows that match a condition. Each rule has a formula, what to style, and a look. **Add rule** opens a window for one rule; the step lists each rule with **Edit**, **Up**, **Down** and **Remove**. What to style is one of:
   - the whole row
   - the picked columns in matching rows
   - each picked cell tested on its own, with `$Value` as that cell
@@ -96,7 +96,7 @@ These steps decide how the Save file step writes the sheet. The data itself does
   - column widths fitted to their contents
   - thin borders on every cell
   - every second row shaded
-  - per-column width, number format (for example `#,##0.00` or `dd/MM/yyyy`), alignment and wrap
+  - per-column width, number format (for example `#,##0.00` or `dd/MM/yyyy`), alignment and wrap. **Add format** opens a window for one column; the step lists each format with **Edit** and **Remove**.
 
 Example: Load file -> Clean text -> Remove duplicates -> Highlight (`$Qty == 0` row light red) -> Format sheet -> Save file.
 

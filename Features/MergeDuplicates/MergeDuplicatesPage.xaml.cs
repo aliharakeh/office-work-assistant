@@ -70,7 +70,7 @@ namespace OfficeWorkAssistant.Features.MergeDuplicates
             var error = MergeDuplicatesWork.Check(s);
             if (error != null)
             {
-                MessageBox.Show(Window.GetWindow(this), error, "Not ready", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Notices.Show(this, error, "Not ready", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             _use(s);

@@ -1,0 +1,15 @@
+{
+    "runConfig.configurations": [
+        {
+            "name": "Build (Release)",
+            "bin": "C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\MSBuild.exe",
+            "args": ["OfficeWorkAssistant.csproj", "/p:Configuration=Release", "/v:minimal"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Run (Release)",
+            "bin": "${workspaceFolder}\\bin\\Release\\OfficeWorkAssistant.exe",
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

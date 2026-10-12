@@ -46,16 +46,11 @@
             <GroupBox Header="Match rules" Grid.Row="1" Margin="0,0,0,8">
                 <DockPanel LastChildFill="True" Margin="4">
                     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="True">
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                            <Button Content="Variables..." Width="88" Margin="0,0,6,0" Click="Variables_Click" />
-                            <Button Content="Add" Width="56" Click="AddCond_Click" />
-                        </StackPanel>
+                        <Button DockPanel.Dock="Right" Content="Add" Width="56" Click="AddCond_Click" />
                         <TextBlock VerticalAlignment="Center" FontSize="11" Foreground="#555"
-                                   Text="$Value is the chosen column. Split it, then $1 $2 in the formula." />
+                                   Text="All rules must match. Add opens a window for one rule." />
                     </DockPanel>
-                    <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
-                        <StackPanel x:Name="CondPanel" />
-                    </ScrollViewer>
+                    <StackPanel x:Name="CondPanel" />
                 </DockPanel>
             </GroupBox>
 

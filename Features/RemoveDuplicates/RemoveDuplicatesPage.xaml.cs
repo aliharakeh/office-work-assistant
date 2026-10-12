@@ -89,7 +89,7 @@ namespace OfficeWorkAssistant.Features.RemoveDuplicates
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), ex.Message, "Remove duplicates", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Notices.Show(this, ex.Message, "Remove duplicates", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             Status.Text = _input.Rows.Count.ToString("N0", CultureInfo.InvariantCulture) + " rows in, " +

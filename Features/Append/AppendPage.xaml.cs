@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Windows;
+using OfficeWorkAssistant.Excel;
 using System.Windows.Controls;
 
 namespace OfficeWorkAssistant.Features.Append
@@ -50,7 +51,7 @@ namespace OfficeWorkAssistant.Features.Append
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), ex.Message, "Append tables", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Notices.Show(this, ex.Message, "Append tables", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             Status.Text = result.Rows.Count.ToString("N0", CultureInfo.InvariantCulture) + " rows, " +

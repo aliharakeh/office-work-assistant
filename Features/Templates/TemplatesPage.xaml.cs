@@ -4,6 +4,8 @@ using System.Data;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using Microsoft.Win32;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Expressions;
@@ -16,7 +18,6 @@ namespace OfficeWorkAssistant.Features.Templates
         int _previewRows = 1000;
         List<TemplateColumn> _columns = new List<TemplateColumn>();
         List<SourceColumnPick> _sourcePicks;
-        int _editingIndex = -1;
         bool _syncSource;
         // The input comes from an earlier pipeline step, and "Use in pipeline"
         // hands the template back.
@@ -44,12 +45,7 @@ namespace OfficeWorkAssistant.Features.Templates
             PreviewBox.Items.Add(1000);
             PreviewBox.Items.Add(5000);
             PreviewBox.SelectedItem = 1000;
-            ColKind.SelectedIndex = 0;
-            FormulaField.Watch(MathExpression, MathRequired);
-            FormulaField.Watch(CondCondition, CondRequired);
-            FormulaField.WatchOptional(CondTrue);
-            FormulaField.WatchOptional(CondFalse);
-            RefreshColumnList();
+            RebuildColumns();
             SyncSelectAll();
             ExcelGrid.Hook(GridSource, GridOut);
             InjectInput();
@@ -66,7 +62,6 @@ namespace OfficeWorkAssistant.Features.Templates
             GridSource.ItemsSource = _source.DefaultView;
             InfoSource.Text = RowInfo(_source.Rows.Count, _pipeInput.Rows.Count, cut);
             RebuildSourcePicks(null);
-            RefreshSourceCombos();
         }
 
         void PreviewBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -104,14 +99,6 @@ namespace OfficeWorkAssistant.Features.Templates
             for (var i = 0; i < maxRows; i++)
                 copy.ImportRow(table.Rows[i]);
             return copy;
-        }
-
-        void RefreshSourceCombos()
-        {
-            string[] labels = TemplatesWork.SourceLabels(_source);
-            CopySource.ItemsSource = labels;
-            if (CopySource.Items.Count > 0 && CopySource.SelectedIndex < 0)
-                CopySource.SelectedIndex = 0;
         }
 
         void RebuildSourcePicks(IList<string> keep)
@@ -253,123 +240,6 @@ namespace OfficeWorkAssistant.Features.Templates
             return list;
         }
 
-        void Kind_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (PanelFixed == null || PanelCopy == null || PanelConcat == null || PanelMath == null || PanelConditional == null || ColKind == null)
-                return;
-            int kind = ColKind.SelectedIndex;
-            PanelFixed.Visibility = kind == 0 ? Visibility.Visible : Visibility.Collapsed;
-            PanelCopy.Visibility = kind == 1 ? Visibility.Visible : Visibility.Collapsed;
-            PanelConcat.Visibility = kind == 2 ? Visibility.Visible : Visibility.Collapsed;
-            PanelMath.Visibility = kind == 3 ? Visibility.Visible : Visibility.Collapsed;
-            PanelConditional.Visibility = kind == 4 ? Visibility.Visible : Visibility.Collapsed;
-            FormulaField.Refresh(MathExpression);
-            FormulaField.Refresh(CondCondition);
-            FormulaField.Refresh(CondTrue);
-            FormulaField.Refresh(CondFalse);
-        }
-
-        bool MathRequired()
-        {
-            return ColKind.SelectedIndex == 3;
-        }
-
-        bool CondRequired()
-        {
-            return ColKind.SelectedIndex == 4;
-        }
-
-        void Columns_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            int index = ColumnList.SelectedIndex;
-            if (index < 0 || index >= _columns.Count)
-                return;
-            _editingIndex = index;
-            LoadEditor(_columns[index]);
-            AddUpdateBtn.Content = "Update column";
-        }
-
-        void AddUpdate_Click(object sender, RoutedEventArgs e)
-        {
-            if (ColKind.SelectedIndex == 3 && !FormulaField.Check(MathExpression))
-                return;
-            if (ColKind.SelectedIndex == 4 &&
-                (!FormulaField.Check(CondCondition) || !FormulaField.Check(CondTrue) || !FormulaField.Check(CondFalse)))
-                return;
-
-            TemplateColumn col;
-            try
-            {
-                col = BuildColumnFromEditor();
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Column", MessageBoxImage.Warning);
-                return;
-            }
-
-            string error = TemplatesWork.ValidateColumn(col);
-            if (error != null)
-            {
-                Alert(error, "Column", MessageBoxImage.Warning);
-                return;
-            }
-
-            if (_editingIndex >= 0 && _editingIndex < _columns.Count)
-            {
-                for (var i = 0; i < _columns.Count; i++)
-                {
-                    if (i != _editingIndex &&
-                        string.Equals(_columns[i].Name.Trim(), col.Name.Trim(), StringComparison.OrdinalIgnoreCase))
-                    {
-                        Alert("Duplicate column name: " + col.Name.Trim() + ".", "Column", MessageBoxImage.Warning);
-                        return;
-                    }
-                }
-                _columns[_editingIndex] = col;
-            }
-            else
-            {
-                for (var i = 0; i < _columns.Count; i++)
-                {
-                    if (string.Equals(_columns[i].Name.Trim(), col.Name.Trim(), StringComparison.OrdinalIgnoreCase))
-                    {
-                        Alert("Duplicate column name: " + col.Name.Trim() + ".", "Column", MessageBoxImage.Warning);
-                        return;
-                    }
-                }
-                _columns.Add(col);
-            }
-
-            ClearEditor();
-            RefreshColumnList();
-        }
-
-        void Remove_Click(object sender, RoutedEventArgs e)
-        {
-            int index = ColumnList.SelectedIndex;
-            if (index < 0 || index >= _columns.Count)
-            {
-                Alert("Select a column first.", "Remove", MessageBoxImage.Warning);
-                return;
-            }
-            _columns.RemoveAt(index);
-            ClearEditor();
-            RefreshColumnList();
-        }
-
-        void ClearEditor_Click(object sender, RoutedEventArgs e)
-        {
-            ClearEditor();
-            RefreshColumnList();
-        }
-
-        void Variables_Click(object sender, RoutedEventArgs e)
-        {
-            ExpressionHelp.Show(Window.GetWindow(this),
-                "Type the Name exactly, e.g. $Today. Works in Fixed, Combine, Math and Conditional. Week starts Monday. Dates have no time except $Now. Use $A $B for columns (A = 1st, B = 2nd). FIRSTWORD() and LASTWORD() pick the first/last word of a text.");
-        }
-
         void Preview_Click(object sender, RoutedEventArgs e)
         {
             DataTable output;
@@ -383,8 +253,7 @@ namespace OfficeWorkAssistant.Features.Templates
             TemplateName.Text = template.Name;
             KeepSource.IsChecked = template.KeepSourceColumns;
             _columns = new List<TemplateColumn>(template.Columns ?? new List<TemplateColumn>());
-            ClearEditor();
-            RefreshColumnList();
+            RebuildColumns();
             RebuildSourcePicks(template.SourceColumns);
         }
 
@@ -438,125 +307,80 @@ namespace OfficeWorkAssistant.Features.Templates
             return template;
         }
 
-        TemplateColumn BuildColumnFromEditor()
+        void AddUpdate_Click(object sender, RoutedEventArgs e)
         {
-            string name = ColName.Text != null ? ColName.Text.Trim() : "";
-            if (name.Length == 0)
-                throw new InvalidOperationException("Enter a column name.");
-
-            var col = new TemplateColumn();
-            col.Name = name;
-            int kind = ColKind.SelectedIndex;
-            if (kind == 1)
-            {
-                col.Kind = TemplateColumnKind.Copy;
-                string picked = CopySource.SelectedItem as string;
-                if (string.IsNullOrWhiteSpace(picked))
-                    picked = CopySource.Text != null ? CopySource.Text.Trim() : "";
-                // Store the Excel letter (A, B, ...) so templates use position, not header names.
-                col.SourceColumn = TemplatesWork.ExtractLetter(picked);
-            }
-            else if (kind == 2)
-            {
-                col.Kind = TemplateColumnKind.Concat;
-                col.Pattern = ConcatPattern.Text;
-            }
-            else if (kind == 3)
-            {
-                col.Kind = TemplateColumnKind.Math;
-                col.Expression = MathExpression.Text;
-                // Keep legacy fields filled so old readers still see something.
-                col.Left = MathExpression.Text;
-                col.Operator = "+";
-                col.Right = "";
-            }
-            else if (kind == 4)
-            {
-                col.Kind = TemplateColumnKind.Conditional;
-                col.Condition = CondCondition.Text;
-                col.TrueExpression = CondTrue.Text;
-                col.FalseExpression = CondFalse.Text;
-            }
-            else
-            {
-                col.Kind = TemplateColumnKind.Fixed;
-                col.FixedValue = FixedValue.Text;
-            }
-            return col;
+            EditColumn(-1);
         }
 
-        void LoadEditor(TemplateColumn col)
+        void RebuildColumns()
         {
-            ColName.Text = col.Name;
-            if (col.Kind == TemplateColumnKind.Copy)
+            ColumnPanel.Children.Clear();
+            if (_columns.Count == 0)
             {
-                ColKind.SelectedIndex = 1;
-                CopySource.Text = "";
-                CopySource.SelectedIndex = -1;
-                string wantLetter = TemplatesWork.ExtractLetter(col.SourceColumn);
-                for (var i = 0; i < CopySource.Items.Count; i++)
+                ColumnPanel.Children.Add(new TextBlock { Text = "No added columns yet.", Foreground = Brushes.Gray, Margin = new Thickness(0, 0, 0, 4) });
+                return;
+            }
+            for (var i = 0; i < _columns.Count; i++)
+            {
+                var index = i;
+                var text = (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + ColumnText(_columns[i]);
+                var edit = new Button { Content = "Edit", Width = 56, Margin = new Thickness(0, 0, 6, 0) };
+                edit.Click += (s, e) => EditColumn(index);
+                var remove = new Button { Content = "Remove", Width = 64 };
+                remove.Click += (s, e) => RemoveColumn(index);
+                var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                buttons.Children.Add(edit);
+                buttons.Children.Add(remove);
+                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+                DockPanel.SetDock(buttons, Dock.Right);
+                row.Children.Add(buttons);
+                row.Children.Add(new TextBlock
                 {
-                    string item = CopySource.Items[i] as string;
-                    // Match by letter first (new templates store "A"), then by old header name.
-                    if (string.Equals(TemplatesWork.ExtractLetter(item), wantLetter, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(item, col.SourceColumn, StringComparison.OrdinalIgnoreCase))
-                    {
-                        CopySource.SelectedIndex = i;
-                        break;
-                    }
-                }
-                if (CopySource.SelectedIndex < 0)
-                    CopySource.Text = col.SourceColumn;
+                    Text = text,
+                    ToolTip = text,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 8, 0)
+                });
+                ColumnPanel.Children.Add(row);
             }
-            else if (col.Kind == TemplateColumnKind.Concat)
+        }
+
+        // "Price [Math]: $A * $B" reads better than the stored kind number.
+        static string ColumnText(TemplateColumn col)
+        {
+            switch (col.Kind)
             {
-                ColKind.SelectedIndex = 2;
-                ConcatPattern.Text = col.Pattern;
+                case TemplateColumnKind.Copy: return "Copy " + col.SourceColumn;
+                case TemplateColumnKind.Concat: return "Text " + col.Pattern;
+                case TemplateColumnKind.Math: return "Math " + col.Expression;
+                case TemplateColumnKind.Conditional: return "If " + col.Condition + " -> " + col.TrueExpression + " else " + col.FalseExpression;
+                default: return "Fixed " + col.FixedValue;
             }
-            else if (col.Kind == TemplateColumnKind.Math)
-            {
-                ColKind.SelectedIndex = 3;
-                string expr = col.Expression;
-                if (string.IsNullOrWhiteSpace(expr) && !string.IsNullOrWhiteSpace(col.Left))
-                    expr = col.Left + " " + col.Operator + " " + col.Right;
-                MathExpression.Text = expr;
-            }
-            else if (col.Kind == TemplateColumnKind.Conditional)
-            {
-                ColKind.SelectedIndex = 4;
-                CondCondition.Text = col.Condition;
-                CondTrue.Text = col.TrueExpression;
-                CondFalse.Text = col.FalseExpression;
-            }
+        }
+
+        // index -1 adds a new column.
+        void EditColumn(int index)
+        {
+            var seed = index >= 0 ? _columns[index] : null;
+            var col = TemplateColumnWindow.Edit(Window.GetWindow(this), _pipeInput, seed, _columns, index);
+            if (col == null)
+                return;
+            if (index >= 0)
+                _columns[index] = col;
             else
-            {
-                ColKind.SelectedIndex = 0;
-                FixedValue.Text = col.FixedValue;
-            }
+                _columns.Add(col);
+            RebuildColumns();
+            // The pipeline applies this editor by itself after a click inside it; the dialog's clicks never reach it.
+            RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         }
 
-        void ClearEditor()
+        void RemoveColumn(int index)
         {
-            _editingIndex = -1;
-            ColumnList.SelectedIndex = -1;
-            AddUpdateBtn.Content = "Add column";
-            ColName.Text = "";
-            FixedValue.Text = "";
-            ConcatPattern.Text = "";
-            MathExpression.Text = "";
-            CondCondition.Text = "";
-            CondTrue.Text = "";
-            CondFalse.Text = "";
-            if (CopySource.Items.Count > 0)
-                CopySource.SelectedIndex = 0;
+            _columns.RemoveAt(index);
+            RebuildColumns();
+            RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         }
-
-        void RefreshColumnList()
-        {
-            ColumnList.ItemsSource = null;
-            ColumnList.ItemsSource = _columns;
-        }
-
         public sealed class SourceColumnPick
         {
             public string Name { get; set; }
@@ -566,7 +390,7 @@ namespace OfficeWorkAssistant.Features.Templates
 
         void Alert(string message, string title, MessageBoxImage icon)
         {
-            MessageBox.Show(Window.GetWindow(this), message, title, MessageBoxButton.OK, icon);
+            Notices.Show(this, message, title, MessageBoxButton.OK, icon);
         }
     }
 }

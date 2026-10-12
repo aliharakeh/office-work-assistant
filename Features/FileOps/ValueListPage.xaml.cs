@@ -144,7 +144,7 @@ namespace OfficeWorkAssistant.Features.FileOps
 
         void Alert(string message, string title, MessageBoxImage icon)
         {
-            MessageBox.Show(Window.GetWindow(this), message, title, MessageBoxButton.OK, icon);
+            Notices.Show(this, message, title, MessageBoxButton.OK, icon);
         }
     }
 }

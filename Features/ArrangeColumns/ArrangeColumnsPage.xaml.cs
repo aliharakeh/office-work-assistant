@@ -119,7 +119,7 @@ namespace OfficeWorkAssistant.Features.ArrangeColumns
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), ex.Message, "Arrange columns", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Notices.Show(this, ex.Message, "Arrange columns", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             Status.Text = "The result has " + result.Columns.Count + " columns.";

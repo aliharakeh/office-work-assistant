@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Expressions;
 
@@ -17,8 +18,8 @@ namespace OfficeWorkAssistant.Features.FillColumns
         bool _cutB;
         int _previewRows = 1000;
         bool _loading;
-        readonly List<KeyRow> _keys = new List<KeyRow>();
-        readonly List<RuleRow> _rules = new List<RuleRow>();
+        readonly List<FillColumnsKey> _keys = new List<FillColumnsKey>();
+        readonly List<FillColumnsRule> _rules = new List<FillColumnsRule>();
         bool _restoring;
         // Inputs come from earlier pipeline steps, and "Use in pipeline"
         // hands the settings back.
@@ -42,8 +43,8 @@ namespace OfficeWorkAssistant.Features.FillColumns
             PreviewBox.Items.Add(5000);
             PreviewBox.SelectedItem = 1000;
             ExcelGrid.Hook(GridA, GridB, GridOut);
-            AddKey();
-            AddRule();
+            RebuildKeys();
+            RebuildRules();
             InjectInputs();
             if (settings != null)
                 ApplySettings(settings);
@@ -61,23 +62,19 @@ namespace OfficeWorkAssistant.Features.FillColumns
             try
             {
                 _keys.Clear();
-                KeyPanel.Children.Clear();
-                _rules.Clear();
-                RulePanel.Children.Clear();
-                if (s.Keys == null || s.Keys.Count == 0)
-                    AddKey();
-                else
+                if (s.Keys != null)
                 {
                     foreach (var k in s.Keys)
-                        AddKey(k);
+                        _keys.Add(CopyKey(k));
                 }
-                if (s.Rules == null || s.Rules.Count == 0)
-                    AddRule();
-                else
+                _rules.Clear();
+                if (s.Rules != null)
                 {
                     foreach (var r in s.Rules)
-                        AddRule(r);
+                        _rules.Add(CopyRule(r));
                 }
+                RebuildKeys();
+                RebuildRules();
             }
             finally
             {
@@ -120,27 +117,12 @@ namespace OfficeWorkAssistant.Features.FillColumns
 
         void AddKey_Click(object sender, RoutedEventArgs e)
         {
-            AddKey();
+            EditKey(-1);
         }
 
         void AddRule_Click(object sender, RoutedEventArgs e)
         {
-            AddRule();
-        }
-
-        void Variables_Click(object sender, RoutedEventArgs e)
-        {
-            var extras = new List<VariableHelp>
-            {
-                new VariableHelp { Name = "$A_Name", Description = "Column Name (or letter, $A_C) of the matched A row. Blank when no A row matched.", Example = "" },
-                new VariableHelp { Name = "$B_Name", Description = "Column Name (or letter) of the B row being filled, including results of earlier rules.", Example = "" },
-                new VariableHelp { Name = "$Name", Description = "Same as $B_Name. A name B does not have falls back to A.", Example = "" },
-                new VariableHelp { Name = "$Value", Description = "The target cell's current value.", Example = "" },
-                new VariableHelp { Name = "$Matched", Description = "true when an A row matched this B row.", Example = "" }
-            };
-            ExpressionHelp.Show(Window.GetWindow(this),
-                "Example: Target Price, When $Matched && $Value == \"\", Value $A_Price. Add a second Price rule below it with Value $Value * 1.1 to change the rows the first rule skipped.",
-                extras);
+            EditRule(-1);
         }
 
         // The grids show a capped preview of the pipeline input.
@@ -168,8 +150,6 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 (isA ? PathA : PathB).Text = label;
                 (isA ? GridA : GridB).ItemsSource = preview.DefaultView;
                 (isA ? InfoA : InfoB).Text = RowInfo(preview.Rows.Count, full.Rows.Count, cut);
-                if (!isA)
-                    RefreshTargets();
             }
             finally
             {
@@ -241,12 +221,13 @@ namespace OfficeWorkAssistant.Features.FillColumns
         {
             foreach (var k in _keys)
             {
-                if (!FormulaField.Ok(k.ExprA) || !FormulaField.Ok(k.ExprB))
+                if (ExpressionEngine.Validate(k.FormulaA) != null || ExpressionEngine.Validate(k.FormulaB) != null)
                     return false;
             }
             foreach (var r in _rules)
             {
-                if (!FormulaField.Ok(r.When) || !FormulaField.Ok(r.Value))
+                if ((!string.IsNullOrWhiteSpace(r.When) && ExpressionEngine.Validate(r.When) != null) ||
+                    ExpressionEngine.Validate(r.Value) != null)
                     return false;
             }
             return true;
@@ -254,174 +235,185 @@ namespace OfficeWorkAssistant.Features.FillColumns
 
         List<FillColumnsKey> Keys()
         {
-            var list = new List<FillColumnsKey>();
-            foreach (var k in _keys)
-                list.Add(new FillColumnsKey { FormulaA = k.ExprA.Text, FormulaB = k.ExprB.Text });
-            return list;
+            return new List<FillColumnsKey>(_keys);
         }
 
         List<FillColumnsRule> Rules()
         {
-            var list = new List<FillColumnsRule>();
-            foreach (var r in _rules)
-                list.Add(new FillColumnsRule { Target = r.Target.Text, When = r.When.Text, Value = r.Value.Text });
-            return list;
+            return new List<FillColumnsRule>(_rules);
         }
 
-        void AddKey()
+        void RebuildKeys()
         {
-            AddKey(null);
-        }
-
-        void AddKey(FillColumnsKey seed)
-        {
-            var line = new Grid { Margin = new Thickness(0, 0, 8, 4) };
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var item = new KeyRow
+            KeyPanel.Children.Clear();
+            if (_keys.Count == 0)
             {
-                ExprA = new TextBox { Text = seed != null ? seed.FormulaA ?? "" : "$A", ToolTip = "Formula on the A row, e.g. $ID or TRIM($Code)." },
-                ExprB = new TextBox { Text = seed != null ? seed.FormulaB ?? "" : "$A", ToolTip = "Formula on the B row, e.g. $ID or TRIM($Code)." }
-            };
-            var eq = new TextBlock { Text = "==", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var del = new Button { Content = "Remove", Width = 64, Margin = new Thickness(4, 0, 0, 0) };
-            Grid.SetColumn(eq, 1);
-            Grid.SetColumn(item.ExprB, 2);
-            Grid.SetColumn(del, 3);
-            line.Children.Add(item.ExprA);
-            line.Children.Add(eq);
-            line.Children.Add(item.ExprB);
-            line.Children.Add(del);
-
-            FormulaField.Watch(item.ExprA);
-            FormulaField.Watch(item.ExprB);
-            item.ExprA.TextChanged += Formula_Changed;
-            item.ExprB.TextChanged += Formula_Changed;
-            del.Click += delegate
-            {
-                _keys.Remove(item);
-                KeyPanel.Children.Remove(line);
-                if (_keys.Count == 0)
-                    AddKey();
-                else
-                    RefreshPreview();
-            };
-
-            _keys.Add(item);
-            KeyPanel.Children.Add(line);
-            RefreshPreview();
-        }
-
-        void AddRule()
-        {
-            AddRule(null);
-        }
-
-        void AddRule(FillColumnsRule seed)
-        {
-            var line = new Grid { Margin = new Thickness(0, 0, 8, 4) };
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
-            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var item = new RuleRow
-            {
-                Target = new ComboBox { IsEditable = true, Margin = new Thickness(0, 0, 4, 0), ToolTip = "Pick a B column to fill, or type a new column name." },
-                When = new TextBox { Text = seed != null ? seed.When ?? "" : "$Matched", Margin = new Thickness(0, 0, 4, 0), ToolTip = "Optional condition, e.g. $Matched && $Value == \"\". Blank = always." },
-                Value = new TextBox { Text = seed != null ? seed.Value ?? "" : "$Value", Margin = new Thickness(0, 0, 4, 0), ToolTip = "Value formula, e.g. $A_Price or IF($A_Qty > 0, $A_Price, $Value)." }
-            };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-            var up = new Button { Content = "Up", Width = 52, Margin = new Thickness(0, 0, 4, 0), ToolTip = "Run this rule earlier." };
-            var del = new Button { Content = "Remove", Width = 64 };
-            buttons.Children.Add(up);
-            buttons.Children.Add(del);
-            Grid.SetColumn(item.When, 1);
-            Grid.SetColumn(item.Value, 2);
-            Grid.SetColumn(buttons, 3);
-            line.Children.Add(item.Target);
-            line.Children.Add(item.When);
-            line.Children.Add(item.Value);
-            line.Children.Add(buttons);
-
-            FillTargets(item.Target);
-            if (seed != null)
-                item.Target.Text = seed.Target ?? "";
-            FormulaField.WatchOptional(item.When);
-            FormulaField.Watch(item.Value);
-            item.Target.SelectionChanged += delegate { Dispatcher.BeginInvoke(new Action(RefreshPreview)); };
-            item.Target.AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler(Formula_Changed));
-            item.When.TextChanged += Formula_Changed;
-            item.Value.TextChanged += Formula_Changed;
-            up.Click += delegate
-            {
-                var i = _rules.IndexOf(item);
-                if (i <= 0)
-                    return;
-                _rules.RemoveAt(i);
-                _rules.Insert(i - 1, item);
-                RulePanel.Children.Remove(line);
-                RulePanel.Children.Insert(i - 1, line);
-                RefreshPreview();
-            };
-            del.Click += delegate
-            {
-                _rules.Remove(item);
-                RulePanel.Children.Remove(line);
-                if (_rules.Count == 0)
-                    AddRule();
-                else
-                    RefreshPreview();
-            };
-
-            _rules.Add(item);
-            RulePanel.Children.Add(line);
-            RefreshPreview();
-        }
-
-        void FillTargets(ComboBox box)
-        {
-            var keep = box.Text;
-            var names = new List<string>();
-            if (_tableB != null)
-            {
-                foreach (DataColumn col in _tableB.Columns)
-                    names.Add(ExcelFile.Header(col));
+                KeyPanel.Children.Add(new TextBlock
+                {
+                    Text = "No match keys yet.",
+                    Foreground = Brushes.Gray,
+                    Margin = new Thickness(0, 0, 0, 4)
+                });
+                return;
             }
-            box.ItemsSource = names;
-            box.Text = keep;
+            for (var i = 0; i < _keys.Count; i++)
+            {
+                var index = i;
+                var text = (_keys[i].FormulaA ?? "") + "   ==   " + (_keys[i].FormulaB ?? "");
+                var edit = new Button { Content = "Edit", Width = 56, Margin = new Thickness(0, 0, 6, 0) };
+                edit.Click += (s, e) => EditKey(index);
+                var remove = new Button { Content = "Remove", Width = 64 };
+                remove.Click += (s, e) => RemoveKey(index);
+                var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                buttons.Children.Add(edit);
+                buttons.Children.Add(remove);
+                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+                DockPanel.SetDock(buttons, Dock.Right);
+                row.Children.Add(buttons);
+                row.Children.Add(new TextBlock
+                {
+                    Text = text,
+                    ToolTip = text,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 8, 0)
+                });
+                KeyPanel.Children.Add(row);
+            }
         }
 
-        void RefreshTargets()
+        static FillColumnsKey CopyKey(FillColumnsKey k)
         {
-            foreach (var r in _rules)
-                FillTargets(r.Target);
+            return new FillColumnsKey { FormulaA = k.FormulaA, FormulaB = k.FormulaB };
         }
 
-        void Formula_Changed(object sender, TextChangedEventArgs e)
+        // index -1 adds a new key.
+        void EditKey(int index)
         {
+            var seed = index >= 0 ? _keys[index] : null;
+            var key = MatchKeyWindow.Edit(Window.GetWindow(this), seed);
+            if (key == null)
+                return;
+            if (index >= 0)
+                _keys[index] = key;
+            else
+                _keys.Add(key);
+            KeysChanged();
+        }
+
+        void RemoveKey(int index)
+        {
+            _keys.RemoveAt(index);
+            KeysChanged();
+        }
+
+        void KeysChanged()
+        {
+            RebuildKeys();
             RefreshPreview();
+            RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         }
 
+        void RebuildRules()
+        {
+            RulePanel.Children.Clear();
+            if (_rules.Count == 0)
+            {
+                RulePanel.Children.Add(new TextBlock
+                {
+                    Text = "No fill rules yet.",
+                    Foreground = Brushes.Gray,
+                    Margin = new Thickness(0, 0, 0, 4)
+                });
+                return;
+            }
+            for (var i = 0; i < _rules.Count; i++)
+            {
+                var index = i;
+                var text = (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + RuleText(_rules[i]);
+                var edit = new Button { Content = "Edit", Width = 56, Margin = new Thickness(0, 0, 6, 0) };
+                edit.Click += (s, e) => EditRule(index);
+                var up = new Button { Content = "Up", Width = 52, Margin = new Thickness(0, 0, 6, 0), ToolTip = "Run this rule earlier." };
+                up.Click += (s, e) => MoveRule(index, -1);
+                var remove = new Button { Content = "Remove", Width = 64 };
+                remove.Click += (s, e) => RemoveRule(index);
+                var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                buttons.Children.Add(edit);
+                buttons.Children.Add(up);
+                buttons.Children.Add(remove);
+                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+                DockPanel.SetDock(buttons, Dock.Right);
+                row.Children.Add(buttons);
+                row.Children.Add(new TextBlock
+                {
+                    Text = text,
+                    ToolTip = text,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 8, 0)
+                });
+                RulePanel.Children.Add(row);
+            }
+        }
+
+        static string RuleText(FillColumnsRule r)
+        {
+            var text = (r.Target ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(r.When))
+                text += " when " + r.When;
+            return text + " = " + (r.Value ?? "");
+        }
+
+        static FillColumnsRule CopyRule(FillColumnsRule r)
+        {
+            return new FillColumnsRule { Target = r.Target, When = r.When, Value = r.Value };
+        }
+
+        // index -1 adds a new rule.
+        void EditRule(int index)
+        {
+            if (_tableB == null)
+            {
+                Alert("Open both Excel files first.", "Missing file", MessageBoxImage.Warning);
+                return;
+            }
+            var seed = index >= 0 ? _rules[index] : null;
+            var rule = FillRuleWindow.Edit(Window.GetWindow(this), _tableB, seed);
+            if (rule == null)
+                return;
+            if (index >= 0)
+                _rules[index] = rule;
+            else
+                _rules.Add(rule);
+            RulesChanged();
+        }
+
+        void RemoveRule(int index)
+        {
+            _rules.RemoveAt(index);
+            RulesChanged();
+        }
+
+        void MoveRule(int index, int delta)
+        {
+            var target = index + delta;
+            if (target < 0 || target >= _rules.Count)
+                return;
+            var rule = _rules[index];
+            _rules[index] = _rules[target];
+            _rules[target] = rule;
+            RulesChanged();
+        }
+
+        void RulesChanged()
+        {
+            RebuildRules();
+            RefreshPreview();
+            RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        }
         void Alert(string message, string title, MessageBoxImage icon)
         {
-            MessageBox.Show(Window.GetWindow(this), message, title, MessageBoxButton.OK, icon);
-        }
-
-        sealed class KeyRow
-        {
-            public TextBox ExprA;
-            public TextBox ExprB;
-        }
-
-        sealed class RuleRow
-        {
-            public ComboBox Target;
-            public TextBox When;
-            public TextBox Value;
+            Notices.Show(this, message, title, MessageBoxButton.OK, icon);
         }
     }
 }

@@ -101,7 +101,7 @@ namespace OfficeWorkAssistant.Features.SplitCombine
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), ex.Message, "Split column", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Notices.Show(this, ex.Message, "Split column", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             int parts = result.Columns.Count - _input.Columns.Count + (s.KeepSource ? 0 : 1);

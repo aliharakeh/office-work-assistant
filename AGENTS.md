@@ -47,7 +47,7 @@ Excel/                   -> namespace OfficeWorkAssistant.Excel        (shared .
 Expressions/             -> namespace OfficeWorkAssistant.Expressions  (shared formula engine)
 ```
 
-- `MainWindow` navigates its `Frame` to one `PipelinePage` and asks it (`CanClose`) before closing. Step editors are `UserControl`s hosted in the pipeline page's right-hand Step panel (`EditorHost`); only the Formula guide is navigated to, and goes back with `NavigationService.GoBack()`.
+- `MainWindow` navigates its `Frame` to one `PipelinePage` and asks it (`CanClose`) before closing. Step editors are `UserControl`s hosted in the pipeline page's right-hand sidebar (`PipelinePage.Steps.cs`): one tab per branch (a last step plus every step feeding it), one section per step, all editors visible at once; only the Formula guide is navigated to, and goes back with `NavigationService.GoBack()`.
 - `Features/<Name>/` holds one self-contained step: the editor control plus `<Name>Work.cs`. `FileOps` holds several file steps (List / set / map, List folder, Find files, File action), and `SplitCombine` holds Split column and Combine columns. `FormulaGuide` is a help page, not a step.
 - Data passes as `DataTable` with `object` columns; the real header is `DataColumn.Caption` (use `ExcelFile.Header` / `ExcelFile.FindColumn` / `ExcelFile.AddColumn`).
 - Namespaces must match folders: `OfficeWorkAssistant.Views`, `OfficeWorkAssistant.Features.<Name>`. XAML `x:Class` must match the code-behind namespace.
@@ -62,7 +62,7 @@ A step provides, inside its own folder:
 
 1. An XML-serializable settings class in `<Name>Work.cs`: public get/set properties, a parameterless constructor that fills lists and sets defaults, no `char` or interfaces.
 2. A static method in `<Name>Work.cs` that takes the input `DataTable`(s) and the settings and returns a new `DataTable`, never changing its inputs.
-3. An editor `UserControl` (named `<Name>Page`) whose only constructor is `(DataTable input(s), string label(s), <Name>Settings settings, Action<<Name>Settings> use)` (steps without inputs drop the tables and labels). It shows the inputs, has an "Apply to step" button that validates and calls `use(...)`. It never navigates and has no Back button or title: the pipeline page shows the step name above it. No Browse, sheet picker or Save: Load file and Save file are pipeline steps. The N-input Append step takes `(IList<DataTable> inputs, IList<string> labels, IList<string> names, AppendSettings settings, Action<AppendSettings> use)`.
+3. An editor `UserControl` (named `<Name>Page`) whose only constructor is `(DataTable input(s), string label(s), <Name>Settings settings, Action<<Name>Settings> use)` (steps without inputs drop the tables and labels). It shows the inputs, has an "Apply to step" button that validates and calls `use(...)`; the pipeline sidebar hides that button and clicks it itself a moment after each edit, so warnings in these handlers must go through `Notices.Show` (Excel/Notices.cs), not `MessageBox.Show`, to stay silent during auto-apply. It never navigates and has no Back button or title: the pipeline page shows the step name above it. No Browse, sheet picker or Save: Load file and Save file are pipeline steps. The N-input Append step takes `(IList<DataTable> inputs, IList<string> labels, IList<string> names, AppendSettings settings, Action<AppendSettings> use)`.
 
 Adding a step kind touches:
 - `PipelineStepKind` (always append: pipelines store the kind by name). Add file kinds to `IsFileKind` and style kinds to `IsStyleKind`.

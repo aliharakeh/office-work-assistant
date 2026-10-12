@@ -49,38 +49,20 @@
                     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="True">
                         <Button DockPanel.Dock="Right" Content="Add" Width="56" Click="AddKey_Click" />
                         <TextBlock VerticalAlignment="Center" FontSize="11" Foreground="#555"
-                                   Text="Each side sees only its own file, e.g. $ID or TRIM($Code). Text matches ignore case. The first A row with a key is used." />
+                                   Text="All keys must match. Add opens a window for one key." />
                     </DockPanel>
-                    <ScrollViewer MaxHeight="96" VerticalScrollBarVisibility="Auto">
-                        <StackPanel x:Name="KeyPanel" />
-                    </ScrollViewer>
+                    <StackPanel x:Name="KeyPanel" />
                 </DockPanel>
             </GroupBox>
 
             <GroupBox Header="Fill rules (top to bottom, first rule that fires wins the cell)" Grid.Row="2" Margin="0,0,0,8">
                 <DockPanel LastChildFill="True" Margin="4">
                     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="True">
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                            <Button Content="Variables..." Width="88" Margin="0,0,6,0" Click="Variables_Click" />
-                            <Button Content="Add" Width="56" Click="AddRule_Click" />
-                        </StackPanel>
+                        <Button DockPanel.Dock="Right" Content="Add" Width="56" Click="AddRule_Click" />
                         <TextBlock VerticalAlignment="Center" FontSize="11" Foreground="#555" TextWrapping="Wrap"
-                                   Text="Target: a B column or a new name. When: blank = always. $A_Name reads A, $B_Name or $Name reads B, $Value is the target cell, $Matched is true when A matched." />
+                                   Text="Add opens a window for one rule. Rules run top to bottom; the first that fires wins the cell." />
                     </DockPanel>
-                    <Grid DockPanel.Dock="Top" Margin="0,0,8,2">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="160" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="2*" />
-                            <ColumnDefinition Width="124" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Target column" FontSize="11" Foreground="#555" />
-                        <TextBlock Grid.Column="1" Text="When (optional)" FontSize="11" Foreground="#555" />
-                        <TextBlock Grid.Column="2" Text="Value" FontSize="11" Foreground="#555" />
-                    </Grid>
-                    <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
-                        <StackPanel x:Name="RulePanel" />
-                    </ScrollViewer>
+                    <StackPanel x:Name="RulePanel" />
                 </DockPanel>
             </GroupBox>
 

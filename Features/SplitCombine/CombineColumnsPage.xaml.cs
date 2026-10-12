@@ -105,7 +105,7 @@ namespace OfficeWorkAssistant.Features.SplitCombine
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), ex.Message, "Combine columns", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Notices.Show(this, ex.Message, "Combine columns", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             Status.Text = "Joins " + s.Columns.Count + " columns into \"" + s.Header + "\".";

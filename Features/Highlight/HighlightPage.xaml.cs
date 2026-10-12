@@ -4,20 +4,17 @@ using System.Data;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using OfficeWorkAssistant.Excel;
-using OfficeWorkAssistant.Expressions;
 
 namespace OfficeWorkAssistant.Features.Highlight
 {
     public partial class HighlightPage : UserControl
     {
-        static readonly string[] Ops = { "==", "!=", ">", ">=", "<", "<=", "contains", "startsWith", "endsWith", "isEmpty", "isNotEmpty" };
-
         readonly DataTable _input;
         readonly Action<HighlightSettings> _use;
         readonly List<HighlightRule> _rules = new List<HighlightRule>();
-        List<Pick> _picks = new List<Pick>();
-        int _editing = -1;
 
         public HighlightPage(DataTable input, string label, HighlightSettings settings, Action<HighlightSettings> use)
         {
@@ -26,226 +23,121 @@ namespace OfficeWorkAssistant.Features.Highlight
             _use = use;
             InputInfo.Text = label + " - colours show in the result below and are written by the Save step. " +
                 "Put this step right before Save: most other steps drop the colours.";
-            FormulaField.Watch(ConditionBox);
-            BuildOp.SelectedIndex = 0;
             if (settings != null)
                 _rules.AddRange(settings.Rules);
-            ShowRules();
-            LoadRule(NewRule());
+            RebuildRules();
         }
 
-        static HighlightRule NewRule()
+        void RebuildRules()
         {
-            return new HighlightRule { Style = new CellStyle { Fill = NamedColors.ToHex("Light red") } };
-        }
-
-        void ShowRules()
-        {
-            RuleList.ItemsSource = null;
-            RuleList.ItemsSource = _rules;
-        }
-
-        void LoadRule(HighlightRule rule)
-        {
-            var on = new HashSet<int>();
-            foreach (var c in rule.Columns)
+            RulePanel.Children.Clear();
+            if (_rules.Count == 0)
             {
-                int i = ExcelColumns.IndexOf(_input, c);
-                if (i >= 0)
-                    on.Add(i);
+                RulePanel.Children.Add(new TextBlock { Text = "No rules yet.", Foreground = Brushes.Gray, Margin = new Thickness(0, 0, 0, 4) });
+                return;
             }
-            _picks = new List<Pick>();
-            for (var i = 0; i < _input.Columns.Count; i++)
-                _picks.Add(new Pick { Index = i, Label = ExcelColumns.Label(_input, i), Include = on.Contains(i) });
-            ColumnList.ItemsSource = _picks;
-            TargetBox.SelectedIndex = (int)rule.Target;
-            ConditionBox.Text = rule.Condition ?? "";
-            StylePicker.Value = rule.Style;
-            StopBox.IsChecked = rule.StopIfTrue;
-            UpdateTarget();
-        }
-
-        HighlightRule EditorRule()
-        {
-            var rule = new HighlightRule
+            for (var i = 0; i < _rules.Count; i++)
             {
-                Condition = ConditionBox.Text.Trim(),
-                Target = (HighlightTarget)Math.Max(0, TargetBox.SelectedIndex),
-                Style = StylePicker.Value,
-                StopIfTrue = StopBox.IsChecked == true
-            };
-            if (rule.Target != HighlightTarget.Row)
-            {
-                foreach (var p in _picks)
+                var index = i;
+                var text = (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + RuleText(_rules[i]);
+                var edit = new Button { Content = "Edit", Width = 56, Margin = new Thickness(0, 0, 6, 0) };
+                edit.Click += (s, e) => EditRule(index);
+                var up = new Button { Content = "Up", Width = 44, Margin = new Thickness(0, 0, 6, 0), ToolTip = "Run this rule earlier." };
+                up.Click += (s, e) => MoveRule(index, -1);
+                var down = new Button { Content = "Down", Width = 52, Margin = new Thickness(0, 0, 6, 0), ToolTip = "Run this rule later." };
+                down.Click += (s, e) => MoveRule(index, 1);
+                var remove = new Button { Content = "Remove", Width = 64 };
+                remove.Click += (s, e) => RemoveRule(index);
+                var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                buttons.Children.Add(edit);
+                buttons.Children.Add(up);
+                buttons.Children.Add(down);
+                buttons.Children.Add(remove);
+                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+                DockPanel.SetDock(buttons, Dock.Right);
+                row.Children.Add(buttons);
+                row.Children.Add(new TextBlock
                 {
-                    if (p.Include)
-                        rule.Columns.Add(ExcelColumns.Letter(p.Index));
-                }
+                    Text = text,
+                    ToolTip = text,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 8, 0)
+                });
+                RulePanel.Children.Add(row);
             }
-            return rule;
         }
 
-        void TargetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        // "Columns B - Status when $Qty > 10 -> yellow fill" reads better than the stored letters.
+        string RuleText(HighlightRule rule)
         {
-            UpdateTarget();
-        }
-
-        void UpdateTarget()
-        {
-            if (ColumnsPanel == null || BuildColumn == null)
-                return;
-            bool cells = TargetBox.SelectedIndex == (int)HighlightTarget.Cells;
-            ColumnsPanel.Visibility = TargetBox.SelectedIndex == (int)HighlightTarget.Row ? Visibility.Collapsed : Visibility.Visible;
-            ConditionHint.Text = cells
-                ? "Checked for each picked cell. $Value is that cell: $Value < 0, $Value > $Today, ISBLANK($Value). Other columns of the row work too."
-                : "Checked for each row: $Status == \"Late\", $Qty > 10 && $Price < 5, $Due < $Today, CONTAINS($Name, \"Ltd\").";
-
-            var items = new List<string>();
-            if (cells)
-                items.Add("This cell ($Value)");
-            items.AddRange(ExcelColumns.Labels(_input));
-            int keep = BuildColumn.SelectedIndex;
-            BuildColumn.ItemsSource = items;
-            BuildColumn.SelectedIndex = items.Count == 0 ? -1 : Math.Max(0, Math.Min(keep, items.Count - 1));
-        }
-
-        void Build_Click(object sender, RoutedEventArgs e)
-        {
-            int picked = BuildColumn.SelectedIndex;
-            if (picked < 0)
-                return;
-            bool cells = TargetBox.SelectedIndex == (int)HighlightTarget.Cells;
-            string name;
-            if (cells && picked == 0)
-                name = "$Value";
+            string where;
+            if (rule.Target == HighlightTarget.Row)
+                where = "Row";
             else
-                name = "$" + ExcelColumns.FormulaName(_input, cells ? picked - 1 : picked);
-
-            string op = Ops[Math.Max(0, BuildOp.SelectedIndex)];
-            string value = BuildValue.Text.Trim();
-            string text;
-            if (op == "isEmpty")
-                text = "ISBLANK(" + name + ")";
-            else if (op == "isNotEmpty")
-                text = "!ISBLANK(" + name + ")";
-            else if (op == "contains")
-                text = "CONTAINS(" + name + ", " + Quote(value) + ")";
-            else if (op == "startsWith")
-                text = "STARTSWITH(" + name + ", " + Quote(value) + ")";
-            else if (op == "endsWith")
-                text = "ENDSWITH(" + name + ", " + Quote(value) + ")";
-            else
-                text = name + " " + op + " " + Literal(value);
-            ConditionBox.Text = text;
-        }
-
-        // Numbers and $built-ins as they are; anything else as quoted text.
-        static string Literal(string value)
-        {
-            double d;
-            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out d))
-                return value;
-            if (value.StartsWith("$", StringComparison.Ordinal) && ExpressionEngine.Validate(value) == null)
-                return value;
-            return Quote(value);
-        }
-
-        static string Quote(string value)
-        {
-            return value.IndexOf('"') >= 0 ? "'" + value + "'" : "\"" + value + "\"";
-        }
-
-        void Help_Click(object sender, RoutedEventArgs e)
-        {
-            ExpressionHelp.Show(Window.GetWindow(this),
-                "A condition is a formula that is true or false. $Qty or $A is a column of the row (A = 1st); $Value is the cell itself when each cell is tested on its own. " +
-                "Compare with == != > >= < <=, join with && (and) || (or), and use the functions below.");
-        }
-
-        void RuleList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            int index = RuleList.SelectedIndex;
-            if (index < 0 || index >= _rules.Count)
-                return;
-            _editing = index;
-            LoadRule(_rules[index]);
-            AddBtn.Content = "Update rule";
+            {
+                var names = new List<string>();
+                foreach (var c in rule.Columns ?? new List<string>())
+                {
+                    var at = ExcelColumns.IndexOf(_input, c);
+                    names.Add(at >= 0 ? ExcelColumns.Label(_input, at) : c);
+                }
+                where = (rule.Target == HighlightTarget.Cells ? "Cells " : "Columns ") + string.Join(", ", names.ToArray());
+            }
+            return where + " when " + rule.Condition + " -> " + (rule.Style ?? new CellStyle()).Describe() + (rule.StopIfTrue ? " (stop)" : "");
         }
 
         void Add_Click(object sender, RoutedEventArgs e)
         {
-            if (!FormulaField.Check(ConditionBox))
+            EditRule(-1);
+        }
+
+        // index -1 adds a new rule.
+        void EditRule(int index)
+        {
+            var seed = index >= 0 ? _rules[index] : null;
+            var rule = HighlightRuleWindow.Edit(Window.GetWindow(this), _input, seed, index >= 0 ? index + 1 : _rules.Count + 1);
+            if (rule == null)
                 return;
-            var rule = EditorRule();
-            string err = HighlightWork.Validate(rule, _editing >= 0 ? _editing + 1 : _rules.Count + 1);
-            if (err != null)
-            {
-                MessageBox.Show(Window.GetWindow(this), err, "Highlight", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-            if (_editing >= 0 && _editing < _rules.Count)
-                _rules[_editing] = rule;
+            if (index >= 0)
+                _rules[index] = rule;
             else
                 _rules.Add(rule);
-            New_Click(null, null);
+            RulesChanged();
         }
 
-        void Remove_Click(object sender, RoutedEventArgs e)
+        void RemoveRule(int index)
         {
-            int index = RuleList.SelectedIndex;
-            if (index < 0 || index >= _rules.Count)
-            {
-                Status.Text = "Select a rule first.";
-                return;
-            }
             _rules.RemoveAt(index);
-            New_Click(null, null);
+            RulesChanged();
         }
 
-        void Up_Click(object sender, RoutedEventArgs e)
+        void MoveRule(int index, int delta)
         {
-            Move(-1);
-        }
-
-        void Down_Click(object sender, RoutedEventArgs e)
-        {
-            Move(1);
-        }
-
-        void Move(int delta)
-        {
-            int index = RuleList.SelectedIndex;
-            int target = index + delta;
-            if (index < 0 || target < 0 || target >= _rules.Count)
+            var target = index + delta;
+            if (target < 0 || target >= _rules.Count)
                 return;
             var rule = _rules[index];
             _rules[index] = _rules[target];
             _rules[target] = rule;
-            _editing = -1;
-            AddBtn.Content = "Add rule";
-            ShowRules();
-            RuleList.SelectedIndex = target;
+            RulesChanged();
         }
 
-        void New_Click(object sender, RoutedEventArgs e)
+        // The pipeline applies this editor by itself after a click inside it; the dialog's clicks never reach it.
+        void RulesChanged()
         {
-            _editing = -1;
-            AddBtn.Content = "Add rule";
-            ShowRules();
-            LoadRule(NewRule());
+            RebuildRules();
+            RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         }
 
         void Apply_Click(object sender, RoutedEventArgs e)
         {
             var s = new HighlightSettings();
             s.Rules.AddRange(_rules);
-            // Nothing added yet but a condition typed: the rule in the editor is meant.
-            bool fromEditor = s.Rules.Count == 0 && ConditionBox.Text.Trim().Length > 0;
-            if (fromEditor)
+            if (s.Rules.Count == 0)
             {
-                if (!FormulaField.Check(ConditionBox))
-                    return;
-                s.Rules.Add(EditorRule());
+                Status.Text = "Add a rule first.";
+                return;
             }
             DataTable result;
             try
@@ -254,23 +146,11 @@ namespace OfficeWorkAssistant.Features.Highlight
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(this), ex.Message, "Highlight", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Notices.Show(this, ex.Message, "Highlight", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
-            }
-            if (fromEditor)
-            {
-                _rules.AddRange(s.Rules);
-                New_Click(null, null);
             }
             Status.Text = HighlightWork.Describe(result);
             _use(s);
-        }
-
-        public sealed class Pick
-        {
-            public int Index { get; set; }
-            public string Label { get; set; }
-            public bool Include { get; set; }
         }
     }
 }
