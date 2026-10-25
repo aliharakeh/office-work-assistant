@@ -1,6 +1,20 @@
 # Office Work Assistant
 
-A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. The whole app is one pipeline canvas. You chain steps (load Excel files, filter, compare, fill, find files, copy, move, delete) into a pipeline, save it, and rerun it next month on new files. Everything runs locally. Run preview never changes anything on disk, and file changes happen only when you click Run and save files and confirm.
+A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. It has two modes: **Builder**, where you chain steps (load Excel files, filter, compare, fill, find files, copy, move, delete) into a pipeline and save it, and **Run**, where someone else picks that saved pipeline, points it at this month's files and runs it. Everything runs locally. Run preview never changes anything on disk, and file changes happen only when you click Run and save files and confirm.
+
+## Two modes
+
+A switch at the top of the window moves between them: **Builder** to make pipelines, **Run** to run one. The app opens in Run mode, ready for the person who just needs this month's result.
+
+### Builder mode
+
+This is the pipeline canvas and everything around it: steps, the Steps sidebar, saved pipelines, Run preview, Run and save files and the Formula guide. It works exactly as it always did; "## The pipeline window" below describes it.
+
+### Run mode
+
+Run mode is for the person who just runs a saved pipeline, not the person who builds it. The saved pipelines are cards on the left, each with its name, when it was last saved, and a plain-language headline such as "5 steps - 2 inputs - 1 output". Pick one and the form on the right shows only what you have to decide: the Excel file, image file or folder each step reads, the output file each step writes and the destination folder of a Copy or Move, and one plain sentence per step saying what it does.
+
+Each choice is pre-filled from the saved pipeline and is yours only for that run, so you can point the pipeline at this month's files without changing it. Settings that depend on the data, such as which column to filter on, a formula, a match rule or a sort key, are fixed by the builder and never shown. **Check** runs every step and changes nothing; **Run** asks you to confirm and then does the work, and **Open output folder** opens where the results went. If a step fails, Run mode names it, says in plain words what was and was not written, and asks you to get the pipeline fixed in Builder mode.
 
 ## The pipeline window
 
@@ -14,7 +28,7 @@ A WPF desktop app for Windows 7 SP1 and later, built on .NET Framework 4.8. The 
   - To remove a link or step, select it and press Delete.
 - **Editing steps:** the Steps sidebar on the right shows every step's settings at once, one section per step in running order, with the earlier step's result already loaded. A pipeline that splits (one file feeding two branches) gets one tab per branch, so each branch's settings stay separate; a shared step appears in each tab. Selecting a step on the canvas jumps to its section; clicking a section selects its step. Changes apply by themselves a moment after you edit (there is no Apply button); a step that cannot apply yet shows why in its section. Steps are named automatically (Filter / Sort 1, 2, ...). Double-click a Load file or Save file step to browse for its file.
 - **Run preview** (F5) runs the selected step and the steps it needs, or every step when none is selected, and shows the result below the canvas. A step that worked turns green. A step that failed turns red and shows why.
-- **Run and save files** reads every file again and runs every step without changing anything. It then lists the files it will replace and how many items each Change files step will copy, move, delete or merge, and asks you to confirm. Only then does it carry out those steps in order and write the Save files.
+- **Run and save files** reads every file again and runs every step without changing anything. It then lists the Excel and text / JSON files it will replace and how many items each Change files step will copy, move, delete or merge, and asks you to confirm. Only then does it carry out those steps in order and write the Save files. This is the flow Run mode gives the person who is not building the pipeline, without the canvas.
 - **Formula guide** opens the formula lessons and tester. Back returns to the canvas.
 - **Column references:** steps remember columns by header name, not by position, so a step keeps working when an earlier step adds, removes or reorders columns. If a column it needs disappears, the step fails and names the missing column. Formulas such as `$A` still mean "first column", so prefer header names such as `$Qty` in pipelines.
 
@@ -104,6 +118,7 @@ Example: Load file -> Clean text -> Remove duplicates -> Highlight (`$Qty == 0` 
 
 These steps link Excel data to files and folders on disk. Each step's result is a normal table, so you can filter, compare and save it like any other step.
 
+- **Load image** starts a pipeline from one PNG, JPEG, BMP or TIFF file, with no input connection needed. Adding the step opens an image picker; use **Choose image...** in its sidebar or double-click it to change the file. You can also type a full path. Its output is one row with `Name` and `Path`, ready to connect to **OCR images** (choose the `Path` column). The pipeline stores the path, not the image itself, so the file must still exist when it runs. OCR checks and decodes the image contents.
 - **List / set / map** builds keys from the step before it with a key formula, such as `$Code` or `TRIM($A)`:
   - A list keeps every row.
   - A set keeps unique keys.
@@ -112,6 +127,25 @@ These steps link Excel data to files and folders on disk. Each step's result is 
   You can also choose Stored values and type the keys in, or click Capture from input to freeze what the input gives today. Stored values are kept in the pipeline, and the step then needs no input.
 - **List folder** lists the files, the folders, or both in a folder, with or without its subfolders. A file filter (for example `$Ext == ".pdf"`) and a separate folder filter (for example `STARTSWITH($Name, "20")`) narrow the list. The folder filter only decides which folders are listed: files inside a folder that is not listed are still searched.
 - **Find files** searches a folder for the items that match each key of the step before it. An item can match when its name equals the key, when its name without extension equals the key, or when its name contains, starts with or ends with the key. Formula mode uses one formula for files and another for folders, for example `$1 == $Key && $Ext == ".pdf"` for files and `$Name == $Key` for folders. Keep keys with no match adds a row with `Found = FALSE` for each key that matched nothing. When a folder matches, the items inside it are skipped, so the folder is handled as a whole.
+- **OCR images** reads full image paths from a selected column and adds a new text column, keeping all input rows and columns. It recognizes printed text locally with Tesseract 5.2.0. PNG, JPEG, BMP and TIFF are supported; every page of a multi-page TIFF is read into the same cell, separated by blank lines. Blank paths produce blank text. A missing, unsupported or unreadable image stops the step with its row number and path; existing columns are never overwritten. PDFs must be rendered to images separately. OCR extracts text, not structured tables, and results should be reviewed.
+
+  English (`eng`) and Arabic (`ara`) are bundled. Enter `ara` in Languages for Arabic only, or `eng+ara` for documents containing both. Arabic uses the larger, slower [tessdata_best](https://github.com/tesseract-ocr/tessdata_best) model: the fast Arabic model produced unwanted characters in the 32-bit smoke test. To add another language, copy its `.traineddata` file from [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast) or tessdata_best into `tessdata` beside the executable, then enter its code. An optional language data folder overrides this location; relative folders are relative to the executable. Models are never downloaded at runtime. OCR also runs during preview and when downstream editors need its results, so large batches can take time.
+
+  Example: List folder (files only, image filter) -> OCR images (`Path` -> `OCR text`) -> Save file. Use a List folder file filter such as `$Ext == ".png" || $Ext == ".jpg" || $Ext == ".jpeg" || $Ext == ".bmp" || $Ext == ".tif" || $Ext == ".tiff"` to exclude non-images.
+
+  For one image, use **Load image -> OCR images -> Save file** instead. Set Languages to `ara` for Arabic or `eng+ara` for English and Arabic together.
+- **Save text / JSON** writes one column, or a list / set / map, to a UTF-8 text or JSON file. It never changes the table it reads.
+  - **Text column**: one row per line, in row order, with no header. Choose any column, such as `OCR text` or `Key`. Line breaks inside a value (OCR paragraphs) are kept.
+  - **Text map**: one `key` + tab + `value` line per row, in row order. Choose the key column (usually `Key`) and the value column.
+  - **JSON array (list / set)**: a JSON array, `["one", "two"]`. Row order is kept and duplicate values stay, so a set is just the unique list the List / set / map step already made. Numbers, booleans and blank cells stay typed (`null`).
+  - **JSON object (map)**: a JSON object, `{"one": "First item"}`. Keys are case-sensitive; duplicate or blank keys stop the step, so use List / set / map (a map) first.
+
+  The output file defaults to `.txt` for the two text formats and `.json` for the two JSON formats. Any explicit extension is kept, and changing the extension does not change the format. Type a full path, or use **Choose output file...**; double-clicking the step also opens the picker. The folder must already exist. Preview shows the plan with `Path`, `Format`, `Rows`, `Content` and `Status` (Ready / Overwrite) and never writes. Existing files are replaced only on Run and save files, after the usual confirmation, and a failed write never truncates the old file. Two save steps (of any kind) may not write the same file in one pipeline.
+
+  Examples:
+  - List folder -> OCR images -> Save text / JSON (Text column, `OCR text`) -> one text file of all recognized pages.
+  - List / set / map (a set) -> Save text / JSON (JSON array) -> `["A100", "B200"]`.
+  - List / set / map (a map: key `$Code`, value `$Name`) -> Save text / JSON (JSON object) -> `{"A100": "First item"}`.
 
 ## Change files steps
 
@@ -151,10 +185,13 @@ Each step editor has a Variables button that lists every variable with the value
 - Windows 7 SP1 or later
 - .NET Framework 4.8 runtime. No SDK is needed to run the app.
 - Excel support covers `.xlsx` only, for both reading and writing. A `.xls` file renamed to `.xlsx` will not open.
+- OCR additionally requires the Visual C++ 2019 runtime matching the app's process architecture, and the deployed `Tesseract.dll`, `x86` / `x64` native DLL folders and `tessdata` folder. Keep both native folders when distributing the AnyCPU build. **OCR's native dependencies have not been verified on Windows 7 SP1**; compatibility of the rest of the app does not establish OCR compatibility. For Win7, use a compatible VS 2019 redistributable, not the latest runtime installer (which no longer supports Win7).
 
 ## Build and run
 
 Use Visual Studio or Framework MSBuild. No modern .NET SDK is required.
+
+Restore packages with the standalone NuGet CLI (`nuget restore OfficeWorkAssistant.sln`) or Visual Studio first. The pinned `Tesseract` 5.2.0 package uses its .NET Framework 4.8 assembly; no modern .NET SDK or `Tesseract.Drawing` package is needed. The English and Arabic models are checked into `tessdata` with their source and license.
 
 ```
 %WINDIR%\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe OfficeWorkAssistant.csproj /p:Configuration=Release /v:minimal
@@ -163,11 +200,38 @@ bin\Release\OfficeWorkAssistant.exe
 
 Close a running instance before rebuilding, otherwise MSBuild cannot overwrite the exe.
 
+### OCR smoke checks
+
+After building Release, run the standalone checks with Windows PowerShell (or PowerShell):
+
+```
+powershell -NoProfile -File Tests\RunOcrTests.ps1 -Platform x86
+powershell -NoProfile -File Tests\RunOcrTests.ps1 -Platform x64
+```
+
+The x64 check requires 64-bit Windows. These compile using Framework `csc.exe` and check validation, input preservation, column remapping, pipeline XML and dispatch, native OCR of generated PNG/JPEG/BMP/TIFF images (including Arabic, mixed English/Arabic, Unicode paths and multi-page TIFF), and Excel text round-tripping. Use `-SkipNative` to check only the logic without loading native OCR DLLs. No developer tools are required on a future Win7 test VM: copy the Release folder, including the compiled smoke-test EXEs, and run each EXE there. Passing on newer Windows is not proof of Win7 compatibility.
+
+The Save text / JSON checks need no OCR files or native libraries:
+
+```
+powershell -NoProfile -File Tests\RunSaveTextTests.ps1
+```
+
+They cover text and JSON content (including Arabic, quotes, line breaks and typed values), list/set/map results, `.txt` / `.json` defaults and custom extensions, column remapping, pipeline XML and dispatch, preview writing nothing, collision checks between save steps, and that a failed save leaves the old file untouched.
+
+The Run mode checks need no OCR files or native libraries either:
+
+```
+powershell -NoProfile -File Tests\RunRunnerTests.ps1
+```
+
+They cover the choices Run mode asks for (which file or folder each step needs, the sheet list of the chosen workbook, the output extension, what is still missing), the plain-language summary and headline, a dry run and a real run with the user's own choices, that the pipeline file is never written by a run, what Check reports for each output and file action, the wording of a failure, and the folders offered after a run.
+
 ## Project layout
 
 ```
 Views/             MainWindow: a Frame that shows the pipeline page; step editors live in its right-hand Step panel.
-Features/Pipeline/ The main page: canvas, saved pipelines, running.
+Features/Pipeline/ The main page (Builder mode): canvas, saved pipelines, running. Also Run mode: RunnerPage.xaml (the page the user sees) and RunnerWork.cs (its logic).
 Features/<Name>/   One step per folder: <Name>Page.xaml (the step editor, a UserControl shown in the Step panel) plus <Name>Work.cs (logic, no WPF).
 Excel/             Shared .xlsx reading and writing, cell styles (SheetStyle) and the style picker, column letters.
 Expressions/       Shared formula engine and the Variables help window.

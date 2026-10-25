@@ -27,16 +27,18 @@ bin\Release\OfficeWorkAssistant.exe
 
 ## Architecture
 
-The app is one pipeline canvas. Every tool is a pipeline step; there is no Home page and no stand-alone tool page.
+The app has two modes over one code base: Builder mode (the pipeline canvas — every tool is a pipeline step, there is no Home page and no stand-alone tool page) and Run mode (a saved pipeline with only the file and folder choices a run needs). Run mode is not a second engine: it loads a pipeline, fills in paths, and runs it through `PipelineWork`.
 
 Feature-folder layout (classic `.csproj`, no SDK globbing — every file needs an explicit entry):
 
 ```
 App.xaml / App.xaml.cs
 Views/
-  MainWindow.xaml(.cs)   -> namespace OfficeWorkAssistant.Views   (Frame showing PipelinePage)
+  MainWindow.xaml(.cs)   -> namespace OfficeWorkAssistant.Views   (Builder / Run switch over a Frame showing one page)
 Features/
-  Pipeline/              -> the main page: canvas, saved pipelines (PipelineStore), running (PipelineWork)
+  Pipeline/              -> Builder mode: the main page, canvas, saved pipelines (PipelineStore), running (PipelineWork);
+                            Run mode: RunnerPage.xaml(.cs) (the saved pipelines as user-friendly items),
+                            RunnerWork.cs (its pure logic)
   <Name>/                -> namespace OfficeWorkAssistant.Features.<Name>
     <Name>Page.xaml(.cs)    step editor (UserControl)
     <Name>Work.cs           pure logic, no WPF
@@ -47,7 +49,7 @@ Excel/                   -> namespace OfficeWorkAssistant.Excel        (shared .
 Expressions/             -> namespace OfficeWorkAssistant.Expressions  (shared formula engine)
 ```
 
-- `MainWindow` navigates its `Frame` to one `PipelinePage` and asks it (`CanClose`) before closing. Step editors are `UserControl`s hosted in the pipeline page's right-hand sidebar (`PipelinePage.Steps.cs`): one tab per branch (a last step plus every step feeding it), one section per step, all editors visible at once; only the Formula guide is navigated to, and goes back with `NavigationService.GoBack()`.
+- `MainWindow` has a Builder / Run mode switch and shows `PipelinePage` or `RunnerPage` in its `Frame`; it asks the pipeline page (`CanClose`) before closing. Step editors are `UserControl`s hosted in the pipeline page's right-hand sidebar (`PipelinePage.Steps.cs`): one tab per branch (a last step plus every step feeding it), one section per step, all editors visible at once; only the Formula guide is navigated to, and goes back with `NavigationService.GoBack()`.
 - `Features/<Name>/` holds one self-contained step: the editor control plus `<Name>Work.cs`. `FileOps` holds several file steps (List / set / map, List folder, Find files, File action), and `SplitCombine` holds Split column and Combine columns. `FormulaGuide` is a help page, not a step.
 - Data passes as `DataTable` with `object` columns; the real header is `DataColumn.Caption` (use `ExcelFile.Header` / `ExcelFile.FindColumn` / `ExcelFile.AddColumn`).
 - Namespaces must match folders: `OfficeWorkAssistant.Views`, `OfficeWorkAssistant.Features.<Name>`. XAML `x:Class` must match the code-behind namespace.
@@ -80,3 +82,6 @@ Rules:
 - Ports are fixed per kind (`Ports`), except Append: `InputPorts` gives it `In1..In(n+1)`, one per link plus a free one. `CompactPorts` renumbers its links after one is removed, and the page rebuilds its box (`RebuildView`).
 - Styling travels on the table: `ExcelFile.WithStyle` returns a copy carrying a `SheetStyle` in `ExtendedProperties`, and `ExcelFile.Save` writes it. Never change a cached table or a `SheetStyle` already on a table; copy first. `PipelineWork.RunStep` clears the style from the result of every step except `IsStyleKind` steps and Save, because other steps may move rows. Formula conditions resolve names with `RowLookup` (letters, then headers, then built-ins, plus `$Value`).
 - File step results are plain tables: lists have `Key`/`Value` columns, and file lists have `Type, Name, Path, Folder, Relative, Size, Modified`. File and folder items each have their own formulas (filters, match, subfolder, name).
+- Run mode lives in `Features/Pipeline` too (`RunnerPage` + `RunnerWork`). It is the only place besides `PipelinePage` allowed to read step settings, and it reads them; it never edits a step. A pipeline with no Save file, Save text / JSON, File action or Merge folders step has nothing to run, so Run mode says so.
+- `RunnerWork` changes only the pipeline it loaded in memory, for that one run. It must never save a pipeline file, so a run never writes back the choices the user made.
+- The only settings Run mode may expose are the file and folder paths a step reads or writes: a Load file path and sheet, a Load image path, a folder (List folder, Find files, Merge folders), a destination folder (File action Copy / Move) and an output path (Save file, Save text / JSON). Anything that depends on a step's own input or output — which column, a formula, a match rule, a sort key, a style rule, OCR languages — stays in Builder mode.

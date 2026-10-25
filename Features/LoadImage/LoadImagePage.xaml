@@ -1,0 +1,13 @@
+<UserControl x:Class="OfficeWorkAssistant.Features.LoadImage.LoadImagePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="White">
+    <StackPanel Margin="0,4,0,0">
+        <TextBlock Text="Image file (full path)" Margin="0,0,0,3" />
+        <TextBox x:Name="PathBox" AutomationProperties.Name="Image file full path" />
+        <TextBlock Text="Use Choose image above, double-click the step, or type a full path. Supports PNG, JPEG, BMP and TIFF. The output is one row with Name and Path; connect it to OCR images and choose the Path column. The image is read by OCR, not embedded in the pipeline."
+                   Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0" />
+        <Button Content="Apply to step" Width="120" HorizontalAlignment="Left" Margin="0,8,0,6" Click="Apply_Click" />
+        <TextBlock x:Name="Status" Foreground="#777" FontSize="11" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

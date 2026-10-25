@@ -18,6 +18,9 @@ using OfficeWorkAssistant.Features.FillColumns;
 using OfficeWorkAssistant.Features.FormatSheet;
 using OfficeWorkAssistant.Features.Highlight;
 using OfficeWorkAssistant.Features.MergeDuplicates;
+using OfficeWorkAssistant.Features.LoadImage;
+using OfficeWorkAssistant.Features.SaveText;
+using OfficeWorkAssistant.Features.Ocr;
 using OfficeWorkAssistant.Features.RemoveDuplicates;
 using OfficeWorkAssistant.Features.SplitCombine;
 using OfficeWorkAssistant.Features.Templates;
@@ -269,6 +272,20 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 AddLoadFields(section, panel);
             else if (node.Kind == PipelineStepKind.Save)
                 AddSaveFields(section, panel);
+            else if (node.Kind == PipelineStepKind.LoadImage)
+            {
+                var browse = new Button { Content = "Choose image...", HorizontalAlignment = HorizontalAlignment.Left,
+                    Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 0, 0, 6) };
+                browse.Click += (s, e) => BrowseImage(node);
+                panel.Children.Add(browse);
+            }
+            else if (node.Kind == PipelineStepKind.SaveText)
+            {
+                var browse = new Button { Content = "Choose output file...", HorizontalAlignment = HorizontalAlignment.Left,
+                    Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 0, 0, 6) };
+                browse.Click += (s, e) => BrowseSaveText(node);
+                panel.Children.Add(browse);
+            }
             panel.Children.Add(section.Error);
 
             section.Body = new Border();
@@ -609,6 +626,65 @@ namespace OfficeWorkAssistant.Features.Pipeline
             RefreshFields(node.Id);
         }
 
+        void BrowseImage(PipelineNode node)
+        {
+            if (node == null || node.Kind != PipelineStepKind.LoadImage)
+                return;
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff)|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff",
+                Title = "Choose the image for " + node.Title,
+                CheckFileExists = true,
+                Multiselect = false
+            };
+            if (dialog.ShowDialog() != true)
+                return;
+            var settings = new LoadImageSettings { Path = dialog.FileName };
+            try
+            {
+                LoadImageWork.Run(settings);
+            }
+            catch (Exception ex)
+            {
+                Alert(ex.Message, "Could not load image", MessageBoxImage.Error);
+                return;
+            }
+            node.Settings = settings;
+            StepChanged(node, null);
+            RunPreview(node.Id);
+        }
+
+        void BrowseSaveText(PipelineNode node)
+        {
+            SaveTextPage editor = null;
+            foreach (var section in SectionsOf(node.Id))
+            {
+                editor = section.Body.Child as SaveTextPage;
+                if (editor != null)
+                    break;
+            }
+            if (editor == null)
+            {
+                Alert("Connect a working input first, then choose the output file.", "Save text / JSON", MessageBoxImage.Warning);
+                return;
+            }
+            bool json = SaveTextWork.IsJson(editor.SelectedFormat);
+            var settings = node.Settings as SaveTextSettings;
+            var dialog = new SaveFileDialog
+            {
+                Filter = "Text files (*.txt)|*.txt|JSON files (*.json)|*.json|All files (*.*)|*.*",
+                FilterIndex = json ? 2 : 1,
+                DefaultExt = json ? ".json" : ".txt",
+                AddExtension = true,
+                OverwritePrompt = false,
+                Title = "Where should " + node.Title + " write?",
+                FileName = settings == null || string.IsNullOrWhiteSpace(settings.Path)
+                    ? (json ? "result.json" : "result.txt") : System.IO.Path.GetFileName(settings.Path)
+            };
+            if (dialog.ShowDialog() == true)
+                editor.SetOutputPath(dialog.FileName);
+        }
+
         void BrowseSave(PipelineNode node)
         {
             var save = node != null ? node.Settings as SaveStepSettings : null;
@@ -762,6 +838,15 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
             switch (node.Kind)
             {
+                case PipelineStepKind.LoadImage:
+                    return new LoadImagePage(PipelineWork.Clone(node.Settings as LoadImageSettings), r => UseSettings(section, r));
+                case PipelineStepKind.SaveText:
+                {
+                    var input = inputs[0];
+                    var s = node.Settings as SaveTextSettings;
+                    return new SaveTextPage(input, labels[0], s == null ? null : PipelineWork.SaveTextToLetters(s, input, false),
+                        r => UseSettings(section, PipelineWork.SaveTextToNames(r, input)));
+                }
                 case PipelineStepKind.FilterSort:
                 {
                     var input = inputs[0];
@@ -787,6 +872,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     return new FindFilesPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FindFilesSettings), r => UseSettings(section, r));
                 case PipelineStepKind.FileAction:
                     return new FileActionPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FileActionSettings), r => UseSettings(section, r));
+                case PipelineStepKind.Ocr:
+                {
+                    var input = inputs[0];
+                    var s = node.Settings as OcrSettings;
+                    return new OcrPage(input, labels[0], s == null ? null : PipelineWork.OcrToLetters(s, input, false),
+                        r => UseSettings(section, PipelineWork.OcrToNames(r, input)));
+                }
                 case PipelineStepKind.MergeFolders:
                     return new MergeDuplicatesPage(PipelineWork.Clone(node.Settings as MergeFoldersSettings), r => UseSettings(section, r));
                 case PipelineStepKind.CleanText:

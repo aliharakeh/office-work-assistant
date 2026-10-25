@@ -3,5 +3,32 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Office Work Assistant" Height="760" Width="1280"
         MinHeight="560" MinWidth="960" WindowStartupLocation="CenterScreen">
-    <Frame x:Name="Root" NavigationUIVisibility="Hidden" JournalOwnership="OwnsJournal" />
+    <Window.Resources>
+        <Style x:Key="ModeButton" TargetType="RadioButton">
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+    <DockPanel>
+        <!-- The two ways to use the app: build a pipeline, or run a saved one. -->
+        <Border DockPanel.Dock="Top" Background="#ECEFF1" BorderBrush="#DDE3E8" BorderThickness="0,0,0,1" Padding="10,6">
+            <DockPanel LastChildFill="True">
+                <TextBlock x:Name="ModeHint" DockPanel.Dock="Right" Foreground="#607D8B" FontSize="11"
+                           VerticalAlignment="Center" TextAlignment="Right" TextWrapping="Wrap" MaxWidth="620" Margin="12,0,0,0" />
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Office Work Assistant" Foreground="#37474F" FontWeight="SemiBold"
+                               VerticalAlignment="Center" Margin="0,0,14,0" />
+                    <RadioButton x:Name="BuilderMode" Content="Builder" GroupName="Mode" Style="{StaticResource ModeButton}"
+                                 Checked="Mode_Checked"
+                                 ToolTip="Build and edit pipelines: add steps, connect them, and fill in their settings." />
+                    <RadioButton x:Name="RunMode" Content="Run" GroupName="Mode" Style="{StaticResource ModeButton}"
+                                 IsChecked="True" Checked="Mode_Checked"
+                                 ToolTip="Run a saved pipeline: choose the files and folders it needs, then press Run." />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+        <Frame x:Name="Root" NavigationUIVisibility="Hidden" JournalOwnership="OwnsJournal" />
+    </DockPanel>
 </Window>

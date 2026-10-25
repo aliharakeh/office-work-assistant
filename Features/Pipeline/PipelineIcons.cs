@@ -54,6 +54,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.Highlight: return "M15,4 L20,9 L10,19 L5,19 L5,14 Z M4,22 H20";
                 // Table with a header row.
                 case PipelineStepKind.FormatSheet: return "M3,4 H21 V20 H3 Z M3,9 H21 M9,9 V20 M15,9 V20";
+                // Scan corners around lines of text.
+                case PipelineStepKind.Ocr: return "M3,8 V3 H8 M16,3 H21 V8 M21,16 V21 H16 M8,21 H3 V16 M7,8 H17 M7,12 H17 M7,16 H14";
+                // Image frame, sun and mountains.
+                case PipelineStepKind.LoadImage: return "M3,3 H21 V21 H3 Z M3,18 L9,11 L13,15 L16,12 L21,18 M16,6 A2,2 0 1 1 16,10 A2,2 0 1 1 16,6";
+                // Text page with a save arrow.
+                case PipelineStepKind.SaveText: return "M4,2 H15 L20,7 V13 M15,2 V7 H20 M4,2 V22 H11 M7,10 H15 M7,14 H11 M17,14 V22 M13,18 L17,22 L21,18";
                 default: return "M4,4 H20 V20 H4 Z";
             }
         }

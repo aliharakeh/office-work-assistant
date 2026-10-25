@@ -13,6 +13,9 @@ using OfficeWorkAssistant.Features.FileOps;
 using OfficeWorkAssistant.Features.FormatSheet;
 using OfficeWorkAssistant.Features.Highlight;
 using OfficeWorkAssistant.Features.MergeDuplicates;
+using OfficeWorkAssistant.Features.LoadImage;
+using OfficeWorkAssistant.Features.Ocr;
+using OfficeWorkAssistant.Features.SaveText;
 using OfficeWorkAssistant.Features.FilterSort;
 using OfficeWorkAssistant.Features.FillColumns;
 using OfficeWorkAssistant.Features.RemoveDuplicates;
@@ -42,7 +45,10 @@ namespace OfficeWorkAssistant.Features.Pipeline
         ArrangeColumns,
         Append,
         Highlight,
-        FormatSheet
+        FormatSheet,
+        Ocr,
+        LoadImage,
+        SaveText
     }
 
     public enum SaveStepMode
@@ -123,6 +129,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
         [XmlElement("Append", typeof(AppendSettings))]
         [XmlElement("Highlight", typeof(HighlightSettings))]
         [XmlElement("FormatSheet", typeof(FormatSheetSettings))]
+        [XmlElement("Ocr", typeof(OcrSettings))]
+        [XmlElement("LoadImage", typeof(LoadImageSettings))]
+        [XmlElement("SaveText", typeof(SaveTextSettings))]
         public object Settings { get; set; }
     }
 
@@ -166,7 +175,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
         // The ports a kind starts with. Append grows: see InputPorts.
         public static string[] Ports(PipelineStepKind kind)
         {
-            if (kind == PipelineStepKind.Load || kind == PipelineStepKind.ListFolder || kind == PipelineStepKind.MergeFolders)
+            if (kind == PipelineStepKind.Load || kind == PipelineStepKind.ListFolder || kind == PipelineStepKind.MergeFolders ||
+                kind == PipelineStepKind.LoadImage)
                 return NoPorts;
             if (kind == PipelineStepKind.Compare || kind == PipelineStepKind.FillColumns)
                 return TwoPorts;
@@ -258,6 +268,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.Append: return "Append tables";
                 case PipelineStepKind.Highlight: return "Highlight";
                 case PipelineStepKind.FormatSheet: return "Format sheet";
+                case PipelineStepKind.Ocr: return "OCR images";
+                case PipelineStepKind.LoadImage: return "Load image";
+                case PipelineStepKind.SaveText: return "Save text / JSON";
                 default: return "Save file";
             }
         }
@@ -285,6 +298,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.Append: return "Stack the rows of several tables.";
                 case PipelineStepKind.Highlight: return "Colour cells or rows that match a condition.";
                 case PipelineStepKind.FormatSheet: return "Header style, widths, freeze, filter, formats.";
+                case PipelineStepKind.Ocr: return "Read text from images into a new column, offline.";
+                case PipelineStepKind.LoadImage: return "Choose one image file to feed into OCR images.";
+                case PipelineStepKind.SaveText: return "Save column text, lists, sets or maps to a text / JSON file.";
                 default: return "Write the result to an Excel file.";
             }
         }
@@ -299,10 +315,19 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.FindFiles:
                 case PipelineStepKind.FileAction:
                 case PipelineStepKind.MergeFolders:
+                case PipelineStepKind.Ocr:
+                case PipelineStepKind.LoadImage:
+                case PipelineStepKind.SaveText:
                     return true;
                 default:
                     return false;
             }
+        }
+
+        // Terminal saves write only after all computations and file actions have succeeded.
+        public static bool IsSaveKind(PipelineStepKind kind)
+        {
+            return kind == PipelineStepKind.Save || kind == PipelineStepKind.SaveText;
         }
 
         // Steps that style the table for Save. Their result keeps the style; every other step drops it.
@@ -367,6 +392,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 node.Settings = new LoadStepSettings();
             else if (kind == PipelineStepKind.Save)
                 node.Settings = new SaveStepSettings();
+            else if (kind == PipelineStepKind.LoadImage)
+                node.Settings = new LoadImageSettings();
             def.Nodes.Add(node);
             return node;
         }
@@ -572,6 +599,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.Append: return settings is AppendSettings;
                 case PipelineStepKind.Highlight: return settings is HighlightSettings;
                 case PipelineStepKind.FormatSheet: return settings is FormatSheetSettings;
+                case PipelineStepKind.Ocr: return settings is OcrSettings;
+                case PipelineStepKind.LoadImage: return settings is LoadImageSettings;
+                case PipelineStepKind.SaveText: return settings is SaveTextSettings;
                 default: return settings is SaveStepSettings;
             }
         }
@@ -681,6 +711,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var format = s as FormatSheetSettings;
             if (format != null)
                 return FormatSheetWork.Summary(format);
+            var ocr = s as OcrSettings;
+            if (ocr != null)
+                return ocr.PathColumn + " -> " + ocr.TextHeader + " (" + ocr.Languages + ")";
+            var image = s as LoadImageSettings;
+            if (image != null)
+                return string.IsNullOrWhiteSpace(image.Path) ? "Choose an image file." : Path.GetFileName(image.Path);
+            var textSave = s as SaveTextSettings;
+            if (textSave != null)
+                return SaveTextWork.FormatLabel(textSave.Format) + " -> " +
+                    (string.IsNullOrWhiteSpace(textSave.Path) ? "Choose a file." : Path.GetFileName(textSave.Path));
             return "";
         }
 
@@ -737,7 +777,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 if (wanted != null && !wanted.Contains(node.Id))
                     continue;
-                if (node.Kind == PipelineStepKind.Save)
+                if (IsSaveKind(node.Kind))
                     saves.Add(node);
                 if (cache.ContainsKey(node.Id))
                     continue;
@@ -754,6 +794,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 }
             }
 
+            if (!CheckSaveTargets(saves, result))
+                return result;
             if (writeFiles && RunActions(def, order, wanted, cache, result))
                 WriteSaves(saves, cache, result);
             return result;
@@ -804,45 +846,89 @@ namespace OfficeWorkAssistant.Features.Pipeline
             return true;
         }
 
-        // New files first, then new sheets, so a sheet added to a workbook that another
-        // step creates in the same run is not wiped out when that workbook is written.
-        static void WriteSaves(List<PipelineNode> saves, IDictionary<string, DataTable> cache, PipelineRunResult result)
+        // Check before any disk action: text output must not collide with another save,
+        // including an Excel step that would add a sheet to the same path.
+        static bool CheckSaveTargets(List<PipelineNode> saves, PipelineRunResult result)
         {
             var created = new Dictionary<string, PipelineNode>(StringComparer.OrdinalIgnoreCase);
             foreach (var node in saves)
             {
-                var s = (SaveStepSettings)node.Settings;
-                if (s.Mode != SaveStepMode.NewFile)
-                    continue;
-                var path = System.IO.Path.GetFullPath(s.Path);
+                string path;
+                try
+                {
+                    path = SaveTargetPath(node);
+                }
+                catch (Exception ex)
+                {
+                    result.FailedNodeId = node.Id;
+                    result.Error = ex.Message;
+                    return false;
+                }
                 PipelineNode other;
                 if (created.TryGetValue(path, out other))
                 {
-                    result.FailedNodeId = node.Id;
-                    result.Error = "This step and '" + other.Title + "' both replace " + System.IO.Path.GetFileName(path) +
-                        ". Make one of them add a new sheet instead.";
-                    return;
+                    var currentExcel = node.Settings as SaveStepSettings;
+                    var otherExcel = other.Settings as SaveStepSettings;
+                    // Text output may not share a file; Excel steps may, as long as only one replaces it
+                    // (a new file writes first, sheets are added to it afterwards).
+                    if (currentExcel == null || otherExcel == null ||
+                        (currentExcel.Mode == SaveStepMode.NewFile && otherExcel.Mode == SaveStepMode.NewFile))
+                    {
+                        result.FailedNodeId = node.Id;
+                        result.Error = "This step and '" + other.Title + "' both write " + path +
+                            ". Choose different output files (Excel steps may instead add new sheets).";
+                        return false;
+                    }
+                    continue;
                 }
                 created[path] = node;
             }
+            return true;
+        }
 
+        public static string SaveTargetPath(PipelineNode node)
+        {
+            var text = node.Settings as SaveTextSettings;
+            if (node.Kind == PipelineStepKind.SaveText && text != null)
+                return SaveTextWork.OutputPath(text);
+            var excel = node.Settings as SaveStepSettings;
+            if (node.Kind != PipelineStepKind.Save || excel == null)
+                throw new InvalidOperationException("Set up the save step first.");
+            string error = CheckSave(excel);
+            if (error != null)
+                throw new InvalidOperationException(error);
+            return Path.GetFullPath(excel.Path);
+        }
+
+        // New files first, then new sheets, so a sheet added to a workbook that another
+        // step creates in the same run is not wiped out when that workbook is written.
+        static void WriteSaves(List<PipelineNode> saves, IDictionary<string, DataTable> cache, PipelineRunResult result)
+        {
             var ordered = new List<PipelineNode>();
             foreach (var node in saves)
             {
-                if (((SaveStepSettings)node.Settings).Mode == SaveStepMode.NewFile)
+                var excel = node.Settings as SaveStepSettings;
+                if (excel == null || excel.Mode == SaveStepMode.NewFile)
                     ordered.Add(node);
             }
             foreach (var node in saves)
             {
-                if (((SaveStepSettings)node.Settings).Mode == SaveStepMode.NewSheet)
+                var excel = node.Settings as SaveStepSettings;
+                if (excel != null && excel.Mode == SaveStepMode.NewSheet)
                     ordered.Add(node);
             }
 
             foreach (var node in ordered)
             {
-                var s = (SaveStepSettings)node.Settings;
                 try
                 {
+                    if (node.Kind == PipelineStepKind.SaveText)
+                    {
+                        cache[node.Id] = SaveTextWork.Write(cache[node.Id]);
+                        result.Written.Add(SaveTargetPath(node));
+                        continue;
+                    }
+                    var s = (SaveStepSettings)node.Settings;
                     // A new sheet needs a workbook to go into; create it the first time.
                     bool append = s.Mode == SaveStepMode.NewSheet && File.Exists(s.Path);
                     ExcelFile.Save(cache[node.Id], s.Path, s.SheetName, append);
@@ -881,6 +967,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     if (string.IsNullOrWhiteSpace(s.Path))
                         throw new InvalidOperationException("Choose a file to load.");
                     return ExcelFile.Load(s.Path, string.IsNullOrEmpty(s.Sheet) ? null : s.Sheet, 0).Table;
+                }
+                case PipelineStepKind.LoadImage:
+                    return LoadImageWork.Run((LoadImageSettings)node.Settings);
+                case PipelineStepKind.SaveText:
+                {
+                    var input = Input(def, node, PortIn, cache);
+                    return SaveTextWork.Run(input, SaveTextToLetters((SaveTextSettings)node.Settings, input, true));
                 }
                 case PipelineStepKind.FilterSort:
                 {
@@ -960,6 +1053,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 {
                     var input = Input(def, node, PortIn, cache);
                     return FormatSheetWork.Run(input, FormatSheetToLetters((FormatSheetSettings)node.Settings, input, true));
+                }
+                case PipelineStepKind.Ocr:
+                {
+                    var input = Input(def, node, PortIn, cache);
+                    return OcrWork.Run(input, OcrToLetters((OcrSettings)node.Settings, input, true));
                 }
                 default:
                 {
@@ -1062,6 +1160,36 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     c.SourceColumn = LetterOf(input, c.SourceColumn, strict) ?? c.SourceColumn;
             }
             return t;
+        }
+
+        public static SaveTextSettings SaveTextToNames(SaveTextSettings settings, DataTable input)
+        {
+            var s = Clone(settings);
+            s.Column = NameOf(input, s.Column);
+            s.ValueColumn = string.IsNullOrWhiteSpace(s.ValueColumn) ? "" : NameOf(input, s.ValueColumn);
+            return s;
+        }
+
+        public static SaveTextSettings SaveTextToLetters(SaveTextSettings settings, DataTable input, bool strict)
+        {
+            var s = Clone(settings);
+            s.Column = LetterOf(input, s.Column, strict) ?? "";
+            s.ValueColumn = LetterOf(input, s.ValueColumn, strict && SaveTextWork.IsMap(s.Format)) ?? "";
+            return s;
+        }
+
+        public static OcrSettings OcrToNames(OcrSettings settings, DataTable input)
+        {
+            var s = Clone(settings);
+            s.PathColumn = NameOf(input, s.PathColumn);
+            return s;
+        }
+
+        public static OcrSettings OcrToLetters(OcrSettings settings, DataTable input, bool strict)
+        {
+            var s = Clone(settings);
+            s.PathColumn = LetterOf(input, s.PathColumn, strict) ?? "";
+            return s;
         }
 
         public static CleanTextSettings CleanTextToNames(CleanTextSettings settings, DataTable input)

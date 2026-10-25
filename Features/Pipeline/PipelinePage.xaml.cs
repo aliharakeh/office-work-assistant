@@ -17,6 +17,7 @@ using OfficeWorkAssistant.Features.FileOps;
 using OfficeWorkAssistant.Features.FilterSort;
 using OfficeWorkAssistant.Features.FillColumns;
 using OfficeWorkAssistant.Features.FormatSheet;
+using OfficeWorkAssistant.Features.SaveText;
 using OfficeWorkAssistant.Features.FormulaGuide;
 using OfficeWorkAssistant.Features.Highlight;
 using OfficeWorkAssistant.Features.MergeDuplicates;
@@ -67,8 +68,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 PipelineStepKind.Compare, PipelineStepKind.Append, PipelineStepKind.FillColumns,
                 PipelineStepKind.Highlight, PipelineStepKind.FormatSheet,
                 PipelineStepKind.Save },
-            new[] { PipelineStepKind.ValueList, PipelineStepKind.ListFolder, PipelineStepKind.FindFiles,
-                PipelineStepKind.FileAction, PipelineStepKind.MergeFolders }
+            new[] { PipelineStepKind.LoadImage, PipelineStepKind.ValueList, PipelineStepKind.ListFolder, PipelineStepKind.FindFiles,
+                PipelineStepKind.Ocr, PipelineStepKind.SaveText, PipelineStepKind.FileAction, PipelineStepKind.MergeFolders }
         };
         static readonly string[] PaletteHeaders =
         {
@@ -428,19 +429,18 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         void RunAll_Click(object sender, RoutedEventArgs e)
         {
-            var saves = new List<SaveStepSettings>();
+            var saves = new List<PipelineNode>();
             var actions = new List<PipelineNode>();
             foreach (var node in _def.Nodes)
             {
-                var s = node.Settings as SaveStepSettings;
-                if (s != null)
-                    saves.Add(s);
+                if (PipelineWork.IsSaveKind(node.Kind))
+                    saves.Add(node);
                 if (PipelineWork.IsActionKind(node.Kind))
                     actions.Add(node);
             }
             if (saves.Count == 0 && actions.Count == 0)
             {
-                Alert("Add a Save file, File action or Merge folders step: those are the steps that write or change files.", "Nothing to save", MessageBoxImage.Warning);
+                Alert("Add a Save file, Save text / JSON, File action or Merge folders step: those are the steps that write or change files.", "Nothing to save", MessageBoxImage.Warning);
                 return;
             }
 
@@ -449,10 +449,20 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
             var warnings = new List<string>();
             var replaced = new List<string>();
-            foreach (var s in saves)
+            foreach (var node in saves)
             {
-                if (s.Mode == SaveStepMode.NewFile && !string.IsNullOrWhiteSpace(s.Path) && System.IO.File.Exists(s.Path))
-                    replaced.Add(s.Path);
+                try
+                {
+                    var excel = node.Settings as SaveStepSettings;
+                    string path = PipelineWork.SaveTargetPath(node);
+                    if ((excel == null || excel.Mode == SaveStepMode.NewFile) && System.IO.File.Exists(path))
+                        replaced.Add(path);
+                }
+                catch (Exception ex)
+                {
+                    Alert(node.Title + ": " + ex.Message, "Pipeline stopped", MessageBoxImage.Warning);
+                    return;
+                }
             }
             if (replaced.Count > 0)
                 warnings.Add("These files will be replaced:\n" + string.Join("\n", replaced.ToArray()));
@@ -529,6 +539,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
             BringIntoView(node);
             if (kind == PipelineStepKind.Load)
                 BrowseLoad(node);
+            else if (kind == PipelineStepKind.LoadImage)
+                BrowseImage(node);
             else if (PipelineWork.Ports(kind).Length == 0 || from != null)
                 SetStatus("Added " + node.Title + ". Set it up in the panel on the right.");
             else
@@ -617,6 +629,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (e.ClickCount == 2 && view.Node.Kind == PipelineStepKind.Save)
             {
                 BrowseSave(view.Node);
+                return;
+            }
+            if (e.ClickCount == 2 && view.Node.Kind == PipelineStepKind.LoadImage)
+            {
+                BrowseImage(view.Node);
+                return;
+            }
+            if (e.ClickCount == 2 && view.Node.Kind == PipelineStepKind.SaveText)
+            {
+                BrowseSaveText(view.Node);
                 return;
             }
             _dragNode = view;
