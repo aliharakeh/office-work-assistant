@@ -222,6 +222,23 @@ internal static class SaveTextSmokeTests
         PipelineWork.AddNode(failed, PipelineStepKind.Load, 0, 100);
         result = PipelineWork.Run(failed, new Dictionary<string, DataTable>(), null, true);
         Check(result.Error != null && File.ReadAllText(collision) == "keep original", "A failed step did not prevent export.");
+
+        var grouped = new PipelineDefinition();
+        var firstActionSource = Source(grouped, ValueListMode.List, actionFile);
+        var secondActionSource = Source(grouped, ValueListMode.List, actionFile);
+        var copy = PipelineWork.AddNode(grouped, PipelineStepKind.FileAction, 200, 0);
+        copy.Settings = new FileActionSettings { PathColumn = "Key", Action = FileActionKind.Copy, DestFolder = destination };
+        grouped.Links.Add(new PipelineLink { From = firstActionSource.Id, To = copy.Id, Port = PipelineWork.PortIn });
+        grouped.Links.Add(new PipelineLink { From = secondActionSource.Id, To = copy.Id, Port = "In2" });
+        var report = Save(grouped, copy, Path.Combine(folder, "copy-report.txt"), SaveTextFormat.Text);
+        ((SaveTextSettings)report.Settings).Column = "Status";
+        var groupedCache = new Dictionary<string, DataTable>();
+        result = PipelineWork.Run(grouped, groupedCache, null, false);
+        Check(result.Error == null && RunnerWork.ActionLines(grouped, groupedCache)[0].Contains("Copy 1 item") &&
+            !File.Exists(Path.Combine(destination, Path.GetFileName(actionFile))), "The batched action preview missed a duplicate source.");
+        result = PipelineWork.Run(grouped, groupedCache, null, true);
+        Check(result.Error == null && result.Written.Count == 2 && File.ReadAllText(result.Written[0]).Trim() == "Copied" &&
+            File.ReadAllText(result.Written[1]).Trim() == "Duplicate", "A downstream save did not receive both real action outcomes.");
     }
 
     static void FailedWriteCheck(string folder)

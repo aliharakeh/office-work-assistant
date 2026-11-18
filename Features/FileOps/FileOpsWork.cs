@@ -611,6 +611,13 @@ namespace OfficeWorkAssistant.Features.FileOps
         // What would happen, row by row. Touches nothing. The input rows plus Destination and Status.
         public static DataTable PlanActions(DataTable input, FileActionSettings s)
         {
+            return PlanActions(input, s, new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        }
+
+        internal static DataTable PlanActions(DataTable input, FileActionSettings s,
+            HashSet<string> sources, HashSet<string> targets)
+        {
             var error = Check(s);
             if (error != null)
                 throw new InvalidOperationException(error);
@@ -631,8 +638,6 @@ namespace OfficeWorkAssistant.Features.FileOps
             if (s.Action != FileActionKind.Delete)
                 dest = Path.GetFullPath(s.DestFolder.Trim());
 
-            var sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (DataRow row in table.Rows)
             {
                 row[destCol] = "";
@@ -730,6 +735,12 @@ namespace OfficeWorkAssistant.Features.FileOps
         public static DataTable Apply(DataTable input, FileActionSettings s)
         {
             var table = PlanActions(input, s);
+            ApplyPlan(table, s);
+            return table;
+        }
+
+        internal static void ApplyPlan(DataTable table, FileActionSettings s)
+        {
             var destCol = ExcelFile.FindColumn(table, "Destination");
             var statusCol = ExcelFile.FindColumn(table, "Status");
             var pathCol = ExcelFile.FindColumn(table, s.PathColumn);
@@ -770,7 +781,6 @@ namespace OfficeWorkAssistant.Features.FileOps
                     row[statusCol] = "Failed: " + ex.Message;
                 }
             }
-            return table;
         }
 
         // Rows a plan would act on.

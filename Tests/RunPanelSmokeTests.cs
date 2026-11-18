@@ -235,6 +235,8 @@ internal static class RunPanelSmokeTests
                 "Shared step settings did not reach both results.");
             Check(File.ReadAllText(savedPath) == before, "Branch run changed the saved pipeline.");
 
+            CheckBuilderBatch(source, otherSource);
+
             // Pipelines without a panel flag default to hidden for every step kind.
             var legacy = new PipelineDefinition();
             var legacyLoad = PipelineWork.AddNode(legacy, PipelineStepKind.Load, 0, 0);
@@ -267,5 +269,53 @@ internal static class RunPanelSmokeTests
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         finally { Directory.Delete(folder, true); }
+    }
+
+    static void CheckBuilderBatch(string firstPath, string secondPath)
+    {
+        var def = new PipelineDefinition();
+        var first = PipelineWork.AddNode(def, PipelineStepKind.Load, 0, 0);
+        var second = PipelineWork.AddNode(def, PipelineStepKind.Load, 0, 120);
+        first.Settings = new LoadStepSettings { Path = firstPath };
+        second.Settings = new LoadStepSettings { Path = secondPath };
+        var edit = PipelineWork.AddNode(def, PipelineStepKind.EditHeaders, 200, 0);
+        edit.Settings = new EditHeadersSettings { Formula = "upper($Value)" };
+        var tail = PipelineWork.AddNode(def, PipelineStepKind.EditHeaders, 400, 0);
+        tail.Settings = new EditHeadersSettings();
+        Link(def, first, edit, "In");
+
+        const BindingFlags privateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+        var page = new PipelinePage();
+        var type = typeof(PipelinePage);
+        type.GetMethod("Reset", privateInstance).Invoke(page, new object[] { def, null });
+        type.GetMethod("Connect", privateInstance).Invoke(page, new object[] { second.Id, edit.Id, "In2", PipelineWork.PortOut });
+        Check(PipelineWork.InputPorts(def, edit).Length == 3, "Linking another workbook did not add a free port.");
+        type.GetMethod("Select", privateInstance, null, new[] { typeof(string) }, null).Invoke(page, new object[] { edit.Id });
+        var result = (bool)type.GetMethod("RunPreview", privateInstance).Invoke(page, new object[] { edit.Id });
+        var picker = (ComboBox)page.FindName("OutResult");
+        var grid = (DataGrid)page.FindName("GridOut");
+        var views = (Dictionary<string, PipelineNodeView>)type.GetField("_views", privateInstance).GetValue(page);
+        var outputs = PipelineWork.OutputPorts(edit, PipelineWork.ResultLayout(def));
+        var initial = grid.ItemsSource;
+        Check(result && picker.Visibility == Visibility.Visible && picker.Items.Count == 2 && initial != null &&
+            views[edit.Id].Outputs.Count == 2 && views[edit.Id].OutputPoint(outputs[0]) != views[edit.Id].OutputPoint(outputs[1]),
+            "The Builder did not show both results after preview.");
+        picker.SelectedIndex = 1;
+        Check(!ReferenceEquals(initial, grid.ItemsSource) &&
+            ((string)picker.SelectedItem).Contains(Path.GetFileNameWithoutExtension(secondPath)),
+            "Choosing the second workbook did not update the Builder preview.");
+        type.GetMethod("AddStep", privateInstance).Invoke(page, new object[] { PipelineStepKind.Highlight, null });
+        var added = def.Nodes[def.Nodes.Count - 1];
+        Check(PipelineWork.InputLink(def, added.Id, "In").FromPort == outputs[0] &&
+            PipelineWork.InputLink(def, added.Id, "In2").FromPort == outputs[1],
+            "Adding a step from the palette did not wire both outputs separately.");
+        type.GetMethod("Connect", privateInstance).Invoke(page, new object[] { edit.Id, tail.Id, "In", outputs[1] });
+        type.GetMethod("Select", privateInstance, null, new[] { typeof(string) }, null).Invoke(page, new object[] { tail.Id });
+        result = (bool)type.GetMethod("RunPreview", privateInstance).Invoke(page, new object[] { tail.Id });
+        var cache = (Dictionary<string, DataTable>)type.GetField("_cache", privateInstance).GetValue(page);
+        var items = PipelineWork.ResultItems(cache[tail.Id]);
+        Check(result && picker.Visibility == Visibility.Collapsed && items.Count == 1 &&
+            items[0].Name == Path.GetFileNameWithoutExtension(secondPath),
+            "The Builder did not route only the selected output socket.");
     }
 }

@@ -262,6 +262,7 @@
     <Compile Include="Features\Pdf\PdfWork.cs" />
     <Compile Include="Features\Pdf\PdfEditors.cs" />
     <Compile Include="Features\Pipeline\PipelineWork.cs" />
+    <Compile Include="Features\Pipeline\PipelineBatch.cs" />
     <Compile Include="Features\Pipeline\PipelineStepEditor.cs" />
     <Compile Include="Features\Pipeline\RunnerPage.xaml.cs">
       <DependentUpon>RunnerPage.xaml</DependentUpon>

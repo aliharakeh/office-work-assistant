@@ -185,6 +185,11 @@ namespace OfficeWorkAssistant.Features.SaveText
         // Called by the pipeline's final save phase only. A failed write never truncates the old file.
         public static DataTable Write(DataTable plan)
         {
+            return Write(plan, true);
+        }
+
+        internal static DataTable Write(DataTable plan, bool replace)
+        {
             if (plan == null || plan.Rows.Count != 1)
                 throw new InvalidOperationException("Run the text / JSON preview before saving.");
             string path = Convert.ToString(plan.Rows[0][ExcelFile.FindColumn(plan, "Path")], CultureInfo.InvariantCulture);
@@ -193,7 +198,7 @@ namespace OfficeWorkAssistant.Features.SaveText
             try
             {
                 File.WriteAllText(temp, content, new UTF8Encoding(false, true));
-                if (File.Exists(path))
+                if (replace && File.Exists(path))
                     File.Replace(temp, path, null);
                 else
                     File.Move(temp, path);

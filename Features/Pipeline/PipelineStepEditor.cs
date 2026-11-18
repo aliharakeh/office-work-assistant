@@ -36,6 +36,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var inputs = new DataTable[ports.Length];
             var labels = new string[ports.Length];
             var cache = new Dictionary<string, DataTable>();
+            var layout = PipelineWork.ResultLayout(def);
             for (var i = 0; i < ports.Length; i++)
             {
                 var link = PipelineWork.InputLink(def, node.Id, ports[i]);
@@ -43,7 +44,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 if (link == null) throw new InvalidOperationException("Connect this step's input in Builder mode first.");
                 var result = PipelineWork.Run(def, cache, link.From, false);
                 if (result.Error != null) throw new InvalidOperationException(result.Error);
-                inputs[i] = cache[link.From];
+                inputs[i] = PipelineWork.LinkedResult(def, link, cache[link.From], layout);
                 labels[i] = "From step: " + PipelineWork.Find(def, link.From).Title;
             }
             return Create(def, node, inputs, labels, use);
@@ -52,9 +53,74 @@ namespace OfficeWorkAssistant.Features.Pipeline
         public static FrameworkElement Create(PipelineDefinition def, PipelineNode node,
             DataTable[] inputs, string[] labels, Action<object> use)
         {
-            var ports = PipelineWork.InputPorts(def, node);
             if (node.Kind == PipelineStepKind.Load || node.Kind == PipelineStepKind.Save)
                 return FileSettings(node, use);
+            if (node.Kind == PipelineStepKind.Append || node.Kind == PipelineStepKind.MergePdf)
+                return CombineEditor(def, node, inputs, labels, use);
+
+            var sample = (DataTable[])inputs.Clone();
+            var sampleLabels = (string[])labels.Clone();
+            var ports = PipelineWork.InputPorts(def, node);
+            int firstCount = 0;
+            int secondCount = 0;
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                if (inputs[i] == null)
+                    continue;
+                var items = PipelineWork.ResultItems(inputs[i]);
+                if (ports[i].StartsWith(PipelineWork.PortB, StringComparison.Ordinal))
+                    secondCount += items.Count;
+                else
+                    firstCount += items.Count;
+                sample[i] = items[0].Table;
+                if (items.Count > 1)
+                    sampleLabels[i] = items[0].Name;
+            }
+            var editor = CreateEditor(node, sample, sampleLabels, use);
+            int count = Math.Max(firstCount, secondCount);
+            if (count <= 1)
+                return editor;
+            var panel = new DockPanel();
+            var note = Notice("These settings run on " + count.ToString(CultureInfo.InvariantCulture) +
+                " inputs. The editor shows the first input.");
+            note.Margin = new Thickness(0, 0, 0, 8);
+            DockPanel.SetDock(note, Dock.Top);
+            panel.Children.Add(note);
+            panel.Children.Add(editor);
+            return panel;
+        }
+
+        static FrameworkElement CombineEditor(PipelineDefinition def, PipelineNode node,
+            DataTable[] inputs, string[] labels, Action<object> use)
+        {
+            var ports = PipelineWork.InputPorts(def, node);
+            var tables = new List<DataTable>();
+            var shown = new List<string>();
+            var names = new List<string>();
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                if (inputs[i] == null)
+                    continue;
+                var items = PipelineWork.ResultItems(inputs[i]);
+                foreach (var item in items)
+                {
+                    tables.Add(item.Table);
+                    shown.Add(items.Count == 1 ? labels[i] : item.Name);
+                    var link = PipelineWork.InputLink(def, node.Id, ports[i]);
+                    names.Add(items.Count == 1 && link != null &&
+                        (string.IsNullOrEmpty(link.FromPort) || link.FromPort == PipelineWork.PortOut)
+                        ? PipelineWork.Find(def, link.From).Title : item.Name);
+                }
+            }
+            if (node.Kind == PipelineStepKind.MergePdf)
+                return new MergePdfPage(tables, shown, node.Settings as MergePdfSettings, r => use(r));
+            if (tables.Count == 0)
+                return Notice("Link the steps whose rows you want to stack: drag from the right dot of each one to this step's left dot.");
+            return new AppendPage(tables, shown, names, PipelineWork.Clone(node.Settings as AppendSettings), r => use(r));
+        }
+
+        static FrameworkElement CreateEditor(PipelineNode node, DataTable[] inputs, string[] labels, Action<object> use)
+        {
             switch (node.Kind)
             {
                 case PipelineStepKind.LoadPdf:
@@ -66,19 +132,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 }
                 case PipelineStepKind.ArrangePdf:
                     return new ArrangePdfPage(inputs[0], labels[0], inputs[1], labels[1], node.Settings as ArrangePdfSettings, r => use(r));
-                case PipelineStepKind.MergePdf:
-                {
-                    var connected = new List<DataTable>();
-                    var names = new List<string>();
-                    for (int i = 0; i < inputs.Length; i++)
-                    {
-                        if (inputs[i] == null)
-                            continue;
-                        connected.Add(inputs[i]);
-                        names.Add(labels[i]);
-                    }
-                    return new MergePdfPage(connected, names, node.Settings as MergePdfSettings, r => use(r));
-                }
                 case PipelineStepKind.SplitPdf:
                     return new SplitPdfPage(inputs[0], labels[0], node.Settings as SplitPdfSettings, r => use(r));
                 case PipelineStepKind.SavePdf:
@@ -159,23 +212,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     return new EditHeadersPage(input, labels[0], s == null ? null : PipelineWork.HeadersToLetters(s, input, false),
                         r => use(PipelineWork.HeadersToNames(r, input)));
                 }
-                case PipelineStepKind.Append:
-                {
-                    var tables = new List<DataTable>();
-                    var shown = new List<string>();
-                    var names = new List<string>();
-                    for (var i = 0; i < ports.Length; i++)
-                    {
-                        if (inputs[i] == null)
-                            continue;
-                        tables.Add(inputs[i]);
-                        shown.Add(labels[i]);
-                        names.Add(PipelineWork.Find(def, PipelineWork.InputLink(def, node.Id, ports[i]).From).Title);
-                    }
-                    if (tables.Count == 0)
-                        return Notice("Link the steps whose rows you want to stack: drag from the right dot of each one to this step's left dot.");
-                    return new AppendPage(tables, shown, names, PipelineWork.Clone(node.Settings as AppendSettings), r => use(r));
-                }
                 case PipelineStepKind.Highlight:
                 {
                     var input = inputs[0];
@@ -212,6 +248,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 Margin = new Thickness(0, 6, 0, 8)
             };
             panel.Children.Add(option);
+            if (node.Kind == PipelineStepKind.Save)
+                panel.Children.Add(Notice("With several results, the source name is added to each output filename."));
             var apply = new Button { Content = "Apply to step", HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(8, 4, 8, 4) };
             apply.Click += (sender, e) =>
             {

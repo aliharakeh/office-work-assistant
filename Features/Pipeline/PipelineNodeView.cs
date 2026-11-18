@@ -17,9 +17,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
     // Tag of every port ellipse, so a hit test can tell which step and port the mouse is on.
     public sealed class PipelinePort
     {
-        public const string Out = "Out";
         public string NodeId;
         public string Port;
+        public bool IsOutput;
     }
 
     // One step box on the canvas: a card with input ports on the left and the output port on
@@ -52,21 +52,23 @@ namespace OfficeWorkAssistant.Features.Pipeline
         public readonly PipelineNode Node;
         public readonly Canvas Root;
         public readonly Border Box;
-        public readonly Ellipse Output;
+        public readonly Dictionary<string, Ellipse> Outputs = new Dictionary<string, Ellipse>();
         public readonly Dictionary<string, Ellipse> Inputs = new Dictionary<string, Ellipse>();
         public readonly double BoxHeight;
         readonly string[] _ports;
+        readonly string[] _outputs;
         readonly TextBlock _title;
         readonly TextBlock _detail;
         PipelineNodeState _state;
         bool _selected;
 
         // ports: the step's input ports now (PipelineWork.InputPorts).
-        public PipelineNodeView(PipelineNode node, string[] ports)
+        public PipelineNodeView(PipelineNode node, string[] ports, string[] outputs)
         {
             Node = node;
             _ports = ports;
-            BoxHeight = Math.Max(Height, PortGap * ports.Length + 16);
+            _outputs = outputs;
+            BoxHeight = Math.Max(Height, PortGap * Math.Max(ports.Length, outputs.Length) + 16);
             Root = new Canvas { Width = Width, Height = BoxHeight + 44 };
             Panel.SetZIndex(Root, 1);
 
@@ -95,16 +97,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
             foreach (var port in ports)
             {
                 var dot = Port(port);
-                int number = PipelineWork.AppendPortNumber(port);
-                dot.ToolTip = number == ports.Length && PipelineWork.HasVariableInputs(node.Kind)
-                    ? "Drop a link here to add another input"
-                    : "Drop a link here: " + PipelineWork.PortLabel(node.Kind, port);
+                int number = port == PipelineWork.PortIn ? 1 : PipelineWork.AppendPortNumber(port);
+                dot.ToolTip = "Drop a link here: " + PipelineWork.PortLabel(node.Kind, port);
                 var y = InputY(port);
                 Canvas.SetLeft(dot, -PortSize / 2);
                 Canvas.SetTop(dot, y - PortSize / 2);
                 Root.Children.Add(dot);
                 Inputs[port] = dot;
-                if (port != PipelineWork.PortIn)
+                if (port != PipelineWork.PortIn || ports.Length > 1)
                 {
                     var name = number > 0 ? number.ToString(System.Globalization.CultureInfo.InvariantCulture) : port;
                     var label = new TextBlock { Text = name, FontSize = 10, FontWeight = FontWeights.Bold, Foreground = PortFill, IsHitTestVisible = false };
@@ -114,17 +114,31 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 }
             }
 
-            Output = Port(PipelinePort.Out);
-            Output.ToolTip = "Drag from here to the next step's input";
-            Output.Cursor = System.Windows.Input.Cursors.Cross;
-            Canvas.SetLeft(Output, Width - PortSize / 2);
-            Canvas.SetTop(Output, BoxHeight / 2 - PortSize / 2);
-            Root.Children.Add(Output);
+            for (int i = 0; i < outputs.Length; i++)
+            {
+                var output = Port(outputs[i], true);
+                var number = (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                output.ToolTip = outputs.Length == 1 ? "Drag from here to the next step's input" : "Result " + number;
+                output.Cursor = System.Windows.Input.Cursors.Cross;
+                var y = PortY(i, outputs.Length);
+                Canvas.SetLeft(output, Width - PortSize / 2);
+                Canvas.SetTop(output, y - PortSize / 2);
+                Root.Children.Add(output);
+                Outputs.Add(outputs[i], output);
+                if (outputs.Length > 1)
+                {
+                    var label = new TextBlock { Text = number, FontSize = 10, FontWeight = FontWeights.Bold,
+                        Foreground = PortFill, IsHitTestVisible = false };
+                    Canvas.SetRight(label, PortSize / 2 + 1);
+                    Canvas.SetTop(label, y - 7);
+                    Root.Children.Add(label);
+                }
+            }
 
             Refresh();
         }
 
-        Ellipse Port(string port)
+        Ellipse Port(string port, bool isOutput = false)
         {
             return new Ellipse
             {
@@ -133,30 +147,37 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 Fill = PortFill,
                 Stroke = Brushes.White,
                 StrokeThickness = 2,
-                Tag = new PipelinePort { NodeId = Node.Id, Port = port }
+                Tag = new PipelinePort { NodeId = Node.Id, Port = port, IsOutput = isOutput }
             };
         }
 
-        double InputY(string port)
+        double PortY(int index, int count)
         {
-            if (port == PipelineWork.PortA)
-                return BoxHeight * 0.3;
-            if (port == PipelineWork.PortB)
-                return BoxHeight * 0.7;
-            int number = PipelineWork.AppendPortNumber(port);
-            if (number > 0)
-                return BoxHeight * number / (_ports.Length + 1);
-            return BoxHeight / 2;
+            return BoxHeight * (index + 1) / (count + 1);
         }
+
+        double InputY(string port) { return PortY(Array.IndexOf(_ports, port), _ports.Length); }
 
         public Point InputPoint(string port)
         {
             return new Point(Node.X, Node.Y + InputY(port));
         }
 
-        public Point OutputPoint()
+        public Point OutputPoint(string port)
         {
-            return new Point(Node.X + Width, Node.Y + BoxHeight / 2);
+            return new Point(Node.X + Width, Node.Y + PortY(Math.Max(0, Array.IndexOf(_outputs, port)), _outputs.Length));
+        }
+
+        public int OutputNumber(string port)
+        {
+            var index = Array.IndexOf(_outputs, port);
+            return index < 0 ? 1 : index + 1;
+        }
+
+        public bool HasPorts(string[] inputs, string[] outputs)
+        {
+            return System.Linq.Enumerable.SequenceEqual(_ports, inputs) &&
+                System.Linq.Enumerable.SequenceEqual(_outputs, outputs);
         }
 
         public void Place()

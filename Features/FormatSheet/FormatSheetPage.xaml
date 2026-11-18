@@ -10,6 +10,7 @@
         <TextBlock x:Name="InputInfo" Foreground="#777" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap" />
         <Expander Header="Sheet" IsExpanded="True">
             <StackPanel Margin="6">
+                <CheckBox x:Name="RtlBox" Content="Right-to-left sheet layout" Margin="0,0,0,2" />
                 <CheckBox x:Name="FreezeBox" Content="Freeze the header row" Margin="0,0,0,2" />
                 <StackPanel Margin="0,0,0,2">
                     <TextBlock Text="Frozen columns (0 = none)" VerticalAlignment="Center" Margin="0,4,0,2" TextWrapping="Wrap" />

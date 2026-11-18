@@ -168,6 +168,27 @@ internal static class PdfSmokeTests
             Directory.GetFiles(folder, "*.tmp").Length == 0, "Source changes damaged an existing output.");
     }
 
+    static void SeparatePdfResults(string folder, string first, string second)
+    {
+        var def = new PipelineDefinition();
+        var a = Step(def, PipelineStepKind.LoadPdf, new LoadPdfSettings { Path = first }, null, null);
+        var b = Step(def, PipelineStepKind.LoadPdf, new LoadPdfSettings { Path = second }, null, null);
+        var split = Step(def, PipelineStepKind.SplitPdf, new SplitPdfSettings { PagesPerFile = 2 }, a, "In");
+        Link(def, b, split, "In2");
+        var save = Step(def, PipelineStepKind.SavePdf, new SavePdfSettings { Path = Path.Combine(folder, "parts.pdf") }, split, "In");
+        var expected = new[] { "parts-first-001.pdf", "parts-first-002.pdf", "parts-second.pdf" }
+            .Select(name => Path.Combine(folder, name)).ToArray();
+        var cache = new Dictionary<string, DataTable>();
+        var check = PipelineWork.Run(def, cache, null, false);
+        Check(check.Error == null && PipelineWork.SaveTargetPaths(save, cache).SequenceEqual(expected) &&
+            expected.All(path => !File.Exists(path)), "Preview did not plan the separate split PDF outputs.");
+        var run = PipelineWork.Run(def, cache, null, true);
+        Check(run.Error == null && run.Written.SequenceEqual(expected), "Writing separate PDFs failed: " + run.Error);
+        Output(expected[0], 350, 360);
+        Output(expected[1], 370);
+        Output(expected[2], 450, 460);
+    }
+
     [STAThread]
     static int Main()
     {
@@ -180,6 +201,7 @@ internal static class PdfSmokeTests
             CreatePdf(first, 350, 360, 370);
             CreatePdf(second, 450, 460);
             TestPipeline(folder, first, second);
+            SeparatePdfResults(folder, first, second);
             BatchAndFailureChecks(folder, first, second);
             Console.WriteLine("Passed {0} PDF checks in a {1}-bit process.", _checks, IntPtr.Size * 8);
             Directory.Delete(folder, true);

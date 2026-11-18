@@ -725,17 +725,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
             var warnings = new List<string>();
             bool hasActions = HasActions();
-            bool hasPdfSave = _def.Nodes.Exists(node => node.Kind == PipelineStepKind.SavePdf);
             _cache.Clear();
-            if (hasActions || hasPdfSave)
+            var plan = RunPipeline(false);
+            if (plan.Error != null)
             {
-                var plan = RunPipeline(false);
-                if (plan.Error != null)
-                {
-                    ShowResult("Needs attention", RunnerWork.FailureText(_def, plan), true);
-                    SetStatus("This pipeline needs a change before it can run.");
-                    return;
-                }
+                ShowResult("Needs attention", RunnerWork.FailureText(_def, plan), true);
+                SetStatus("This pipeline needs a change before it can run.");
+                return;
             }
             var replaced = RunnerWork.ReplacedFiles(_def, _cache);
             if (replaced.Count > 0)
@@ -748,7 +744,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
-            var result = RunPipeline(true);
+            var result = RunPipeline(true, replaced);
             if (result.Error != null)
             {
                 ShowResult("Needs attention", RunnerWork.FailureText(_def, result), true);
@@ -775,7 +771,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         }
 
         // Runs the pipeline over what the form says. Files are only touched when writeFiles is true.
-        PipelineRunResult RunPipeline(bool writeFiles)
+        PipelineRunResult RunPipeline(bool writeFiles, ICollection<string> confirmedReplacements = null)
         {
             SetStatus("Working... please wait.");
             // Show the new status before the work starts.
@@ -783,7 +779,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             Mouse.OverrideCursor = Cursors.Wait;
             try
             {
-                return PipelineWork.Run(_def, _cache, null, writeFiles);
+                return PipelineWork.Run(_def, _cache, null, writeFiles, confirmedReplacements);
             }
             finally
             {

@@ -559,7 +559,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             panel.Children.Add(section.SaveSheet);
             panel.Children.Add(new TextBlock
             {
-                Text = "Files are written only by Run and save files. A new sheet must not exist yet.",
+                Text = "With several results, result.xlsx becomes result-January.xlsx, result-February.xlsx, and so on. A new sheet must not exist yet.",
                 Foreground = Brushes.Gray,
                 FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,
@@ -749,6 +749,17 @@ namespace OfficeWorkAssistant.Features.Pipeline
             _views[node.Id].Refresh();
             MarkDirty();
             var down = PipelineWork.Downstream(_def, node.Id);
+            if (node.Kind == PipelineStepKind.ValueList)
+            {
+                PipelineWork.RemoveDisconnectedOutputs(_def);
+                if (RefreshPortViews())
+                {
+                    RedrawWires();
+                    RebuildSidebar(down);
+                    UpdateSections();
+                    return;
+                }
+            }
             foreach (var section in new List<StepSection>(_sections.Values))
             {
                 if (section != keep && down.Contains(section.Node.Id))
@@ -805,7 +816,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (_selectedLink != null)
             {
                 var to = PipelineWork.Find(_def, _selectedLink.To);
-                LinkText.Text = PipelineWork.Find(_def, _selectedLink.From).Title + "  ->  " + to.Title +
+                var from = _views[_selectedLink.From];
+                var output = from.Outputs.Count > 1
+                    ? string.IsNullOrEmpty(_selectedLink.FromPort) ? " (all results)" :
+                        " (result " + from.OutputNumber(_selectedLink.FromPort).ToString(CultureInfo.InvariantCulture) + ")"
+                    : "";
+                LinkText.Text = from.Node.Title + output + "  ->  " + to.Title +
                     (_selectedLink.Port == PipelineWork.PortIn ? "" : " (" + PipelineWork.PortLabel(to.Kind, _selectedLink.Port) + ")");
             }
 
@@ -819,12 +835,45 @@ namespace OfficeWorkAssistant.Features.Pipeline
         void ShowResult(PipelineNode node)
         {
             DataTable table;
+            var previous = OutResult.Tag as DataTable;
+            var previousIndex = OutResult.SelectedIndex;
+            OutResult.Tag = null;
+            OutResult.ItemsSource = null;
+            OutResult.Visibility = Visibility.Collapsed;
             if (node == null || !_cache.TryGetValue(node.Id, out table))
             {
                 GridOut.ItemsSource = null;
                 InfoOut.Text = node == null ? "Select a step to see its result." : "Click Run preview to see this step's result.";
                 return;
             }
+            var items = PipelineWork.ResultItems(table);
+            if (items.Count > 1)
+            {
+                var labels = new List<string>();
+                for (int i = 0; i < items.Count; i++)
+                    labels.Add((i + 1).ToString(CultureInfo.InvariantCulture) + ". " +
+                        (items[i].TargetPath == null ? items[i].Name : System.IO.Path.GetFileName(items[i].TargetPath)));
+                OutResult.Tag = table;
+                OutResult.ItemsSource = labels;
+                OutResult.Visibility = Visibility.Visible;
+                OutResult.SelectedIndex = previous == table && previousIndex >= 0 ? previousIndex : 0;
+            }
+            else
+                ShowResultTable(node, items[0].Table, 1);
+        }
+
+        void OutResult_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var table = OutResult.Tag as DataTable;
+            var node = _selected == null ? null : PipelineWork.Find(_def, _selected);
+            if (table == null || node == null || OutResult.SelectedIndex < 0)
+                return;
+            var items = PipelineWork.ResultItems(table);
+            ShowResultTable(node, items[OutResult.SelectedIndex].Table, items.Count);
+        }
+
+        void ShowResultTable(PipelineNode node, DataTable table, int results)
+        {
             var shown = table;
             if (table.Rows.Count > PreviewRows)
             {
@@ -834,7 +883,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
             GridOut.ItemsSource = shown.DefaultView;
             var rows = table.Rows.Count.ToString("N0", CultureInfo.InvariantCulture);
-            InfoOut.Text = node.Title + ": " + rows + " rows, " + table.Columns.Count.ToString(CultureInfo.InvariantCulture) + " columns" +
+            InfoOut.Text = node.Title + (results > 1 ? " (" + results.ToString(CultureInfo.InvariantCulture) + " results)" : "") +
+                ": " + rows + " rows, " + table.Columns.Count.ToString(CultureInfo.InvariantCulture) + " columns" +
                 (shown != table ? " (showing the first " + PreviewRows.ToString("N0", CultureInfo.InvariantCulture) + ")" : "");
         }
 
@@ -868,7 +918,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     return Notice("This step cannot be set up until the steps before it work.\n\n" +
                         (failed != null ? failed.Title + ": " : "") + result.Error);
                 }
-                inputs[i] = _cache[link.From];
+                try
+                {
+                    inputs[i] = PipelineWork.LinkedResult(_def, link, _cache[link.From], _outputLayout);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Notice(ex.Message);
+                }
                 labels[i] = "From step: " + PipelineWork.Find(_def, link.From).Title;
             }
 

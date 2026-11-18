@@ -172,6 +172,30 @@ namespace OfficeWorkAssistant.Excel
             }
         }
 
+        internal static void SavePipelineOutput(DataTable table, string path, string sheetName, bool append, bool replace)
+        {
+            if (append)
+            {
+                Save(table, path, sheetName, true);
+                return;
+            }
+
+            string temporary = Path.Combine(Path.GetDirectoryName(path), "." + Guid.NewGuid().ToString("N") + ".xlsx");
+            try
+            {
+                Save(table, temporary, sheetName, false);
+                if (replace && File.Exists(path))
+                    File.Replace(temporary, path, null);
+                else
+                    File.Move(temporary, path);
+            }
+            finally
+            {
+                if (File.Exists(temporary))
+                    File.Delete(temporary);
+            }
+        }
+
         // Null when the name works as an Excel sheet name; otherwise the reason it does not.
         public static string CheckSheetName(string name)
         {
@@ -259,6 +283,7 @@ namespace OfficeWorkAssistant.Excel
         // Bottom layer first, so each later one only changes what it sets.
         static void WriteStyle(IXLWorksheet ws, DataTable table, SheetStyle style)
         {
+            ws.RightToLeft = style.RightToLeft;
             int rows = table.Rows.Count;
             int cols = table.Columns.Count;
             if (cols == 0)

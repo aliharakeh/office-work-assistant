@@ -780,50 +780,52 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 if (!PipelineWork.IsSaveKind(node.Kind))
                     continue;
-                if (node.Kind == PipelineStepKind.SavePdf)
-                {
-                    DataTable plan;
-                    if (cache != null && cache.TryGetValue(node.Id, out plan))
-                    {
-                        foreach (DataRow output in plan.Rows)
-                            lines.Add("Writes " + output["Path"] + " - " + Count((int)output["Pages"], "page") +
-                                ((string)output["Status"] == "Overwrite" ? ", replacing the file." : "."));
-                    }
-                    continue;
-                }
-                string path;
                 try
                 {
-                    path = PipelineWork.SaveTargetPath(node);
+                    DataTable table = null;
+                    if (cache != null)
+                        cache.TryGetValue(node.Id, out table);
+                    if (node.Kind == PipelineStepKind.SavePdf)
+                    {
+                        if (table != null)
+                            foreach (var item in PipelineWork.ResultItems(table))
+                                foreach (DataRow output in item.Table.Rows)
+                                    lines.Add("Writes " + output["Path"] + " - " + Count((int)output["Pages"], "page") +
+                                        ((string)output["Status"] == "Overwrite" ? ", replacing the file." : "."));
+                        continue;
+                    }
+
+                    var text = node.Settings as SaveTextSettings;
+                    var save = node.Settings as SaveStepSettings;
+                    var items = table == null ? null : PipelineWork.ResultItems(table);
+                    int index = 0;
+                    foreach (string path in PipelineWork.SaveTargetPaths(node, cache))
+                    {
+                        var rows = items == null ? "" : RowsOf(items[index++].Table, text != null);
+                        if (text != null)
+                        {
+                            lines.Add("Writes " + path + rows + " as " + SaveTextWork.FormatLabel(text.Format) + ".");
+                            continue;
+                        }
+                        lines.Add("Writes " + path + rows +
+                            (save != null && save.Mode == SaveStepMode.NewSheet
+                                ? ", added as a new sheet named \"" + (save.SheetName ?? "") + "\"" +
+                                    (File.Exists(path) ? " (the workbook must not have that sheet yet)." : ".")
+                                : File.Exists(path) ? ", replacing the file." : ", as a new file."));
+                    }
                 }
                 catch (Exception ex)
                 {
                     lines.Add("Could not prepare " + StepName(def, node) + ": " + ex.Message);
-                    continue;
                 }
-                var text = node.Settings as SaveTextSettings;
-                if (text != null)
-                {
-                    lines.Add("Writes " + path + RowsOf(cache, node.Id) + " as " + SaveTextWork.FormatLabel(text.Format) + ".");
-                    continue;
-                }
-                var save = node.Settings as SaveStepSettings;
-                lines.Add("Writes " + path + RowsOf(cache, node.Id) +
-                    (save != null && save.Mode == SaveStepMode.NewSheet
-                        ? ", added as a new sheet named \"" + (save.SheetName ?? "") + "\"" +
-                            (File.Exists(path) ? " (the workbook must not have that sheet yet)." : ".")
-                        : File.Exists(path) ? ", replacing the file." : ", as a new file."));
             }
             return lines;
         }
 
-        static string RowsOf(IDictionary<string, DataTable> cache, string nodeId)
+        static string RowsOf(DataTable table, bool textPlan)
         {
-            DataTable table;
-            if (cache == null || !cache.TryGetValue(nodeId, out table) || table == null)
-                return "";
             var rows = table.Rows.Count;
-            var column = ExcelFile.FindColumn(table, "Rows");
+            var column = textPlan ? ExcelFile.FindColumn(table, "Rows") : null;
             if (column != null && table.Rows.Count > 0)
             {
                 try
@@ -845,21 +847,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 if (!PipelineWork.IsSaveKind(node.Kind))
                     continue;
-                var save = node.Settings as SaveStepSettings;
-                if (save != null && save.Mode != SaveStepMode.NewFile)
-                    continue;
                 try
                 {
-                    if (node.Kind == PipelineStepKind.SavePdf)
-                    {
-                        DataTable plan;
-                        if (cache != null && cache.TryGetValue(node.Id, out plan))
-                            files.AddRange(PdfWork.Targets(plan, true));
-                        continue;
-                    }
-                    var path = PipelineWork.SaveTargetPath(node);
-                    if (File.Exists(path))
-                        files.Add(path);
+                    files.AddRange(PipelineWork.ReplacementPaths(node, cache));
                 }
                 catch (Exception)
                 {

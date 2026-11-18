@@ -58,6 +58,7 @@ namespace OfficeWorkAssistant.Features.FormatSheet
     {
         public bool StyleHeader { get; set; }
         public CellStyle Header { get; set; }
+        public bool RightToLeft { get; set; }
         public bool FreezeHeader { get; set; }
         public int FreezeColumns { get; set; }
         public bool AutoFilter { get; set; }
@@ -117,6 +118,8 @@ namespace OfficeWorkAssistant.Features.FormatSheet
             style.DefaultColumn = Apply(style.DefaultColumn, s.DefaultColumn, "Column defaults");
             if (s.DefaultColumnWidth > 0)
                 style.DefaultColumnWidth = s.DefaultColumnWidth;
+            if (s.RightToLeft)
+                style.RightToLeft = true;
             if (s.FreezeHeader)
                 style.FreezeRows = 1;
             if (s.FreezeColumns > 0)
@@ -155,6 +158,7 @@ namespace OfficeWorkAssistant.Features.FormatSheet
         {
             var parts = new List<string>();
             if (s.StyleHeader) parts.Add("header");
+            if (s.RightToLeft) parts.Add("right-to-left");
             if (s.FreezeHeader || s.FreezeColumns > 0) parts.Add("freeze");
             if (s.AutoFilter) parts.Add("filter");
             if (s.AutoFit) parts.Add("fit widths");

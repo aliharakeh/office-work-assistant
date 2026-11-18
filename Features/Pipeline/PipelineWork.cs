@@ -150,15 +150,24 @@ namespace OfficeWorkAssistant.Features.Pipeline
         public object Settings { get; set; }
     }
 
-    // The output of From feeds input Port ("In", "A", "B", or "In1", "In2", ... of Append) of To.
+        // The output of From feeds one input port of To.
     public sealed class PipelineLink
     {
         [XmlAttribute]
+        public string Id { get; set; }
+        [XmlAttribute]
         public string From { get; set; }
+        [XmlAttribute]
+        public string FromPort { get; set; }
         [XmlAttribute]
         public string To { get; set; }
         [XmlAttribute]
         public string Port { get; set; }
+
+        public PipelineLink()
+        {
+            Id = Guid.NewGuid().ToString("N");
+        }
     }
 
     public sealed class PipelineRunResult
@@ -177,7 +186,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
     }
 
     // Pure logic: graph, XML, running steps. No WPF.
-    public static class PipelineWork
+    public static partial class PipelineWork
     {
         public const string PortIn = "In";
         public const string PortA = "A";
@@ -187,38 +196,48 @@ namespace OfficeWorkAssistant.Features.Pipeline
         static readonly string[] OnePort = { PortIn };
         static readonly string[] TwoPorts = { PortA, PortB };
 
-        // The ports a kind starts with. Append grows: see InputPorts.
+        // The ports a kind starts with.
         public static string[] Ports(PipelineStepKind kind)
         {
             if (kind == PipelineStepKind.Load || kind == PipelineStepKind.ListFolder || kind == PipelineStepKind.MergeFolders)
                 return NoPorts;
             if (kind == PipelineStepKind.Compare || kind == PipelineStepKind.FillColumns || kind == PipelineStepKind.ArrangePdf)
                 return TwoPorts;
-            if (HasVariableInputs(kind))
+            if (CombinesInputs(kind))
                 return new[] { AppendPort(1) };
             return OnePort;
         }
 
-        // The ports a step on the canvas has now. Append has one per linked table plus a free one.
+        // Variable-input steps have one port per link plus a free one.
         public static string[] InputPorts(PipelineDefinition def, PipelineNode node)
         {
-            if (!HasVariableInputs(node.Kind))
-                return Ports(node.Kind);
-            var count = AppendLinks(def, node.Id).Count;
-            var ports = new string[count + 1];
-            for (var i = 0; i < ports.Length; i++)
-                ports[i] = AppendPort(i + 1);
-            return ports;
+            var roles = Ports(node.Kind);
+            if (roles.Length == 0)
+                return roles;
+            var ports = new List<string>(roles);
+            foreach (var role in roles)
+            {
+                var links = BatchLinks(def, node, role);
+                for (var i = 2; i <= links.Count + 1; i++)
+                    ports.Add(VariablePort(node.Kind, role, i));
+            }
+            return ports.ToArray();
         }
 
         public static bool HasVariableInputs(PipelineStepKind kind)
+        {
+            return Ports(kind).Length != 0;
+        }
+
+        static bool CombinesInputs(PipelineStepKind kind)
         {
             return kind == PipelineStepKind.Append || kind == PipelineStepKind.MergePdf;
         }
 
         public static bool IsOptionalInput(PipelineStepKind kind, string port)
         {
-            return kind == PipelineStepKind.ValueList || HasVariableInputs(kind) ||
+            return kind == PipelineStepKind.ValueList || CombinesInputs(kind) ||
+                (port != PortIn && port != PortA && port != PortB) ||
                 kind == PipelineStepKind.LoadPdf || (kind == PipelineStepKind.ArrangePdf && port == PortB);
         }
 
@@ -227,30 +246,21 @@ namespace OfficeWorkAssistant.Features.Pipeline
             return "In" + n.ToString(CultureInfo.InvariantCulture);
         }
 
-        // 1 for "In1", ...; 0 when the name is not an Append port.
+        // 1 for "In1", ...; 0 when the name is not a numbered input.
         public static int AppendPortNumber(string port)
         {
-            int n;
-            if (port == null || port.Length < 3 || !port.StartsWith("In", StringComparison.Ordinal) ||
-                !int.TryParse(port.Substring(2), NumberStyles.None, CultureInfo.InvariantCulture, out n) || n < 1)
-                return 0;
-            return n;
+            return NumberedPort(port, PortIn);
         }
 
-        // The links into an Append step, in port order.
-        public static List<PipelineLink> AppendLinks(PipelineDefinition def, string nodeId)
+        static int NumberedPort(string port, string role)
         {
-            var links = new List<PipelineLink>();
-            foreach (var link in def.Links)
-            {
-                if (link.To == nodeId && AppendPortNumber(link.Port) > 0)
-                    links.Add(link);
-            }
-            links.Sort((a, b) => AppendPortNumber(a.Port).CompareTo(AppendPortNumber(b.Port)));
-            return links;
+            int number;
+            return port != null && port.StartsWith(role, StringComparison.Ordinal) &&
+                int.TryParse(port.Substring(role.Length), NumberStyles.None, CultureInfo.InvariantCulture, out number) &&
+                number > 0 ? number : 0;
         }
 
-        // Numbers an Append step's links In1, In2, ... again with no gaps, keeping their order.
+        // Renumber variable inputs with no gaps, keeping their order.
         // True when a port changed.
         public static bool CompactPorts(PipelineDefinition def, string nodeId)
         {
@@ -258,14 +268,17 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (node == null || !HasVariableInputs(node.Kind))
                 return false;
             var changed = false;
-            var links = AppendLinks(def, nodeId);
-            for (var i = 0; i < links.Count; i++)
+            foreach (var role in Ports(node.Kind))
             {
-                var port = AppendPort(i + 1);
-                if (links[i].Port != port)
+                var links = BatchLinks(def, node, role);
+                for (var i = 0; i < links.Count; i++)
                 {
-                    links[i].Port = port;
-                    changed = true;
+                    var port = VariablePort(node.Kind, role, i + 1);
+                    if (links[i].Port != port)
+                    {
+                        links[i].Port = port;
+                        changed = true;
+                    }
                 }
             }
             return changed;
@@ -384,11 +397,22 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var merge = node.Settings as MergeFoldersSettings;
             if (merge != null)
                 return "Merge " + Count(MergeDuplicatesWork.CountReady(plan), "folder") + " in " + merge.Folder;
-            return FileOpsWork.Describe((FileActionSettings)node.Settings, FileOpsWork.CountReady(plan));
+            var count = 0;
+            if (plan != null)
+                foreach (var item in ResultItems(plan))
+                    count += FileOpsWork.CountReady(item.Table);
+            return FileOpsWork.Describe((FileActionSettings)node.Settings, count);
         }
 
         public static string PortLabel(PipelineStepKind kind, string port)
         {
+            if (Ports(kind) == TwoPorts)
+            {
+                int a = NumberedPort(port, PortA);
+                int b = NumberedPort(port, PortB);
+                if (a > 1 || b > 1)
+                    return PortLabel(kind, a > 1 ? PortA : PortB) + " " + Math.Max(a, b).ToString(CultureInfo.InvariantCulture);
+            }
             if (kind == PipelineStepKind.FillColumns)
                 return port == PortA ? "A (take values from)" : "B (fill into)";
             if (kind == PipelineStepKind.Compare)
@@ -403,6 +427,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 return "PDF input " + AppendPortNumber(port).ToString(CultureInfo.InvariantCulture);
             if (kind == PipelineStepKind.Append)
                 return "table " + AppendPortNumber(port).ToString(CultureInfo.InvariantCulture);
+            if (HasVariableInputs(kind) && port != PortIn)
+                return "input " + AppendPortNumber(port).ToString(CultureInfo.InvariantCulture);
             return "input";
         }
 
@@ -461,7 +487,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             return "n" + (max + 1).ToString(CultureInfo.InvariantCulture);
         }
 
-        // Returns the Append steps that lost an input; their ports are numbered again.
+        // Returns the variable-input steps that lost an input; their ports are numbered again.
         public static List<string> RemoveNode(PipelineDefinition def, string id)
         {
             var fed = new List<string>();
@@ -612,6 +638,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var ports = new HashSet<string>();
             def.Links.RemoveAll(l => l == null || !ids.Contains(l.From) || !ids.Contains(l.To) ||
                 !PortFits(Find(def, l.To).Kind, l.Port) || !ports.Add(l.To + "|" + l.Port));
+            var linkIds = new HashSet<string>();
+            foreach (var link in def.Links)
+                if (string.IsNullOrEmpty(link.Id) || link.Id.Contains("/") || !linkIds.Add(link.Id))
+                {
+                    link.Id = Guid.NewGuid().ToString("N");
+                    linkIds.Add(link.Id);
+                }
             foreach (var node in def.Nodes)
                 CompactPorts(def, node.Id);
             Order(def); // throws on a loop
@@ -620,9 +653,10 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         static bool PortFits(PipelineStepKind kind, string port)
         {
-            if (HasVariableInputs(kind))
-                return AppendPortNumber(port) > 0;
-            return Array.IndexOf(Ports(kind), port) >= 0;
+            foreach (var role in Ports(kind))
+                if (InputNumber(kind, port, role) > 0)
+                    return true;
+            return false;
         }
 
         static bool SettingsFit(PipelineStepKind kind, object settings)
@@ -823,7 +857,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         // writeFiles: once every step has worked, write the Save steps' files. Nothing is
         // written when a step fails. Otherwise Save steps just pass their input through.
         public static PipelineRunResult Run(PipelineDefinition def, IDictionary<string, DataTable> cache,
-            string targetId, bool writeFiles)
+            string targetId, bool writeFiles, ICollection<string> confirmedReplacements = null)
         {
             var result = new PipelineRunResult();
             List<PipelineNode> order;
@@ -838,6 +872,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
 
             var wanted = targetId == null ? null : Upstream(def, targetId);
+            var outputs = ResultLayout(def, order);
             var saves = new List<PipelineNode>();
             foreach (var node in order)
             {
@@ -849,7 +884,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     continue;
                 try
                 {
-                    cache[node.Id] = RunStep(def, node, cache);
+                    cache[node.Id] = RunStep(def, node, cache, outputs);
                 }
                 catch (Exception ex)
                 {
@@ -866,11 +901,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (!writeFiles)
                 return result;
 
-            var pdfTargets = PdfReplacements(saves, cache);
-            if (RunActions(def, order, wanted, cache, result) &&
+            var replacements = confirmedReplacements == null ? Replacements(saves, cache) :
+                new HashSet<string>(confirmedReplacements, StringComparer.OrdinalIgnoreCase);
+            if (CheckReplacements(saves, cache, replacements, result) &&
+                RunActions(def, order, wanted, cache, outputs, result) &&
                 CheckSaveTargets(saves, cache, PdfSources(order, wanted, cache), result) &&
-                CheckPdfReplacements(saves, cache, pdfTargets, result))
-                WriteSaves(saves, cache, result);
+                CheckReplacements(saves, cache, replacements, result))
+                WriteSaves(saves, cache, replacements, result);
             return result;
         }
 
@@ -878,7 +915,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         // again against the disk as it is now, and run the steps after them again so a Save of
         // their result reports what really happened. False when a step failed.
         static bool RunActions(PipelineDefinition def, List<PipelineNode> order, HashSet<string> wanted,
-            IDictionary<string, DataTable> cache, PipelineRunResult result)
+            IDictionary<string, DataTable> cache, IDictionary<string, string[]> outputs, PipelineRunResult result)
         {
             var stale = new HashSet<string>();
             foreach (var node in order)
@@ -892,11 +929,14 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 {
                     if (action)
                     {
-                        var done = node.Kind == PipelineStepKind.MergeFolders
-                            ? MergeDuplicatesWork.Apply((MergeFoldersSettings)node.Settings)
-                            : FileOpsWork.Apply(Input(def, node, PortIn, cache), (FileActionSettings)node.Settings);
+                        var done = RunStep(def, node, cache, outputs, true);
                         cache[node.Id] = done;
-                        result.Actions.Add(node.Title + ": " + FileOpsWork.Outcome(done));
+                        var items = ResultItems(done);
+                        var outcomes = new List<string>();
+                        foreach (var item in items)
+                            outcomes.Add((items.Count > 1 ? item.Name + " (" : "") + FileOpsWork.Outcome(item.Table) +
+                                (items.Count > 1 ? ")" : ""));
+                        result.Actions.Add(node.Title + ": " + string.Join(", ", outcomes.ToArray()));
                         foreach (var d in Downstream(def, node.Id))
                         {
                             if (d != node.Id)
@@ -904,7 +944,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                         }
                     }
                     else
-                        cache[node.Id] = RunStep(def, node, cache);
+                        cache[node.Id] = RunStep(def, node, cache, outputs);
                 }
                 catch (Exception ex)
                 {
@@ -925,38 +965,32 @@ namespace OfficeWorkAssistant.Features.Pipeline
             foreach (var node in order)
             {
                 if (node.Kind == PipelineStepKind.LoadPdf && (wanted == null || wanted.Contains(node.Id)))
-                    sources.UnionWith(PdfWork.Sources(cache[node.Id]));
+                    foreach (var item in ResultItems(cache[node.Id]))
+                        sources.UnionWith(PdfWork.Sources(item.Table));
             }
             return sources;
         }
 
-        static Dictionary<string, HashSet<string>> PdfReplacements(List<PipelineNode> saves, IDictionary<string, DataTable> cache)
+        static HashSet<string> Replacements(List<PipelineNode> saves, IDictionary<string, DataTable> cache)
         {
-            var replacements = new Dictionary<string, HashSet<string>>();
-            foreach (var save in saves)
-            {
-                if (save.Kind == PipelineStepKind.SavePdf)
-                    replacements[save.Id] = new HashSet<string>(PdfWork.Targets(cache[save.Id], true), StringComparer.OrdinalIgnoreCase);
-            }
-            return replacements;
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var node in saves)
+                paths.UnionWith(ReplacementPaths(node, cache));
+            return paths;
         }
 
-        static bool CheckPdfReplacements(List<PipelineNode> saves, IDictionary<string, DataTable> cache,
-            Dictionary<string, HashSet<string>> before, PipelineRunResult result)
+        static bool CheckReplacements(List<PipelineNode> saves, IDictionary<string, DataTable> cache,
+            HashSet<string> before, PipelineRunResult result)
         {
-            foreach (var save in saves)
-            {
-                if (save.Kind != PipelineStepKind.SavePdf)
-                    continue;
-                foreach (string path in PdfWork.Targets(cache[save.Id], true))
+            foreach (var node in saves)
+                foreach (string path in ReplacementPaths(node, cache))
                 {
-                    if (before[save.Id].Contains(path))
+                    if (before.Contains(path))
                         continue;
-                    result.FailedNodeId = save.Id;
-                    result.Error = "A PDF output now needs a new replacement confirmation. Run again to review: " + path;
+                    result.FailedNodeId = node.Id;
+                    result.Error = "An output now needs a new replacement confirmation. Run again to review: " + path;
                     return false;
                 }
-            }
             return true;
         }
 
@@ -964,29 +998,39 @@ namespace OfficeWorkAssistant.Features.Pipeline
         static bool CheckSaveTargets(List<PipelineNode> saves, IDictionary<string, DataTable> cache,
             HashSet<string> pdfSources, PipelineRunResult result)
         {
-            var created = new Dictionary<string, PipelineNode>(StringComparer.OrdinalIgnoreCase);
+            var targets = new Dictionary<string, List<PipelineNode>>(StringComparer.OrdinalIgnoreCase);
             foreach (var node in saves)
             {
                 try
                 {
+                    var local = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (string path in SaveTargetPaths(node, cache))
                     {
+                        if (!local.Add(path))
+                            throw new InvalidOperationException("More than one result writes " + path + ".");
+                        if (Directory.Exists(path))
+                            throw new InvalidOperationException("A folder occupies the output path: " + path);
                         if (pdfSources.Contains(path))
                             throw new InvalidOperationException("Choose a new output path to keep the source PDF: " + path);
-                        PipelineNode other;
-                        if (!created.TryGetValue(path, out other))
+                        List<PipelineNode> others;
+                        if (!targets.TryGetValue(path, out others))
                         {
-                            created[path] = node;
-                            continue;
+                            others = new List<PipelineNode>();
+                            targets.Add(path, others);
                         }
                         var currentExcel = node.Settings as SaveStepSettings;
-                        var otherExcel = other.Settings as SaveStepSettings;
-                        if (currentExcel == null || otherExcel == null ||
-                            (currentExcel.Mode == SaveStepMode.NewFile && otherExcel.Mode == SaveStepMode.NewFile))
-                            throw new InvalidOperationException("This step and '" + other.Title + "' both write " + path +
-                                ". Choose different output files (Excel steps may instead add new sheets).");
-                        if (currentExcel.Mode == SaveStepMode.NewFile)
-                            created[path] = node;
+                        foreach (var other in others)
+                        {
+                            var otherExcel = other.Settings as SaveStepSettings;
+                            if (currentExcel == null || otherExcel == null ||
+                                (currentExcel.Mode == SaveStepMode.NewFile && otherExcel.Mode == SaveStepMode.NewFile))
+                                throw new InvalidOperationException("This step and '" + other.Title + "' both write " + path +
+                                    ". Choose different output files (Excel steps may instead add new sheets).");
+                            if (string.Equals(currentExcel.SheetName.Trim(), otherExcel.SheetName.Trim(), StringComparison.OrdinalIgnoreCase))
+                                throw new InvalidOperationException("This step and '" + other.Title + "' both write sheet '" +
+                                    currentExcel.SheetName.Trim() + "' in " + path + ".");
+                        }
+                        others.Add(node);
                     }
                 }
                 catch (Exception ex)
@@ -996,14 +1040,68 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     return false;
                 }
             }
+            foreach (var target in targets)
+            {
+                var sheetSteps = target.Value.FindAll(node => IsNewSheet(node));
+                if (sheetSteps.Count != target.Value.Count || !File.Exists(target.Key))
+                    continue;
+                try
+                {
+                    var existing = new HashSet<string>(ExcelFile.Load(target.Key, null, 1).Sheets, StringComparer.OrdinalIgnoreCase);
+                    foreach (var node in sheetSteps)
+                    {
+                        var name = ((SaveStepSettings)node.Settings).SheetName.Trim();
+                        if (!existing.Contains(name))
+                            continue;
+                        result.FailedNodeId = node.Id;
+                        result.Error = "The workbook already has a sheet named '" + name + "': " + target.Key;
+                        return false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    result.FailedNodeId = sheetSteps[0].Id;
+                    result.Error = ex.Message;
+                    return false;
+                }
+            }
             return true;
         }
 
-        static IEnumerable<string> SaveTargetPaths(PipelineNode node, IDictionary<string, DataTable> cache)
+        static bool IsNewSheet(PipelineNode node)
         {
-            if (node.Kind == PipelineStepKind.SavePdf)
-                return PdfWork.Targets(cache[node.Id], false);
-            return new[] { SaveTargetPath(node) };
+            var excel = node.Settings as SaveStepSettings;
+            return excel != null && excel.Mode == SaveStepMode.NewSheet;
+        }
+
+        public static IEnumerable<string> SaveTargetPaths(PipelineNode node, IDictionary<string, DataTable> cache)
+        {
+            DataTable table;
+            if (cache == null || !cache.TryGetValue(node.Id, out table))
+            {
+                if (node.Kind != PipelineStepKind.SavePdf)
+                    yield return SaveTargetPath(node);
+                yield break;
+            }
+            foreach (var item in ResultItems(table))
+            {
+                if (node.Kind == PipelineStepKind.SavePdf)
+                {
+                    foreach (var path in PdfWork.Targets(item.Table, false))
+                        yield return path;
+                }
+                else
+                    yield return item.TargetPath ?? SaveTargetPath(node);
+            }
+        }
+
+        public static IEnumerable<string> ReplacementPaths(PipelineNode node, IDictionary<string, DataTable> cache)
+        {
+            if (IsNewSheet(node))
+                yield break;
+            foreach (var path in SaveTargetPaths(node, cache))
+                if (File.Exists(path))
+                    yield return path;
         }
 
         public static string SaveTargetPath(PipelineNode node)
@@ -1022,19 +1120,18 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         // New files first, then new sheets, so a sheet added to a workbook that another
         // step creates in the same run is not wiped out when that workbook is written.
-        static void WriteSaves(List<PipelineNode> saves, IDictionary<string, DataTable> cache, PipelineRunResult result)
+        static void WriteSaves(List<PipelineNode> saves, IDictionary<string, DataTable> cache,
+            HashSet<string> replacements, PipelineRunResult result)
         {
             var ordered = new List<PipelineNode>();
             foreach (var node in saves)
             {
-                var excel = node.Settings as SaveStepSettings;
-                if (excel == null || excel.Mode == SaveStepMode.NewFile)
+                if (!IsNewSheet(node))
                     ordered.Add(node);
             }
             foreach (var node in saves)
             {
-                var excel = node.Settings as SaveStepSettings;
-                if (excel != null && excel.Mode == SaveStepMode.NewSheet)
+                if (IsNewSheet(node))
                     ordered.Add(node);
             }
 
@@ -1042,22 +1139,38 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 try
                 {
+                    var items = ResultItems(cache[node.Id]);
+                    var written = new List<PipelineItem>();
                     if (node.Kind == PipelineStepKind.SavePdf)
                     {
-                        cache[node.Id] = PdfWork.Write(cache[node.Id], result.Written);
+                        var plans = new List<DataTable>();
+                        foreach (var item in items)
+                            plans.Add(item.Table);
+                        var outputs = PdfWork.WritePlans(plans, result.Written, replacements);
+                        for (int i = 0; i < items.Count; i++)
+                            written.Add(new PipelineItem(outputs[i], items[i].Name, items[i].TargetPath));
+                        cache[node.Id] = Pack(written);
                         continue;
                     }
-                    if (node.Kind == PipelineStepKind.SaveText)
+                    foreach (var item in items)
                     {
-                        cache[node.Id] = SaveTextWork.Write(cache[node.Id]);
-                        result.Written.Add(SaveTargetPath(node));
-                        continue;
+                        DataTable table = item.Table;
+                        if (node.Kind == PipelineStepKind.SaveText)
+                        {
+                            table = SaveTextWork.Write(table, replacements.Contains(item.TargetPath));
+                            result.Written.Add(item.TargetPath);
+                        }
+                        else
+                        {
+                            var settings = (SaveStepSettings)node.Settings;
+                            bool append = IsNewSheet(node) && File.Exists(item.TargetPath);
+                            ExcelFile.SavePipelineOutput(table, item.TargetPath, settings.SheetName, append,
+                                replacements.Contains(item.TargetPath));
+                            result.Written.Add(item.TargetPath + " (sheet " + settings.SheetName.Trim() + ")");
+                        }
+                        written.Add(new PipelineItem(table, item.Name, item.TargetPath));
                     }
-                    var s = (SaveStepSettings)node.Settings;
-                    // A new sheet needs a workbook to go into; create it the first time.
-                    bool append = s.Mode == SaveStepMode.NewSheet && File.Exists(s.Path);
-                    ExcelFile.Save(cache[node.Id], s.Path, s.SheetName, append);
-                    result.Written.Add(s.Path + " (sheet " + s.SheetName.Trim() + ")");
+                    cache[node.Id] = Pack(written);
                 }
                 catch (Exception ex)
                 {
@@ -1068,25 +1181,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
         }
 
-        // A step's result. Only style steps and Save keep a style from Highlight / Format sheet:
-        // any other step may move or drop rows, so the old style would land on the wrong cells.
-        static DataTable RunStep(PipelineDefinition def, PipelineNode node, IDictionary<string, DataTable> cache)
+        // Execute one item using the original feature logic.
+        static DataTable RunSingle(PipelineNode node, DataTable first, DataTable second)
         {
-            var table = RunNode(def, node, cache);
-            // Save passes its input through; that table belongs to the step before it.
-            if (!IsStyleKind(node.Kind) && node.Kind != PipelineStepKind.Save)
-                ExcelFile.ClearStyle(table);
-            if (node.Kind != PipelineStepKind.Save && node.Kind != PipelineStepKind.LoadPdf &&
-                node.Kind != PipelineStepKind.ArrangePdf && node.Kind != PipelineStepKind.MergePdf && node.Kind != PipelineStepKind.SplitPdf)
-                PdfWork.ClearDocuments(table);
-            return table;
-        }
-
-        static DataTable RunNode(PipelineDefinition def, PipelineNode node, IDictionary<string, DataTable> cache)
-        {
-            if (node.Settings == null)
-                throw new InvalidOperationException("Set up this step first: double-click it.");
-
             switch (node.Kind)
             {
                 case PipelineStepKind.Load:
@@ -1098,7 +1195,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 }
                 case PipelineStepKind.LoadPdf:
                 {
-                    var input = OptionalInput(def, node, PortIn, cache);
+                    var input = first;
                     var settings = (LoadPdfSettings)node.Settings;
                     if (input != null)
                     {
@@ -1109,117 +1206,81 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     return PdfWork.Load(input, settings);
                 }
                 case PipelineStepKind.ArrangePdf:
-                    return PdfWork.Arrange(Input(def, node, PortA, cache), OptionalInput(def, node, PortB, cache),
+                    return PdfWork.Arrange(first, second,
                         (ArrangePdfSettings)node.Settings);
-                case PipelineStepKind.MergePdf:
-                {
-                    var tables = new List<DataTable>();
-                    foreach (var link in AppendLinks(def, node.Id))
-                        tables.Add(Input(def, node, link.Port, cache));
-                    return PdfWork.Merge(tables, (MergePdfSettings)node.Settings);
-                }
                 case PipelineStepKind.SplitPdf:
-                    return PdfWork.Split(Input(def, node, PortIn, cache), (SplitPdfSettings)node.Settings);
-                case PipelineStepKind.SavePdf:
-                    return PdfWork.PlanSave(Input(def, node, PortIn, cache), (SavePdfSettings)node.Settings);
-                case PipelineStepKind.SaveText:
-                {
-                    var input = Input(def, node, PortIn, cache);
-                    return SaveTextWork.Run(input, SaveTextToLetters((SaveTextSettings)node.Settings, input, true));
-                }
+                    return PdfWork.Split(first, (SplitPdfSettings)node.Settings);
                 case PipelineStepKind.FilterSort:
                 {
-                    var input = Input(def, node, PortIn, cache);
+                    var input = first;
                     return FilterSortWork.Run(input, FilterSortToLetters((FilterSortSettings)node.Settings, input, true));
                 }
                 case PipelineStepKind.Templates:
                 {
-                    var input = Input(def, node, PortIn, cache);
+                    var input = first;
                     return TemplatesWork.ApplyTemplate(input, TemplateToLetters((TemplateDefinition)node.Settings, input, true));
                 }
                 case PipelineStepKind.Compare:
-                    return ExcelProcessingWork.Run(Input(def, node, PortA, cache), Input(def, node, PortB, cache),
+                    return ExcelProcessingWork.Run(first, second,
                         (ExcelProcessingSettings)node.Settings);
                 case PipelineStepKind.FillColumns:
-                    return FillColumnsWork.Run(Input(def, node, PortA, cache), Input(def, node, PortB, cache),
+                    return FillColumnsWork.Run(first, second,
                         (FillColumnsSettings)node.Settings);
                 case PipelineStepKind.ValueList:
                 {
                     var s = (ValueListSettings)node.Settings;
-                    return FileOpsWork.BuildList(s.Source == ValueListSource.Stored ? null : Input(def, node, PortIn, cache), s);
+                    return FileOpsWork.BuildList(s.Source == ValueListSource.Stored ? null : first, s);
                 }
                 case PipelineStepKind.ListFolder:
                     return FileOpsWork.ListFolder((FolderScanSettings)node.Settings);
                 case PipelineStepKind.FindFiles:
-                    return FileOpsWork.FindFiles(Input(def, node, PortIn, cache), (FindFilesSettings)node.Settings);
-                case PipelineStepKind.FileAction:
-                    // Only the plan. RunActions does it once every step has worked.
-                    return FileOpsWork.PlanActions(Input(def, node, PortIn, cache), (FileActionSettings)node.Settings);
+                    return FileOpsWork.FindFiles(first, (FindFilesSettings)node.Settings);
                 case PipelineStepKind.MergeFolders:
                     return MergeDuplicatesWork.Plan((MergeFoldersSettings)node.Settings);
                 case PipelineStepKind.CleanText:
                 {
-                    var input = Input(def, node, PortIn, cache);
+                    var input = first;
                     return CleanTextWork.Run(input, CleanTextToLetters((CleanTextSettings)node.Settings, input, true));
                 }
                 case PipelineStepKind.SplitColumn:
                 {
-                    var input = Input(def, node, PortIn, cache);
+                    var input = first;
                     return SplitCombineWork.Split(input, SplitToLetters((SplitColumnSettings)node.Settings, input, true));
                 }
                 case PipelineStepKind.CombineColumns:
                 {
-                    var input = Input(def, node, PortIn, cache);
+                    var input = first;
                     return SplitCombineWork.Combine(input, CombineToLetters((CombineColumnsSettings)node.Settings, input, true));
                 }
                 case PipelineStepKind.RemoveDuplicates:
                 {
-                    var input = Input(def, node, PortIn, cache);
+                    var input = first;
                     return RemoveDuplicatesWork.Run(input, RemoveDuplicatesToLetters((RemoveDuplicatesSettings)node.Settings, input, true));
                 }
                 case PipelineStepKind.EditHeaders:
                 {
-                    var input = Input(def, node, PortIn, cache);
+                    var input = first;
                     return EditHeadersWork.Run(input, HeadersToLetters((EditHeadersSettings)node.Settings, input, true));
                 }
                 case PipelineStepKind.ArrangeColumns:
                 {
-                    var input = Input(def, node, PortIn, cache);
+                    var input = first;
                     return ArrangeColumnsWork.Run(input, ArrangeToLetters((ArrangeColumnsSettings)node.Settings, input, true));
-                }
-                case PipelineStepKind.Append:
-                {
-                    var links = AppendLinks(def, node.Id);
-                    if (links.Count < 2)
-                        throw new InvalidOperationException("Link at least two steps to this step's input dots.");
-                    var tables = new List<DataTable>();
-                    var names = new List<string>();
-                    foreach (var link in links)
-                    {
-                        tables.Add(Input(def, node, link.Port, cache));
-                        names.Add(Find(def, link.From).Title);
-                    }
-                    return AppendWork.Run(tables, names, (AppendSettings)node.Settings);
                 }
                 case PipelineStepKind.Highlight:
                 {
-                    var input = Input(def, node, PortIn, cache);
+                    var input = first;
                     return HighlightWork.Run(input, HighlightToLetters((HighlightSettings)node.Settings, input, true));
                 }
                 case PipelineStepKind.FormatSheet:
                 {
-                    var input = Input(def, node, PortIn, cache);
+                    var input = first;
                     return FormatSheetWork.Run(input, FormatSheetToLetters((FormatSheetSettings)node.Settings, input, true));
                 }
+                case PipelineStepKind.Save:
+                    return first;
                 default:
-                {
-                    // Files are written after every step worked; see WriteSaves.
-                    var input = Input(def, node, PortIn, cache);
-                    string error = CheckSave((SaveStepSettings)node.Settings);
-                    if (error != null)
-                        throw new InvalidOperationException(error);
-                    return input;
-                }
+                    throw new InvalidOperationException("This step kind cannot process an individual input: " + node.Kind);
             }
         }
 
@@ -1231,22 +1292,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (!string.Equals(Path.GetExtension(s.Path), ".xlsx", StringComparison.OrdinalIgnoreCase))
                 return "Save to a .xlsx file.";
             return ExcelFile.CheckSheetName(s.SheetName);
-        }
-
-        static DataTable OptionalInput(PipelineDefinition def, PipelineNode node, string port, IDictionary<string, DataTable> cache)
-        {
-            return InputLink(def, node.Id, port) == null ? null : Input(def, node, port, cache);
-        }
-
-        static DataTable Input(PipelineDefinition def, PipelineNode node, string port, IDictionary<string, DataTable> cache)
-        {
-            var link = InputLink(def, node.Id, port);
-            if (link == null)
-                throw new InvalidOperationException("Connect " + PortLabel(node.Kind, port) + " first.");
-            DataTable table;
-            if (!cache.TryGetValue(link.From, out table))
-                throw new InvalidOperationException("The step before this one has no result yet.");
-            return table;
         }
 
         // ---------- column names <-> letters ----------

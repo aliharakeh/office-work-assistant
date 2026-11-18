@@ -415,32 +415,50 @@ namespace OfficeWorkAssistant.Features.Pdf
         // Generate every part before publishing any part. Each replacement is atomic.
         public static DataTable Write(DataTable plan, IList<string> written)
         {
-            var outputs = (List<Output>)plan.ExtendedProperties[OutputsKey];
+            return WritePlans(new[] { plan }, written, null)[0];
+        }
+
+        internal static IList<DataTable> WritePlans(IList<DataTable> plans, IList<string> written,
+            ICollection<string> replacements)
+        {
             var staged = new List<string>();
             var opened = new Dictionary<Source, PdfDocument>();
+            var results = new List<DataTable>();
             try
             {
-                foreach (var output in outputs)
+                foreach (var plan in plans)
                 {
-                    string temp = Path.Combine(Path.GetDirectoryName(output.Path), "." + Guid.NewGuid().ToString("N") + ".tmp");
-                    using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    var outputs = (List<Output>)plan.ExtendedProperties[OutputsKey];
+                    foreach (var output in outputs)
                     {
-                        staged.Add(temp);
-                        WritePages(output.Pages, stream, opened);
+                        string temp = Path.Combine(Path.GetDirectoryName(output.Path), "." + Guid.NewGuid().ToString("N") + ".tmp");
+                        using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        {
+                            staged.Add(temp);
+                            WritePages(output.Pages, stream, opened);
+                        }
                     }
                 }
-                var result = plan.Copy();
-                for (int i = 0; i < outputs.Count; i++)
+                int stagedIndex = 0;
+                foreach (var plan in plans)
                 {
-                    var output = outputs[i];
-                    if (output.Replace && File.Exists(output.Path))
-                        File.Replace(staged[i], output.Path, null);
-                    else
-                        File.Move(staged[i], output.Path);
-                    written.Add(output.Path);
-                    result.Rows[i]["Status"] = "Saved";
+                    var result = plan.Copy();
+                    var outputs = (List<Output>)plan.ExtendedProperties[OutputsKey];
+                    for (int i = 0; i < outputs.Count; i++)
+                    {
+                        var output = outputs[i];
+                        bool replace = replacements == null ? output.Replace : replacements.Contains(output.Path);
+                        var temp = staged[stagedIndex++];
+                        if (replace && File.Exists(output.Path))
+                            File.Replace(temp, output.Path, null);
+                        else
+                            File.Move(temp, output.Path);
+                        written.Add(output.Path);
+                        result.Rows[i]["Status"] = "Saved";
+                    }
+                    results.Add(result);
                 }
-                return result;
+                return results;
             }
             finally
             {

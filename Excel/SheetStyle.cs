@@ -233,6 +233,7 @@ namespace OfficeWorkAssistant.Excel
         // Every second data row (the 2nd, 4th, ...) gets this.
         public CellStyle Band { get; set; }
         public bool AutoFit { get; set; }
+        public bool RightToLeft { get; set; }
         public int FreezeRows { get; set; }
         public int FreezeColumns { get; set; }
         public bool AutoFilter { get; set; }

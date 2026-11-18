@@ -32,6 +32,7 @@ namespace OfficeWorkAssistant.Features.FormatSheet
             var s = settings ?? new FormatSheetSettings();
             HeaderBox.IsChecked = s.StyleHeader;
             HeaderPicker.Value = s.Header;
+            RtlBox.IsChecked = s.RightToLeft;
             FreezeBox.IsChecked = s.FreezeHeader;
             FreezeColsBox.Text = s.FreezeColumns.ToString(CultureInfo.InvariantCulture);
             FilterBox.IsChecked = s.AutoFilter;
@@ -130,6 +131,7 @@ namespace OfficeWorkAssistant.Features.FormatSheet
             {
                 StyleHeader = HeaderBox.IsChecked == true,
                 Header = HeaderPicker.Value,
+                RightToLeft = RtlBox.IsChecked == true,
                 FreezeHeader = FreezeBox.IsChecked == true,
                 FreezeColumns = freeze,
                 AutoFilter = FilterBox.IsChecked == true,

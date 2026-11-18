@@ -141,6 +141,9 @@
                         <DockPanel>
                             <TextBlock x:Name="InfoOut" DockPanel.Dock="Top" Margin="0,0,0,6" Foreground="#777" FontSize="11"
                                        Text="Select a step and click Run preview." />
+                            <ComboBox x:Name="OutResult" DockPanel.Dock="Top" Margin="0,0,0,6" Visibility="Collapsed"
+                                      ToolTip="Choose a result to preview" AutomationProperties.Name="Result to preview"
+                                      SelectionChanged="OutResult_SelectionChanged" />
                             <DataGrid x:Name="GridOut" AutoGenerateColumns="True" IsReadOnly="True" Background="White"
                                       BorderBrush="#DDE3E8" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEF1F4"
                                       CanUserAddRows="False" HeadersVisibility="Column" />

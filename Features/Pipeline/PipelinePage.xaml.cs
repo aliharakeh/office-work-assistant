@@ -9,7 +9,6 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using Microsoft.Win32;
 using OfficeWorkAssistant.Excel;
-using OfficeWorkAssistant.Features.Pdf;
 using OfficeWorkAssistant.Features.Append;
 using OfficeWorkAssistant.Features.ArrangeColumns;
 using OfficeWorkAssistant.Features.CleanText;
@@ -51,7 +50,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
         PipelineNodeView _dragNode;
         Point _dragOffset;
         bool _dragMoved;
-        string _linkFrom;
+        PipelinePort _linkFrom;
+        Dictionary<string, string[]> _outputLayout;
         Path _tempWire;
 
         // Palette item being pressed: a click adds the step, a drag places it on the canvas.
@@ -450,8 +450,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             // Start clean so every Load step reads its file again.
             _cache.Clear();
 
-            bool hasPdfSave = saves.Exists(node => node.Kind == PipelineStepKind.SavePdf);
-            if ((hasPdfSave || actions.Count > 0) && !RunPreview(null))
+            if (!RunPreview(null))
                 return;
 
             var warnings = new List<string>();
@@ -460,17 +459,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 try
                 {
-                    var excel = node.Settings as SaveStepSettings;
-                    if (excel != null && excel.Mode != SaveStepMode.NewFile)
-                        continue;
-                    if (node.Kind == PipelineStepKind.SavePdf)
-                    {
-                        replaced.AddRange(PdfWork.Targets(_cache[node.Id], true));
-                        continue;
-                    }
-                    string path = PipelineWork.SaveTargetPath(node);
-                    if (System.IO.File.Exists(path))
-                        replaced.Add(path);
+                    replaced.AddRange(PipelineWork.ReplacementPaths(node, _cache));
                 }
                 catch (Exception ex)
                 {
@@ -496,7 +485,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     MessageBoxButton.YesNo, actions.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
-            var result = Execute(null, true, true);
+            var result = Execute(null, true, true, replaced);
             if (result.Error != null)
             {
                 string message = result.Error;
@@ -538,12 +527,18 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 y = BoardScroll.VerticalOffset + 30 + n * 24;
             }
             var node = PipelineWork.AddNode(_def, kind, x, y);
-            AddView(node);
 
-            // Building a chain: the new step reads from the selected one.
+            // Building a chain connects each result to the same input role on the new step.
             var ports = PipelineWork.Ports(kind);
             if (from != null && ports.Length > 0 && kind != PipelineStepKind.LoadPdf)
-                Connect(from.Id, node.Id, ports[0]);
+            {
+                var outputs = PipelineWork.OutputPorts(from, _outputLayout);
+                for (int i = 0; i < outputs.Length; i++)
+                    _def.Links.Add(new PipelineLink { From = from.Id, FromPort = outputs[i], To = node.Id,
+                        Port = PipelineWork.VariablePort(kind, ports[0], i + 1) });
+            }
+            RefreshPortViews();
+            RedrawWires();
 
             MarkDirty();
             GrowBoard();
@@ -587,6 +582,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             _selected = null;
             _selectedLink = null;
             Board.Children.Clear();
+            _outputLayout = PipelineWork.ResultLayout(_def);
             foreach (var node in _def.Nodes)
                 AddView(node);
             RedrawWires();
@@ -605,25 +601,37 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         void AddView(PipelineNode node)
         {
-            var view = new PipelineNodeView(node, PipelineWork.InputPorts(_def, node));
+            var view = new PipelineNodeView(node, PipelineWork.InputPorts(_def, node), PipelineWork.OutputPorts(node, _outputLayout));
             view.Box.MouseLeftButtonDown += Node_MouseDown;
-            view.Output.MouseLeftButtonDown += Output_MouseDown;
+            foreach (var output in view.Outputs.Values)
+                output.MouseLeftButtonDown += Output_MouseDown;
             view.Box.Tag = node.Id;
             _views[node.Id] = view;
             Board.Children.Add(view.Root);
         }
 
-        // Variable input ports follow their links.
-        void RebuildView(string id)
+        bool RefreshPortViews()
         {
-            PipelineNodeView old;
-            if (!_views.TryGetValue(id, out old) || !PipelineWork.HasVariableInputs(old.Node.Kind))
-                return;
-            Board.Children.Remove(old.Root);
-            AddView(old.Node);
-            var view = _views[id];
-            view.Selected = _selected == id;
-            view.SetState(_cache.ContainsKey(id) ? PipelineNodeState.Ok : PipelineNodeState.Idle, null);
+            _outputLayout = PipelineWork.ResultLayout(_def);
+            bool changed = false;
+            foreach (var node in _def.Nodes)
+            {
+                PipelineNodeView old;
+                if (_views.TryGetValue(node.Id, out old))
+                {
+                    if (old.HasPorts(PipelineWork.InputPorts(_def, node), PipelineWork.OutputPorts(node, _outputLayout)))
+                        continue;
+                    Board.Children.Remove(old.Root);
+                }
+                AddView(node);
+                var view = _views[node.Id];
+                view.Selected = _selected == node.Id;
+                view.SetState(_cache.ContainsKey(node.Id) ? PipelineNodeState.Ok : PipelineNodeState.Idle, null);
+                changed = true;
+            }
+            if (changed)
+                GrowBoard();
+            return changed;
         }
 
         void Node_MouseDown(object sender, MouseButtonEventArgs e)
@@ -658,7 +666,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         {
             var port = (PipelinePort)((FrameworkElement)sender).Tag;
             e.Handled = true;
-            _linkFrom = port.NodeId;
+            _linkFrom = port;
             _tempWire = new Path
             {
                 Stroke = WireSelectedBrush,
@@ -692,7 +700,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
             else if (_tempWire != null)
             {
-                _tempWire.Data = Bezier(_views[_linkFrom].OutputPoint(), p);
+                _tempWire.Data = Bezier(_views[_linkFrom.NodeId].OutputPoint(_linkFrom.Port), p);
             }
         }
 
@@ -724,7 +732,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 SetStatus("Drop the link on a step's left dot.");
                 return;
             }
-            Connect(from, target.NodeId, target.Port);
+            Connect(from.NodeId, target.NodeId, target.Port, from.Port);
         }
 
         PipelinePort PortAt(Point p)
@@ -732,7 +740,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var hit = VisualTreeHelper.HitTest(Board, p);
             var element = hit != null ? hit.VisualHit as FrameworkElement : null;
             var port = element != null ? element.Tag as PipelinePort : null;
-            if (port != null && port.Port != PipelinePort.Out)
+            if (port != null && !port.IsOutput)
                 return port;
             // Dropped on a step's box: use its first free input (or its only one).
             var nodeId = element != null ? FindNodeId(element) : null;
@@ -764,7 +772,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             return null;
         }
 
-        void Connect(string from, string to, string port)
+        void Connect(string from, string to, string port, string fromPort)
         {
             if (from == to)
             {
@@ -776,20 +784,24 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 SetStatus("That link would make a loop, so it was not added.");
                 return;
             }
-            var old = PipelineWork.InputLink(_def, to, port);
-            if (old != null)
+            var link = PipelineWork.InputLink(_def, to, port);
+            if (link != null && link.From == from && link.FromPort == fromPort)
+                return;
+            if (link == null)
             {
-                if (old.From == from)
-                    return;
-                _def.Links.Remove(old);
+                link = new PipelineLink { To = to, Port = port };
+                _def.Links.Add(link);
             }
-            _def.Links.Add(new PipelineLink { From = from, To = to, Port = port });
+            link.From = from;
+            link.FromPort = fromPort;
+            var affected = PipelineWork.Downstream(_def, to);
             Invalidate(to);
             MarkDirty();
-            RebuildView(to);
+            PipelineWork.RemoveDisconnectedOutputs(_def);
+            RefreshPortViews();
             RedrawWires();
             // The editors of the step and of what follows it were built for the old input.
-            RebuildSidebar(new[] { to });
+            RebuildSidebar(affected);
             ShowSelection(false);
             var node = PipelineWork.Find(_def, to);
             SetStatus("Linked " + PipelineWork.Find(_def, from).Title + " to " + node.Title +
@@ -798,6 +810,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         void RedrawWires()
         {
+            if (_selectedLink != null && !_def.Links.Contains(_selectedLink))
+                _selectedLink = null;
             foreach (var path in _wires.Values)
                 Board.Children.Remove(path);
             _wires.Clear();
@@ -825,7 +839,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 PipelineNodeView to;
                 if (!_views.TryGetValue(pair.Key.From, out from) || !_views.TryGetValue(pair.Key.To, out to))
                     continue;
-                pair.Value.Data = Bezier(from.OutputPoint(), to.InputPoint(pair.Key.Port));
+                var target = to.InputPoint(pair.Key.Port);
+                if (string.IsNullOrEmpty(pair.Key.FromPort) && from.Outputs.Count > 1)
+                {
+                    var wires = new GeometryGroup();
+                    foreach (var port in from.Outputs.Keys)
+                        wires.Children.Add(Bezier(from.OutputPoint(port), target));
+                    pair.Value.Data = wires;
+                }
+                else
+                    pair.Value.Data = Bezier(from.OutputPoint(pair.Key.FromPort), target);
                 pair.Value.Stroke = pair.Key == _selectedLink ? WireSelectedBrush : WireBrush;
             }
         }
@@ -847,7 +870,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             foreach (var node in _def.Nodes)
             {
                 w = Math.Max(w, node.X + PipelineNodeView.Width + 400);
-                h = Math.Max(h, node.Y + PipelineNodeView.Height + 400);
+                h = Math.Max(h, node.Y + _views[node.Id].BoxHeight + 400);
             }
             Board.Width = w;
             Board.Height = h;
@@ -889,32 +912,31 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         void DeleteSelected()
         {
-            string[] changed;
+            HashSet<string> changed;
             if (_selectedLink != null)
             {
                 var to = _selectedLink.To;
+                changed = PipelineWork.Downstream(_def, to);
                 _def.Links.Remove(_selectedLink);
                 Invalidate(to);
                 _selectedLink = null;
-                PipelineWork.CompactPorts(_def, to);
-                RebuildView(to);
-                changed = new[] { to };
             }
             else if (_selected != null)
             {
-                foreach (var id in PipelineWork.Downstream(_def, _selected))
+                changed = PipelineWork.Downstream(_def, _selected);
+                foreach (var id in changed)
                     Forget(id);
                 Board.Children.Remove(_views[_selected].Root);
                 _views.Remove(_selected);
-                var fed = PipelineWork.RemoveNode(_def, _selected);
+                PipelineWork.RemoveNode(_def, _selected);
+                changed.Remove(_selected);
                 _selected = null;
-                foreach (var id in fed)
-                    RebuildView(id);
-                changed = new List<string>(fed).ToArray();
             }
             else
                 return;
             MarkDirty();
+            PipelineWork.RemoveDisconnectedOutputs(_def);
+            RefreshPortViews();
             RedrawWires();
             UpdateEmptyHint();
             RebuildSidebar(changed);
@@ -940,13 +962,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         // selectFailed: select the step that failed and redraw the side panel. False while the side panel is
         // itself being built, which must not select another step or build itself again.
-        PipelineRunResult Execute(string targetId, bool writeFiles, bool selectFailed)
+        PipelineRunResult Execute(string targetId, bool writeFiles, bool selectFailed, ICollection<string> confirmedReplacements = null)
         {
             PipelineRunResult result;
             Mouse.OverrideCursor = Cursors.Wait;
             try
             {
-                result = PipelineWork.Run(_def, _cache, targetId, writeFiles);
+                result = PipelineWork.Run(_def, _cache, targetId, writeFiles, confirmedReplacements);
             }
             finally
             {
