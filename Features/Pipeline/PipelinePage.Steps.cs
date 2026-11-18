@@ -10,6 +10,7 @@ using Microsoft.Win32;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Features.Append;
 using OfficeWorkAssistant.Features.ArrangeColumns;
+using OfficeWorkAssistant.Features.EditHeaders;
 using OfficeWorkAssistant.Features.CleanText;
 using OfficeWorkAssistant.Features.ExcelProcessing;
 using OfficeWorkAssistant.Features.FileOps;
@@ -18,9 +19,8 @@ using OfficeWorkAssistant.Features.FillColumns;
 using OfficeWorkAssistant.Features.FormatSheet;
 using OfficeWorkAssistant.Features.Highlight;
 using OfficeWorkAssistant.Features.MergeDuplicates;
-using OfficeWorkAssistant.Features.LoadImage;
 using OfficeWorkAssistant.Features.SaveText;
-using OfficeWorkAssistant.Features.Ocr;
+using OfficeWorkAssistant.Features.Pdf;
 using OfficeWorkAssistant.Features.RemoveDuplicates;
 using OfficeWorkAssistant.Features.SplitCombine;
 using OfficeWorkAssistant.Features.Templates;
@@ -51,10 +51,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
             public TextBlock Error;
             public Border Body;
             public bool Placeholder;
+            public CheckBox RunRulesToggle;
             // Why the editor's settings could not be applied yet (shown instead of a dialog).
             public string Problem;
             public TextBox LoadPath;
             public ComboBox LoadSheet;
+            public CheckBox LoadFirstRowIsData;
             public TextBox SavePath;
             public TextBox SaveSheet;
             public RadioButton SaveNewFile;
@@ -237,25 +239,48 @@ namespace OfficeWorkAssistant.Features.Pipeline
         {
             var section = new StepSection { Node = node };
             var panel = new StackPanel();
+            panel.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/OfficeWorkAssistant;component/Excel/EditorStyles.xaml", UriKind.Relative) });
 
-            var top = new DockPanel { Margin = new Thickness(0, 0, 0, 2) };
-            var delete = new Button { Content = "Delete step", Padding = new Thickness(8, 1, 8, 1), Margin = new Thickness(6, 0, 0, 0) };
+            var top = new StackPanel { Margin = new Thickness(0, 0, 0, 2) };
+            var delete = new Button { Content = "Delete step", Padding = new Thickness(8, 1, 8, 1), Margin = new Thickness(0, 4, 0, 4), HorizontalAlignment = HorizontalAlignment.Left };
             delete.Click += (s, e) =>
             {
                 Select(node.Id, false);
                 DeleteSelected();
             };
-            DockPanel.SetDock(delete, Dock.Right);
             section.Kind = new TextBlock
             {
                 FontSize = 11,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = PipelineNodeView.AccentOf(node.Kind),
+                TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            top.Children.Add(delete);
             top.Children.Add(section.Kind);
+            top.Children.Add(delete);
             panel.Children.Add(top);
+            // Every step may expose its settings for a run.
+            {
+                var allowRules = new CheckBox
+                {
+                    Content = "Show in Run panel",
+                    IsChecked = node.ShowInRunMode,
+                    Margin = new Thickness(0, 4, 0, 6)
+                };
+                section.RunRulesToggle = allowRules;
+                allowRules.Click += (s, e) =>
+                {
+                    node.ShowInRunMode = allowRules.IsChecked == true;
+                    foreach (var other in _sections.Values)
+                    {
+                        var toggle = other.RunRulesToggle;
+                        if (other.Node.Id == node.Id && toggle != null)
+                            toggle.IsChecked = node.ShowInRunMode;
+                    }
+                    MarkDirty();
+                };
+                panel.Children.Add(allowRules);
+            }
 
             panel.Children.Add(new TextBlock
             {
@@ -272,11 +297,17 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 AddLoadFields(section, panel);
             else if (node.Kind == PipelineStepKind.Save)
                 AddSaveFields(section, panel);
-            else if (node.Kind == PipelineStepKind.LoadImage)
+            else if (node.Kind == PipelineStepKind.SavePdf ||
+                (node.Kind == PipelineStepKind.LoadPdf && PipelineWork.InputLink(_def, node.Id, PipelineWork.PortIn) == null))
             {
-                var browse = new Button { Content = "Choose image...", HorizontalAlignment = HorizontalAlignment.Left,
-                    Padding = new Thickness(8, 2, 8, 2), Margin = new Thickness(0, 0, 0, 6) };
-                browse.Click += (s, e) => BrowseImage(node);
+                var browse = new Button
+                {
+                    Content = node.Kind == PipelineStepKind.LoadPdf ? "Choose PDF..." : "Choose output PDF...",
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Padding = new Thickness(8, 2, 8, 2),
+                    Margin = new Thickness(0, 0, 0, 6)
+                };
+                browse.Click += (s, e) => BrowsePdf(section);
                 panel.Children.Add(browse);
             }
             else if (node.Kind == PipelineStepKind.SaveText)
@@ -450,13 +481,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
         {
             var node = section.Node;
             panel.Children.Add(new TextBlock { Text = "File", Margin = new Thickness(0, 0, 0, 2) });
-            var row = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
-            var browse = new Button { Content = "Browse...", Width = 72, Margin = new Thickness(6, 0, 0, 0) };
+            var row = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
+            var browse = new Button { Content = "Browse...", Width = 72, Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
             browse.Click += (s, e) => BrowseLoad(node);
-            DockPanel.SetDock(browse, Dock.Right);
             section.LoadPath = new TextBox { IsReadOnly = true };
-            row.Children.Add(browse);
             row.Children.Add(section.LoadPath);
+            row.Children.Add(browse);
             panel.Children.Add(row);
 
             panel.Children.Add(new TextBlock { Text = "Sheet", Margin = new Thickness(0, 0, 0, 2) });
@@ -472,6 +502,18 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 RefreshFields(node.Id);
             };
             panel.Children.Add(section.LoadSheet);
+            section.LoadFirstRowIsData = new CheckBox { Content = "No header row (first row is data)", Margin = new Thickness(0, 0, 0, 8) };
+            RoutedEventHandler headersChanged = (s, e) =>
+            {
+                var load = node.Settings as LoadStepSettings;
+                if (_filling || load == null) return;
+                load.FirstRowIsData = section.LoadFirstRowIsData.IsChecked == true;
+                StepChanged(node, null);
+                RefreshFields(node.Id);
+            };
+            section.LoadFirstRowIsData.Checked += headersChanged;
+            section.LoadFirstRowIsData.Unchecked += headersChanged;
+            panel.Children.Add(section.LoadFirstRowIsData);
         }
 
         void AddSaveFields(StepSection section, StackPanel panel)
@@ -495,13 +537,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
             panel.Children.Add(section.SaveNewSheet);
 
             panel.Children.Add(new TextBlock { Text = "File (.xlsx)", Margin = new Thickness(0, 0, 0, 2) });
-            var row = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
-            var browse = new Button { Content = "Browse...", Width = 72, Margin = new Thickness(6, 0, 0, 0) };
+            var row = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
+            var browse = new Button { Content = "Browse...", Width = 72, Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
             browse.Click += (s, e) => BrowseSave(node);
-            DockPanel.SetDock(browse, Dock.Right);
             section.SavePath = new TextBox { IsReadOnly = true };
-            row.Children.Add(browse);
             row.Children.Add(section.SavePath);
+            row.Children.Add(browse);
             panel.Children.Add(row);
 
             panel.Children.Add(new TextBlock { Text = "Sheet name", Margin = new Thickness(0, 0, 0, 2) });
@@ -543,6 +584,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 if (load != null && section.LoadPath != null)
                 {
                     section.LoadPath.Text = load.Path ?? "";
+                    section.LoadFirstRowIsData.IsChecked = load.FirstRowIsData;
                     var sheets = SheetsOf(load, section);
                     var shown = section.LoadSheet.ItemsSource as string[];
                     if (shown == null || !SameSheets(shown, sheets))
@@ -626,32 +668,26 @@ namespace OfficeWorkAssistant.Features.Pipeline
             RefreshFields(node.Id);
         }
 
-        void BrowseImage(PipelineNode node)
+        void BrowsePdf(StepSection section)
         {
-            if (node == null || node.Kind != PipelineStepKind.LoadImage)
-                return;
-            var dialog = new OpenFileDialog
+            const string filter = "PDF files (*.pdf)|*.pdf";
+            var load = section.Body.Child as LoadPdfPage;
+            if (load != null)
             {
-                Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff)|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff",
-                Title = "Choose the image for " + node.Title,
-                CheckFileExists = true,
-                Multiselect = false
-            };
-            if (dialog.ShowDialog() != true)
-                return;
-            var settings = new LoadImageSettings { Path = dialog.FileName };
-            try
-            {
-                LoadImageWork.Run(settings);
-            }
-            catch (Exception ex)
-            {
-                Alert(ex.Message, "Could not load image", MessageBoxImage.Error);
+                var dialog = new OpenFileDialog { Filter = filter, CheckFileExists = true };
+                if (dialog.ShowDialog() == true)
+                    load.SetPath(dialog.FileName);
                 return;
             }
-            node.Settings = settings;
-            StepChanged(node, null);
-            RunPreview(node.Id);
+            var save = section.Body.Child as SavePdfPage;
+            if (save == null)
+            {
+                Alert("Connect a working PDF input first.", "Save PDF", MessageBoxImage.Warning);
+                return;
+            }
+            var output = new SaveFileDialog { Filter = filter, DefaultExt = ".pdf", AddExtension = true, OverwritePrompt = false };
+            if (output.ShowDialog() == true)
+                save.SetPath(output.FileName);
         }
 
         void BrowseSaveText(PipelineNode node)
@@ -820,7 +856,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 var link = PipelineWork.InputLink(_def, node.Id, ports[i]);
                 // A list can be typed in without an input; Append always has a free port.
-                if (link == null && (node.Kind == PipelineStepKind.ValueList || node.Kind == PipelineStepKind.Append))
+                if (link == null && PipelineWork.IsOptionalInput(node.Kind, ports[i]))
                     continue;
                 if (link == null)
                     return Notice("Connect " + PipelineWork.PortLabel(node.Kind, ports[i]) +
@@ -836,121 +872,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 labels[i] = "From step: " + PipelineWork.Find(_def, link.From).Title;
             }
 
-            switch (node.Kind)
-            {
-                case PipelineStepKind.LoadImage:
-                    return new LoadImagePage(PipelineWork.Clone(node.Settings as LoadImageSettings), r => UseSettings(section, r));
-                case PipelineStepKind.SaveText:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as SaveTextSettings;
-                    return new SaveTextPage(input, labels[0], s == null ? null : PipelineWork.SaveTextToLetters(s, input, false),
-                        r => UseSettings(section, PipelineWork.SaveTextToNames(r, input)));
-                }
-                case PipelineStepKind.FilterSort:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as FilterSortSettings;
-                    return new FilterSortPage(input, labels[0], s == null ? null : PipelineWork.FilterSortToLetters(s, input, false),
-                        r => UseSettings(section, PipelineWork.FilterSortToNames(r, input)));
-                }
-                case PipelineStepKind.Templates:
-                {
-                    var input = inputs[0];
-                    var t = node.Settings as TemplateDefinition;
-                    return new TemplatesPage(input, labels[0], t == null ? null : PipelineWork.TemplateToLetters(t, input, false),
-                        r => UseSettings(section, PipelineWork.TemplateToNames(r, input)));
-                }
-                case PipelineStepKind.Compare:
-                    return new ExcelProcessingPage(inputs[0], labels[0], inputs[1], labels[1],
-                        PipelineWork.Clone(node.Settings as ExcelProcessingSettings), r => UseSettings(section, r));
-                case PipelineStepKind.ValueList:
-                    return new ValueListPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as ValueListSettings), r => UseSettings(section, r));
-                case PipelineStepKind.ListFolder:
-                    return new FindFilesPage(PipelineWork.Clone(node.Settings as FolderScanSettings), r => UseSettings(section, r));
-                case PipelineStepKind.FindFiles:
-                    return new FindFilesPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FindFilesSettings), r => UseSettings(section, r));
-                case PipelineStepKind.FileAction:
-                    return new FileActionPage(inputs[0], labels[0], PipelineWork.Clone(node.Settings as FileActionSettings), r => UseSettings(section, r));
-                case PipelineStepKind.Ocr:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as OcrSettings;
-                    return new OcrPage(input, labels[0], s == null ? null : PipelineWork.OcrToLetters(s, input, false),
-                        r => UseSettings(section, PipelineWork.OcrToNames(r, input)));
-                }
-                case PipelineStepKind.MergeFolders:
-                    return new MergeDuplicatesPage(PipelineWork.Clone(node.Settings as MergeFoldersSettings), r => UseSettings(section, r));
-                case PipelineStepKind.CleanText:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as CleanTextSettings;
-                    return new CleanTextPage(input, labels[0], s == null ? null : PipelineWork.CleanTextToLetters(s, input, false),
-                        r => UseSettings(section, PipelineWork.CleanTextToNames(r, input)));
-                }
-                case PipelineStepKind.SplitColumn:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as SplitColumnSettings;
-                    return new SplitColumnPage(input, labels[0], s == null ? null : PipelineWork.SplitToLetters(s, input, false),
-                        r => UseSettings(section, PipelineWork.SplitToNames(r, input)));
-                }
-                case PipelineStepKind.CombineColumns:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as CombineColumnsSettings;
-                    return new CombineColumnsPage(input, labels[0], s == null ? null : PipelineWork.CombineToLetters(s, input, false),
-                        r => UseSettings(section, PipelineWork.CombineToNames(r, input)));
-                }
-                case PipelineStepKind.RemoveDuplicates:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as RemoveDuplicatesSettings;
-                    return new RemoveDuplicatesPage(input, labels[0], s == null ? null : PipelineWork.RemoveDuplicatesToLetters(s, input, false),
-                        r => UseSettings(section, PipelineWork.RemoveDuplicatesToNames(r, input)));
-                }
-                case PipelineStepKind.ArrangeColumns:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as ArrangeColumnsSettings;
-                    return new ArrangeColumnsPage(input, labels[0], s == null ? null : PipelineWork.ArrangeToLetters(s, input, false),
-                        r => UseSettings(section, PipelineWork.ArrangeToNames(r, input)));
-                }
-                case PipelineStepKind.Append:
-                {
-                    var tables = new List<DataTable>();
-                    var shown = new List<string>();
-                    var names = new List<string>();
-                    for (var i = 0; i < ports.Length; i++)
-                    {
-                        if (inputs[i] == null)
-                            continue;
-                        tables.Add(inputs[i]);
-                        shown.Add(labels[i]);
-                        names.Add(PipelineWork.Find(_def, PipelineWork.InputLink(_def, node.Id, ports[i]).From).Title);
-                    }
-                    if (tables.Count == 0)
-                        return Notice("Link the steps whose rows you want to stack: drag from the right dot of each one to this step's left dot.");
-                    return new AppendPage(tables, shown, names, PipelineWork.Clone(node.Settings as AppendSettings), r => UseSettings(section, r));
-                }
-                case PipelineStepKind.Highlight:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as HighlightSettings;
-                    return new HighlightPage(input, labels[0], s == null ? null : PipelineWork.HighlightToLetters(s, input, false),
-                        r => UseSettings(section, PipelineWork.HighlightToNames(r, input)));
-                }
-                case PipelineStepKind.FormatSheet:
-                {
-                    var input = inputs[0];
-                    var s = node.Settings as FormatSheetSettings;
-                    return new FormatSheetPage(input, labels[0], s == null ? null : PipelineWork.FormatSheetToLetters(s, input, false),
-                        r => UseSettings(section, PipelineWork.FormatSheetToNames(r, input)));
-                }
-                default:
-                    return new FillColumnsPage(inputs[0], labels[0], inputs[1], labels[1],
-                        PipelineWork.Clone(node.Settings as FillColumnsSettings), r => UseSettings(section, r));
-            }
+            return PipelineStepEditor.Create(_def, node, inputs, labels, r => UseSettings(section, r));
         }
     }
 }

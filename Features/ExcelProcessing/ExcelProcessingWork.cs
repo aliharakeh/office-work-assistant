@@ -41,12 +41,14 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
         // "AOnly", "BOnly" or "Common", the same tags as the page's output list.
         public string Operation { get; set; }
         public List<ExcelProcessingMatch> Matches { get; set; }
+        public bool MatchAll { get; set; }
         public bool AllColumns { get; set; }
         public List<ExcelProcessingColumn> Columns { get; set; }
 
         public ExcelProcessingSettings()
         {
             Operation = "Common";
+            MatchAll = true;
             Matches = new List<ExcelProcessingMatch>();
             AllColumns = true;
             Columns = new List<ExcelProcessingColumn>();
@@ -91,8 +93,10 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             return new ExcelProcessingCompareResult { Table = result, Sources = sources, Originals = originals };
         }
 
-        public static ExcelProcessingCompareResult Compare(DataTable a, DataTable b, string operation, IList<ExcelProcessingMatch> extra)
+        public static ExcelProcessingCompareResult Compare(DataTable a, DataTable b, string operation, IList<ExcelProcessingMatch> extra, bool matchAll = true)
         {
+            if (!matchAll)
+                return CompareAny(a, b, operation, extra);
             if (operation == "AOnly")
                 return OnlyInA(a, b, extra);
             if (operation == "BOnly")
@@ -100,6 +104,55 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             if (operation == "Common")
                 return Common(a, b, extra);
             throw new InvalidOperationException("Choose an output operation first.");
+        }
+
+        // OR cannot use the composite AND key: a pair may match any one rule.
+        static ExcelProcessingCompareResult CompareAny(DataTable a, DataTable b, string operation, IList<ExcelProcessingMatch> rules)
+        {
+            if (operation != "Common" && operation != "AOnly" && operation != "BOnly")
+                throw new InvalidOperationException("Choose an output operation first.");
+            string[] originals;
+            char[] sources;
+            var joined = NewJoinTable(a, b, out originals, out sources);
+            var hitA = new HashSet<DataRow>();
+            var hitB = new HashSet<DataRow>();
+            foreach (DataRow rowA in a.Rows)
+            {
+                foreach (DataRow rowB in b.Rows)
+                {
+                    var matches = false;
+                    foreach (var rule in rules ?? new List<ExcelProcessingMatch>())
+                    {
+                        if (IsJoin(rule))
+                        {
+                            var va = SideValue(a, rowA, rule, true);
+                            var vb = SideValue(b, rowB, rule, false);
+                            // Keep the existing case-insensitive, nonblank equality semantics.
+                            matches = Op(rule) == "=="
+                                ? NormKey(va).Length > 0 && NormKey(va) == NormKey(vb)
+                                : ExpressionEngine.Compare(Op(rule), va, vb);
+                        }
+                        else if (HasA(rule))
+                            matches = PassSide(a, rowA, rule, true);
+                        else if (HasB(rule))
+                            matches = PassSide(b, rowB, rule, false);
+                        if (matches) break;
+                    }
+                    if (!matches) continue;
+                    hitA.Add(rowA);
+                    hitB.Add(rowB);
+                    if (operation == "Common")
+                        joined.Rows.Add(FillJoin(joined, a, b, rowA, rowB));
+                }
+            }
+            if (operation == "Common")
+                return new ExcelProcessingCompareResult { Table = joined, Sources = sources, Originals = originals };
+            var source = operation == "AOnly" ? a : b;
+            var hits = operation == "AOnly" ? hitA : hitB;
+            var result = source.Clone();
+            foreach (DataRow row in source.Rows)
+                if (!hits.Contains(row)) result.ImportRow(row);
+            return FromOne(result, operation == "AOnly" ? 'A' : 'B');
         }
 
         // Keeps the result columns at these positions, named the way the page labels them
@@ -130,7 +183,7 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             if (!HasJoin(settings.Matches))
                 throw new InvalidOperationException("Set a match rule that uses both A and B.");
 
-            var result = Compare(a, b, settings.Operation, settings.Matches);
+            var result = Compare(a, b, settings.Operation, settings.Matches, settings.MatchAll);
             var columns = new List<int>();
             if (settings.AllColumns)
             {

@@ -170,6 +170,7 @@ namespace OfficeWorkAssistant.Features.FilterSort
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Owner = Window.GetWindow(this)
             };
+            win.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/OfficeWorkAssistant;component/Excel/EditorStyles.xaml", UriKind.Relative) });
             string picked = null;
             var use = new Button { Content = "Use", Width = 80, IsDefault = true };
             use.Click += delegate
@@ -186,7 +187,7 @@ namespace OfficeWorkAssistant.Features.FilterSort
                     win.DialogResult = true;
             };
             var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+            var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
             buttons.Children.Add(use);
             buttons.Children.Add(cancel);
             var root = new DockPanel { Margin = new Thickness(10) };

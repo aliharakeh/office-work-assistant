@@ -29,20 +29,17 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             Title = seed == null ? "Add match rule" : "Edit match rule";
             Owner = owner;
             WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen;
-            ResizeMode = ResizeMode.NoResize;
-            SizeToContent = SizeToContent.Height;
+            ResizeMode = ResizeMode.CanResize;
+            Height = 640;
+            MinHeight = 300;
+            MinWidth = 280;
             Width = 640;
 
-            var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var grid = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
 
             var sideA = SideBox("File A", a, s.ColumnA, s.SplitA, s.ExpressionA ?? "$Value", _a);
             var sideB = SideBox("File B", b, s.ColumnB, s.SplitB, s.ExpressionB ?? "$Value", _b);
-            Grid.SetColumn(sideA, 0);
-            Grid.SetColumn(_op, 1);
-            Grid.SetColumn(sideB, 2);
+
             grid.Children.Add(sideA);
             grid.Children.Add(_op);
             grid.Children.Add(sideB);
@@ -55,18 +52,23 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
 
             var variables = new Button { Content = "Variables...", Width = 88, HorizontalAlignment = HorizontalAlignment.Left };
             variables.Click += (sender, e) => ExpressionHelp.Show(this,
-                "Type $Today in a formula. $Value is the chosen column on that side. After Split, $1 $2 are parts of it. IF(), FIRSTWORD() and LASTWORD() work inside the formula.");
+                "Type $Today in a formula. $Value is the chosen column on that side. After Split, $1 $2 are parts of it. IF(), FIRSTWORD() and LASTWORD() work inside the formula.",
+                new[]
+                {
+                    new VariableHelp { Name = "$Value", Description = "Value of the chosen column on this side.", Example = "Acme_2024" },
+                    new VariableHelp { Name = "$1", Description = "First part of the chosen column after splitting with this side's separator.", Example = "Acme" },
+                    new VariableHelp { Name = "$2", Description = "Second split part. Use $3, $4, ... for later parts.", Example = "2024" }
+                });
             var ok = new Button { Content = "OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
             ok.Click += Ok_Click;
             var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);
-            var footer = new Grid { Margin = new Thickness(0, 4, 0, 0) };
-            footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var footer = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+
             footer.Children.Add(variables);
-            Grid.SetColumn(buttons, 1);
+
             footer.Children.Add(buttons);
 
             var hint = new TextBlock
@@ -83,7 +85,9 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             root.Children.Add(hint);
             root.Children.Add(_error);
             root.Children.Add(footer);
-            Content = root;
+            Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/OfficeWorkAssistant;component/Excel/EditorStyles.xaml", UriKind.Relative) });
+            Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         }
 
         // Returns the rule the user saved, or null when the window was cancelled.
@@ -106,7 +110,7 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             part.Formula = new TextBox { Text = formula, ToolTip = "Formula. $Value is the column." };
             FormulaField.Watch(part.Formula);
 
-            var splitRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+            var splitRow = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
             splitRow.Children.Add(part.Split);
             splitRow.Children.Add(part.Custom);
 

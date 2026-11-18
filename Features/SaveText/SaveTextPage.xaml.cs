@@ -24,7 +24,7 @@ namespace OfficeWorkAssistant.Features.SaveText
             int value = ExcelColumns.IndexOf(input, s.ValueColumn);
             if (settings == null)
             {
-                var preferred = ExcelFile.FindColumn(input, "OCR text") ?? ExcelFile.FindColumn(input, "Key");
+                var preferred = ExcelFile.FindColumn(input, "Key");
                 column = preferred != null ? preferred.Ordinal : (input.Columns.Count > 0 ? 0 : -1);
                 var mapValue = ExcelFile.FindColumn(input, "Value");
                 value = mapValue != null ? mapValue.Ordinal : -1;

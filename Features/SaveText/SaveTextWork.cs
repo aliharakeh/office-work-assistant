@@ -80,7 +80,7 @@ namespace OfficeWorkAssistant.Features.SaveText
         public static void Validate(DataTable input, SaveTextSettings settings)
         {
             if (input == null)
-                throw new InvalidOperationException("Connect a table, OCR result or list / set / map first.");
+                throw new InvalidOperationException("Connect a table or list / set / map first.");
             if (settings == null)
                 throw new InvalidOperationException("Set up Save text / JSON first.");
             FormatLabel(settings.Format);

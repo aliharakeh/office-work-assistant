@@ -56,11 +56,17 @@ namespace OfficeWorkAssistant.Features.FillColumns
             ApplyLoad(false, _pipeB, _pipeLabelB);
         }
 
+        void MatchMode_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (IsInitialized) RefreshPreview();
+        }
+
         void ApplySettings(FillColumnsSettings s)
         {
             _restoring = true;
             try
             {
+                MatchMode.SelectedIndex = s.MatchAll ? 0 : 1;
                 _keys.Clear();
                 if (s.Keys != null)
                 {
@@ -90,7 +96,7 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 Alert("Fix the formulas marked in red first.", "Formula error", MessageBoxImage.Warning);
                 return;
             }
-            var s = new FillColumnsSettings { Keys = Keys(), Rules = Rules() };
+            var s = new FillColumnsSettings { Keys = Keys(), Rules = Rules(), MatchAll = MatchMode.SelectedIndex != 1 };
             try
             {
                 // Run it once on every row so a broken rule shows up here, not later in the pipeline.
@@ -194,7 +200,7 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 var a = FullTable(true);
                 var keys = Keys();
                 var rules = Rules();
-                var result = FillColumnsWork.Fill(a, _tableB, keys, rules, _previewRows);
+                var result = FillColumnsWork.Fill(a, _tableB, keys, rules, _previewRows, MatchMode.SelectedIndex != 1);
                 GridOut.ItemsSource = result.Table.DefaultView;
 
                 var text = result.Matched.ToString("N0", CultureInfo.InvariantCulture) + " matched, " +
@@ -264,20 +270,19 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 edit.Click += (s, e) => EditKey(index);
                 var remove = new Button { Content = "Remove", Width = 64 };
                 remove.Click += (s, e) => RemoveKey(index);
-                var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                var buttons = new WrapPanel { Margin = new Thickness(0, 4, 0, 4) };
                 buttons.Children.Add(edit);
                 buttons.Children.Add(remove);
-                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
-                DockPanel.SetDock(buttons, Dock.Right);
-                row.Children.Add(buttons);
+                var row = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
                 row.Children.Add(new TextBlock
                 {
                     Text = text,
                     ToolTip = text,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    TextWrapping = TextWrapping.Wrap,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 8, 0)
                 });
+                row.Children.Add(buttons);
                 KeyPanel.Children.Add(row);
             }
         }
@@ -337,21 +342,20 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 up.Click += (s, e) => MoveRule(index, -1);
                 var remove = new Button { Content = "Remove", Width = 64 };
                 remove.Click += (s, e) => RemoveRule(index);
-                var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                var buttons = new WrapPanel { Margin = new Thickness(0, 4, 0, 4) };
                 buttons.Children.Add(edit);
                 buttons.Children.Add(up);
                 buttons.Children.Add(remove);
-                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
-                DockPanel.SetDock(buttons, Dock.Right);
-                row.Children.Add(buttons);
+                var row = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
                 row.Children.Add(new TextBlock
                 {
                     Text = text,
                     ToolTip = text,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    TextWrapping = TextWrapping.Wrap,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 8, 0)
                 });
+                row.Children.Add(buttons);
                 RulePanel.Children.Add(row);
             }
         }

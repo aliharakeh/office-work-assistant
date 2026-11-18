@@ -54,6 +54,11 @@ namespace OfficeWorkAssistant.Excel
         // maxRows <= 0 loads everything; a positive value keeps the UI preview small.
         public static ExcelLoadResult Load(string path, string sheetName, int maxRows)
         {
+            return Load(path, sheetName, maxRows, true);
+        }
+
+        public static ExcelLoadResult Load(string path, string sheetName, int maxRows, bool hasHeaders)
+        {
             try
             {
                 // Shared read: succeeds even while Excel has the file open.
@@ -73,11 +78,11 @@ namespace OfficeWorkAssistant.Excel
                         : wb.Worksheet(sheetName);
 
                     var range = ws.RangeUsed();
-                    var total = range == null ? 0 : range.RowCount() - 1;
+                    var total = range == null ? 0 : range.RowCount() - (hasHeaders ? 1 : 0);
                     if (total < 0)
                         total = 0;
 
-                    var table = ToTable(ws, maxRows);
+                    var table = ToTable(ws, maxRows, hasHeaders);
 
                     return new ExcelLoadResult
                     {
@@ -351,7 +356,7 @@ namespace OfficeWorkAssistant.Excel
         {
             if (col == null)
                 return "";
-            if (!string.IsNullOrEmpty(col.Caption))
+            if (col.Caption != null)
                 return col.Caption;
             return col.ColumnName ?? "";
         }
@@ -394,7 +399,7 @@ namespace OfficeWorkAssistant.Excel
             return null;
         }
 
-        static DataTable ToTable(IXLWorksheet ws, int maxRows)
+        static DataTable ToTable(IXLWorksheet ws, int maxRows, bool hasHeaders)
         {
             var table = new DataTable();
             table.Locale = CultureInfo.InvariantCulture;
@@ -406,16 +411,14 @@ namespace OfficeWorkAssistant.Excel
             var colCount = range.ColumnCount();
             for (var c = 1; c <= colCount; c++)
             {
-                var name = header.Cell(c).GetString();
-                if (string.IsNullOrWhiteSpace(name))
-                    name = "Column" + c;
-                AddColumn(table, name);
+                var name = hasHeaders ? header.Cell(c).GetString() : "";
+                AddColumn(table, name).Caption = name.Trim();
             }
 
             var loaded = 0;
             foreach (var row in range.RowsUsed())
             {
-                if (row.RowNumber() == header.RowNumber())
+                if (hasHeaders && row.RowNumber() == header.RowNumber())
                     continue;
                 if (maxRows > 0 && loaded >= maxRows)
                     break;

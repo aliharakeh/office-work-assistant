@@ -1,0 +1,20 @@
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OfficeWorkAssistant.Features.EditHeaders.EditHeadersPage" Background="White">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/OfficeWorkAssistant;component/Excel/EditorStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <StackPanel Margin="0,4,0,0">
+        <TextBlock x:Name="InputInfo" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,6" />
+        <TextBlock Text="Formula for all existing headers (optional)" TextWrapping="Wrap" />
+        <TextBox x:Name="AllFormula" Margin="0,4,0,6" HorizontalAlignment="Stretch" />
+        <TextBlock Text="Use $Value or $Header for the original header, $Column for its letter, $Index for its number, and $A / $Name for another original header. Example: upper(trim($Value)). Individual edits below override the all-headers formula." TextWrapping="Wrap" Foreground="#666" Margin="0,0,0,8" />
+        <TextBlock Text="Keep uses the all-headers result. Text sets a name; Formula calculates it; Clear removes the name and keeps the data. New columns contain blank cells." TextWrapping="Wrap" Margin="0,0,0,6" />
+        <StackPanel x:Name="Rows" />
+        <Button Content="Add blank column" Click="Add_Click" HorizontalAlignment="Left" Margin="0,6,0,6" />
+        <Button Content="Apply to step" Click="Apply_Click" HorizontalAlignment="Left" Width="120" Margin="0,4,0,6" />
+        <TextBlock x:Name="Status" Foreground="#777" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

@@ -36,7 +36,7 @@ internal static class SaveTextSmokeTests
     static DataTable Input(params object[] values)
     {
         var table = new DataTable();
-        ExcelFile.AddColumn(table, "OCR text");
+        ExcelFile.AddColumn(table, "Notes");
         foreach (object value in values)
             table.Rows.Add(value ?? DBNull.Value);
         return table;
@@ -55,7 +55,7 @@ internal static class SaveTextSmokeTests
     static void ContentChecks(string folder)
     {
         var input = Input("first\nsecond", Arabic, "", null);
-        var s = Settings(folder, "ocr", SaveTextFormat.Text);
+        var s = Settings(folder, "notes", SaveTextFormat.Text);
         string path = s.Path + ".txt";
         var plan = SaveTextWork.Run(input, s);
         Check((string)Value(plan, "Path") == path, "Text extension did not default to .txt.");
@@ -179,10 +179,10 @@ internal static class SaveTextSmokeTests
         var named = PipelineWork.SaveTextToNames(settings, original);
         var moved = new DataTable();
         ExcelFile.AddColumn(moved, "New first column");
-        ExcelFile.AddColumn(moved, "OCR text");
-        Check(named.Column == "OCR text" && settings.Column == "A", "Column name conversion mutated settings.");
+        ExcelFile.AddColumn(moved, "Notes");
+        Check(named.Column == "Notes" && settings.Column == "A", "Column name conversion mutated settings.");
         Check(PipelineWork.SaveTextToLetters(named, moved, true).Column == "B", "Export column did not survive reorder.");
-        Fails(() => PipelineWork.SaveTextToLetters(named, new DataTable(), true), "OCR text");
+        Fails(() => PipelineWork.SaveTextToLetters(named, new DataTable(), true), "Notes");
         Check(PipelineWork.SaveTextToLetters(named, new DataTable(), false).Column == "", "Missing export column was retargeted.");
         Check(PipelineWork.IsSaveKind(PipelineStepKind.SaveText) && PipelineWork.IsFileKind(PipelineStepKind.SaveText) &&
             !PipelineWork.IsActionKind(PipelineStepKind.SaveText), "Export is not a terminal save.");
@@ -219,7 +219,7 @@ internal static class SaveTextSmokeTests
         var failed = new PipelineDefinition();
         input = Source(failed, ValueListMode.List, "new contents");
         Save(failed, input, collision, SaveTextFormat.Text);
-        PipelineWork.AddNode(failed, PipelineStepKind.LoadImage, 0, 100);
+        PipelineWork.AddNode(failed, PipelineStepKind.Load, 0, 100);
         result = PipelineWork.Run(failed, new Dictionary<string, DataTable>(), null, true);
         Check(result.Error != null && File.ReadAllText(collision) == "keep original", "A failed step did not prevent export.");
     }

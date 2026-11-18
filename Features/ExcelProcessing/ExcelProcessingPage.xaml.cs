@@ -73,7 +73,7 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
 
         void Op_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            RefreshPreview(true);
+            if (IsInitialized) RefreshPreview(true);
         }
 
         void UseInPipeline_Click(object sender, RoutedEventArgs e)
@@ -97,6 +97,7 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             var s = new ExcelProcessingSettings();
             s.Operation = SelectedOp();
             s.Matches = CollectedConds();
+            s.MatchAll = MatchMode.SelectedIndex != 1;
             s.AllColumns = BothState() == true;
             if (!s.AllColumns)
             {
@@ -111,6 +112,7 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
             _restoring = true;
             try
             {
+                MatchMode.SelectedIndex = s.MatchAll ? 0 : 1;
                 _rules.Clear();
                 if (s.Matches != null)
                 {
@@ -238,7 +240,7 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
 
             try
             {
-                _preview = ExcelProcessingWork.Compare(a, b, tag, CollectedConds());
+                _preview = ExcelProcessingWork.Compare(a, b, tag, CollectedConds(), MatchMode.SelectedIndex != 1);
 
                 _picks = new List<ColumnPick>();
                 for (var i = 0; i < _preview.Table.Columns.Count; i++)
@@ -489,20 +491,19 @@ namespace OfficeWorkAssistant.Features.ExcelProcessing
                 edit.Click += (s, e) => EditRule(index);
                 var remove = new Button { Content = "Remove", Width = 64 };
                 remove.Click += (s, e) => RemoveRule(index);
-                var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                var buttons = new WrapPanel { Margin = new Thickness(0, 4, 0, 4) };
                 buttons.Children.Add(edit);
                 buttons.Children.Add(remove);
-                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
-                DockPanel.SetDock(buttons, Dock.Right);
-                row.Children.Add(buttons);
+                var row = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
                 row.Children.Add(new TextBlock
                 {
                     Text = text,
                     ToolTip = text,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    TextWrapping = TextWrapping.Wrap,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 8, 0)
                 });
+                row.Children.Add(buttons);
                 CondPanel.Children.Add(row);
             }
         }

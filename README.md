@@ -12,9 +12,11 @@ This is the pipeline canvas and everything around it: steps, the Steps sidebar, 
 
 ### Run mode
 
-Run mode is for the person who just runs a saved pipeline, not the person who builds it. The saved pipelines are cards on the left, each with its name, when it was last saved, and a plain-language headline such as "5 steps - 2 inputs - 1 output". Pick one and the form on the right shows only what you have to decide: the Excel file, image file or folder each step reads, the output file each step writes and the destination folder of a Copy or Move, and one plain sentence per step saying what it does.
+Run mode is for the person who just runs a saved pipeline, not the person who builds it. The saved pipelines are cards on the left, each with its name, when it was last saved, and a plain-language headline such as "5 steps - 2 inputs - 1 output". Pick one and the form on the right shows only what you have to decide: the Excel file or folder each step reads, the output file each step writes and the destination folder of a Copy or Move, and one plain sentence per step saying what it does.
 
-Each choice is pre-filled from the saved pipeline and is yours only for that run, so you can point the pipeline at this month's files without changing it. Settings that depend on the data, such as which column to filter on, a formula, a match rule or a sort key, are fixed by the builder and never shown. **Check** runs every step and changes nothing; **Run** asks you to confirm and then does the work, and **Open output folder** opens where the results went. If a step fails, Run mode names it, says in plain words what was and was not written, and asks you to get the pipeline fixed in Builder mode.
+Every step has a **Show in Run panel** checkbox in Builder mode. Checked steps show a section in Run mode with any file choices and an **Edit step settings...** button, which opens the same editor used in Builder mode. All settings can be changed, including columns, formulas, matching rules, sorting, styles and headers. Apply to step uses the changes for this run; closing the editor without applying cancels them. Unchecked steps run with their saved settings and have no editable section. The checkbox defaults to unchecked for every step. A missing setting also defaults to unchecked; explicitly saved choices are preserved. Nothing in Run mode saves changes back to the pipeline. **Check** runs every step and changes nothing on disk; **Run** asks you to confirm replacements and file actions before doing the work, and **Open output folder** opens where the results went.
+
+Run mode uses one tab per branch, named after its final step, just like the Builder sidebar. Each tab shows the steps leading to that result. Shared file choices stay synchronized across tabs. One Check button and one Run button below the tabs validate and run every branch together, regardless of which tab is selected.
 
 ## The pipeline window
 
@@ -37,6 +39,8 @@ Each choice is pre-filled from the saved pipeline and is yours only for that run
 ### Load file / Save file
 Load file reads one sheet of an `.xlsx` or `.xlsm` file, even when it is open in Excel. Save file either writes a new `.xlsx` file or adds a new sheet to a workbook. It writes only on Run and save files.
 
+For a sheet without headers, tick **No header row (first row is data)** in Load file. This preserves the first data row and starts with blank headers. Existing blank header cells also stay blank.
+
 ### Filter & Sort
 - Conditions work on a column (pick a column, an operator and a value) or as a free formula such as `$A > 10 && $B == "OK"`. The column operators are `==`, `!=`, `>`, `>=`, `<`, `<=`, contains, starts with, ends with, is empty and is not empty.
 - Rows can match all conditions or any one of them.
@@ -52,7 +56,7 @@ Two inputs, A and B.
 
 ### Fill columns
 Fills columns of B with values from the matching row of A.
-- **Match rules** compare a formula on the A row with a formula on the B row, for example `TRIM($ID)` == `$Code`. All rules must match, text compares ignore case, and the first matching A row is used. **Add** opens a window for one key; the step lists each key with **Edit** and **Remove**.
+- **Match rules** compare a formula on the A row with a formula on the B row, for example `TRIM($ID)` == `$Code`. Choose AND to require all rules or OR to accept any rule. Text compares ignore case, and the first matching A row is used. **Add** opens a window for one key; the step lists each key with **Edit** and **Remove**.
 - **Fill rules** each have a target column (one of B's columns, or a new name to add a column), an optional When condition, and a Value formula. For each column, the first rule that fires fills the cell. **Add** opens a window for one rule; the step lists each rule with **Edit**, **Up** and **Remove**.
 - **Variables:**
   - `$A_Price` reads the matched A row.
@@ -86,6 +90,7 @@ Fills columns of B with values from the matching row of A.
 
   An optional count column says how many rows shared the key. Kept rows stay in their original order.
 - **Arrange columns** lists every column in output order. Click a column's name to select it and use Up and Down to reorder; tick its box to keep it, and type a new name to rename it. Columns an earlier step adds later can be kept at the end or dropped.
+- **Edit headers** adds, edits or clears individual header names without removing their data. Choose Text, Formula or Clear for each column; Keep leaves the all-headers formula's result unchanged. An optional formula changes all existing headers first, then individual edits override it. Add blank column appends a new column with empty data cells. Formulas use the shared formula engine: `$Value` / `$Header` is the original header, `$Column` is its Excel letter, `$Index` is its number (starting at 1), and `$A` / `$Name` reads another original header. For example, `upper(trim($Value))` cleans all names, `"Field_" + $Column` generates names, and `if(isblank($Value), "Field_" + $Column, $Value)` fills only missing headers. Clear removes the name, keeping the column. Header settings stay in Builder mode.
 - **Append tables** stacks the rows of every linked step, in link order: input 1 first. Columns match by header (the 2nd `Qty` of one table with the 2nd `Qty` of another) or by position. Every column is kept, or only those all tables have. An optional source column holds each row's input step title, so rename the Load steps to label the rows, for example `January`. Deleting a link renumbers the remaining inputs.
 
 ## Style steps
@@ -118,7 +123,6 @@ Example: Load file -> Clean text -> Remove duplicates -> Highlight (`$Qty == 0` 
 
 These steps link Excel data to files and folders on disk. Each step's result is a normal table, so you can filter, compare and save it like any other step.
 
-- **Load image** starts a pipeline from one PNG, JPEG, BMP or TIFF file, with no input connection needed. Adding the step opens an image picker; use **Choose image...** in its sidebar or double-click it to change the file. You can also type a full path. Its output is one row with `Name` and `Path`, ready to connect to **OCR images** (choose the `Path` column). The pipeline stores the path, not the image itself, so the file must still exist when it runs. OCR checks and decodes the image contents.
 - **List / set / map** builds keys from the step before it with a key formula, such as `$Code` or `TRIM($A)`:
   - A list keeps every row.
   - A set keeps unique keys.
@@ -127,15 +131,8 @@ These steps link Excel data to files and folders on disk. Each step's result is 
   You can also choose Stored values and type the keys in, or click Capture from input to freeze what the input gives today. Stored values are kept in the pipeline, and the step then needs no input.
 - **List folder** lists the files, the folders, or both in a folder, with or without its subfolders. A file filter (for example `$Ext == ".pdf"`) and a separate folder filter (for example `STARTSWITH($Name, "20")`) narrow the list. The folder filter only decides which folders are listed: files inside a folder that is not listed are still searched.
 - **Find files** searches a folder for the items that match each key of the step before it. An item can match when its name equals the key, when its name without extension equals the key, or when its name contains, starts with or ends with the key. Formula mode uses one formula for files and another for folders, for example `$1 == $Key && $Ext == ".pdf"` for files and `$Name == $Key` for folders. Keep keys with no match adds a row with `Found = FALSE` for each key that matched nothing. When a folder matches, the items inside it are skipped, so the folder is handled as a whole.
-- **OCR images** reads full image paths from a selected column and adds a new text column, keeping all input rows and columns. It recognizes printed text locally with Tesseract 5.2.0. PNG, JPEG, BMP and TIFF are supported; every page of a multi-page TIFF is read into the same cell, separated by blank lines. Blank paths produce blank text. A missing, unsupported or unreadable image stops the step with its row number and path; existing columns are never overwritten. PDFs must be rendered to images separately. OCR extracts text, not structured tables, and results should be reviewed.
-
-  English (`eng`) and Arabic (`ara`) are bundled. Enter `ara` in Languages for Arabic only, or `eng+ara` for documents containing both. Arabic uses the larger, slower [tessdata_best](https://github.com/tesseract-ocr/tessdata_best) model: the fast Arabic model produced unwanted characters in the 32-bit smoke test. To add another language, copy its `.traineddata` file from [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast) or tessdata_best into `tessdata` beside the executable, then enter its code. An optional language data folder overrides this location; relative folders are relative to the executable. Models are never downloaded at runtime. OCR also runs during preview and when downstream editors need its results, so large batches can take time.
-
-  Example: List folder (files only, image filter) -> OCR images (`Path` -> `OCR text`) -> Save file. Use a List folder file filter such as `$Ext == ".png" || $Ext == ".jpg" || $Ext == ".jpeg" || $Ext == ".bmp" || $Ext == ".tif" || $Ext == ".tiff"` to exclude non-images.
-
-  For one image, use **Load image -> OCR images -> Save file** instead. Set Languages to `ara` for Arabic or `eng+ara` for English and Arabic together.
 - **Save text / JSON** writes one column, or a list / set / map, to a UTF-8 text or JSON file. It never changes the table it reads.
-  - **Text column**: one row per line, in row order, with no header. Choose any column, such as `OCR text` or `Key`. Line breaks inside a value (OCR paragraphs) are kept.
+  - **Text column**: one row per line, in row order, with no header. Choose any column, such as `Key`. Line breaks inside a value are kept.
   - **Text map**: one `key` + tab + `value` line per row, in row order. Choose the key column (usually `Key`) and the value column.
   - **JSON array (list / set)**: a JSON array, `["one", "two"]`. Row order is kept and duplicate values stay, so a set is just the unique list the List / set / map step already made. Numbers, booleans and blank cells stay typed (`null`).
   - **JSON object (map)**: a JSON object, `{"one": "First item"}`. Keys are case-sensitive; duplicate or blank keys stop the step, so use List / set / map (a map) first.
@@ -143,9 +140,18 @@ These steps link Excel data to files and folders on disk. Each step's result is 
   The output file defaults to `.txt` for the two text formats and `.json` for the two JSON formats. Any explicit extension is kept, and changing the extension does not change the format. Type a full path, or use **Choose output file...**; double-clicking the step also opens the picker. The folder must already exist. Preview shows the plan with `Path`, `Format`, `Rows`, `Content` and `Status` (Ready / Overwrite) and never writes. Existing files are replaced only on Run and save files, after the usual confirmation, and a failed write never truncates the old file. Two save steps (of any kind) may not write the same file in one pipeline.
 
   Examples:
-  - List folder -> OCR images -> Save text / JSON (Text column, `OCR text`) -> one text file of all recognized pages.
   - List / set / map (a set) -> Save text / JSON (JSON array) -> `["A100", "B200"]`.
   - List / set / map (a map: key `$Code`, value `$Name`) -> Save text / JSON (JSON object) -> `{"A100": "First item"}`.
+
+## PDF steps
+
+- **Load PDF** opens a PDF chosen in the sidebar. To process several files, connect a table with full PDF paths, such as **List folder** filtered to PDF files. Choose the path column if its header is not Path. Preview shows each page's source, number, size and rotation.
+- **Arrange PDF pages** uses an ordered list of pages from input A. Use a list like `1-2, 5, 3-4, 5@90` to reorder, duplicate and rotate pages. Omit a page to remove it. Use `all`, `last`, `odd`, `even`, descending ranges such as `last-1`, or `blank` for an A4 page. To insert from a second PDF, connect it to B and use `1-2, B:1, 3-last`.
+- **Merge PDFs** takes PDFs in numbered port order. Connect separate Load PDF steps or a Load PDF step that reads a list of files. Interleave alternates pages from exactly two documents and can reverse the second document first.
+- **Split PDF** divides each input PDF into one page per file by default. Enter a different page count or groups separated by semicolons, such as `1-3; 4-last`. Connect Save PDF to write the parts.
+- **Save PDF** takes a full output file path. If the step receives multiple documents, `result.pdf` becomes `result-001.pdf`, `result-002.pdf`, and so on. Preview lists every file and page count. The pipeline confirms replacements before writing and requires a different path from any source PDF.
+
+These steps copy PDF pages and their visible content. Encrypted PDFs are unsupported. Bookmarks, forms and other document-level features may be lost, and signatures do not carry over to the new PDF. PDF steps use the managed PDFsharp-WPF 6.2.4 Framework build. The app can run them offline without a separate PDF viewer, native renderer or OCR models.
 
 ## Change files steps
 
@@ -185,13 +191,12 @@ Each step editor has a Variables button that lists every variable with the value
 - Windows 7 SP1 or later
 - .NET Framework 4.8 runtime. No SDK is needed to run the app.
 - Excel support covers `.xlsx` only, for both reading and writing. A `.xls` file renamed to `.xlsx` will not open.
-- OCR additionally requires the Visual C++ 2019 runtime matching the app's process architecture, and the deployed `Tesseract.dll`, `x86` / `x64` native DLL folders and `tessdata` folder. Keep both native folders when distributing the AnyCPU build. **OCR's native dependencies have not been verified on Windows 7 SP1**; compatibility of the rest of the app does not establish OCR compatibility. For Win7, use a compatible VS 2019 redistributable, not the latest runtime installer (which no longer supports Win7).
 
 ## Build and run
 
 Use Visual Studio or Framework MSBuild. No modern .NET SDK is required.
 
-Restore packages with the standalone NuGet CLI (`nuget restore OfficeWorkAssistant.sln`) or Visual Studio first. The pinned `Tesseract` 5.2.0 package uses its .NET Framework 4.8 assembly; no modern .NET SDK or `Tesseract.Drawing` package is needed. The English and Arabic models are checked into `tessdata` with their source and license.
+Restore packages with the standalone NuGet CLI (`nuget restore OfficeWorkAssistant.sln`) or Visual Studio first.
 
 ```
 %WINDIR%\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe OfficeWorkAssistant.csproj /p:Configuration=Release /v:minimal
@@ -200,18 +205,7 @@ bin\Release\OfficeWorkAssistant.exe
 
 Close a running instance before rebuilding, otherwise MSBuild cannot overwrite the exe.
 
-### OCR smoke checks
-
-After building Release, run the standalone checks with Windows PowerShell (or PowerShell):
-
-```
-powershell -NoProfile -File Tests\RunOcrTests.ps1 -Platform x86
-powershell -NoProfile -File Tests\RunOcrTests.ps1 -Platform x64
-```
-
-The x64 check requires 64-bit Windows. These compile using Framework `csc.exe` and check validation, input preservation, column remapping, pipeline XML and dispatch, native OCR of generated PNG/JPEG/BMP/TIFF images (including Arabic, mixed English/Arabic, Unicode paths and multi-page TIFF), and Excel text round-tripping. Use `-SkipNative` to check only the logic without loading native OCR DLLs. No developer tools are required on a future Win7 test VM: copy the Release folder, including the compiled smoke-test EXEs, and run each EXE there. Passing on newer Windows is not proof of Win7 compatibility.
-
-The Save text / JSON checks need no OCR files or native libraries:
+The Save text / JSON smoke checks can be run after building Release.
 
 ```
 powershell -NoProfile -File Tests\RunSaveTextTests.ps1
@@ -219,13 +213,20 @@ powershell -NoProfile -File Tests\RunSaveTextTests.ps1
 
 They cover text and JSON content (including Arabic, quotes, line breaks and typed values), list/set/map results, `.txt` / `.json` defaults and custom extensions, column remapping, pipeline XML and dispatch, preview writing nothing, collision checks between save steps, and that a failed save leaves the old file untouched.
 
-The Run mode checks need no OCR files or native libraries either:
+The Run mode smoke checks can be run after building Release.
 
 ```
 powershell -NoProfile -File Tests\RunRunnerTests.ps1
 ```
 
 They cover the choices Run mode asks for (which file or folder each step needs, the sheet list of the chosen workbook, the output extension, what is still missing), the plain-language summary and headline, a dry run and a real run with the user's own choices, that the pipeline file is never written by a run, what Check reports for each output and file action, the wording of a failure, and the folders offered after a run.
+
+Run the PDF checks after building Release. On 64-bit Windows, run both process architectures.
+
+```
+powershell -NoProfile -File Tests\RunPdfTests.ps1 -Platform x86
+powershell -NoProfile -File Tests\RunPdfTests.ps1 -Platform x64
+```
 
 ## Project layout
 
@@ -238,3 +239,7 @@ Expressions/       Shared formula engine and the Variables help window.
 ```
 
 Each step keeps its logic in its `Work` class so the editor stays thin. Steps do not reference each other; only the pipeline references them. See `AGENTS.md` for the rules on adding a new step.
+
+Match rules in Compare, Fill columns and Filter & Sort support **AND (all rules)** and **OR (any rule)**. Existing pipelines keep AND unless changed. Fill columns uses the first matching A row in either mode; fill and highlight actions retain their order.
+
+In Builder, enable **Allow editing match rules in Run mode** separately on each step that has matching conditions. It starts off. Run mode then shows that step's match rules, filters or conditions, including its AND/OR choice where applicable. Each rule editor has a **Variables...** button with help for that rule's variables, examples and the shared formula functions. Other step settings remain fixed, and rule edits apply only to the loaded run; the saved pipeline is never overwritten.

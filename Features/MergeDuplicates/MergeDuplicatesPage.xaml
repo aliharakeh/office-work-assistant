@@ -1,40 +1,32 @@
-<UserControl x:Class="OfficeWorkAssistant.Features.MergeDuplicates.MergeDuplicatesPage"
-      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Background="White">
-    <DockPanel Margin="0,4,0,0">
-        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="True">
-            <Button DockPanel.Dock="Right" Content="Apply to step" Padding="10,1" Click="Use_Click" />
-        </DockPanel>
-
-        <GroupBox DockPanel.Dock="Top" Header="Duplicates" Margin="0,0,0,8">
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="OfficeWorkAssistant.Features.MergeDuplicates.MergeDuplicatesPage" Background="White">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/OfficeWorkAssistant;component/Excel/EditorStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <StackPanel Margin="0,4,0,0">
+        <StackPanel Margin="0,0,0,8">
+            <Button Content="Apply to step" Padding="10,1" Click="Use_Click" HorizontalAlignment="Left" />
+        </StackPanel>
+        <GroupBox Header="Duplicates" Margin="0,0,0,8">
             <StackPanel Margin="6">
-                <TextBlock Foreground="#777" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap"
-                           Text="Finds subfolders of a folder that belong together and moves everything from the others into the one to keep. Name clashes are renamed to name (2)." />
-                <Grid Margin="0,0,0,6">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="100" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Parent folder" VerticalAlignment="Center" />
-                    <TextBox x:Name="FolderBox" Grid.Column="1" Margin="0,0,6,0" />
-                    <Button Grid.Column="2" Content="Browse..." Width="88" Click="Browse_Click" />
-                </Grid>
-                <Grid Margin="0,0,0,6">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="100" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Same when" VerticalAlignment="Center" />
-                    <TextBox x:Name="ConditionBox" Grid.Column="1"
-                             ToolTip="Two folders A and B belong together when this is true. $A $B are the names, $A1 $B2 their split parts. Example: $A1 == $B1" />
-                </Grid>
-                <WrapPanel Margin="100,0,0,6">
-                    <TextBlock Text="Split $A1 $B1 by" VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <TextBox x:Name="SepBox" Width="30" MaxLength="1" Margin="0,0,16,0" />
-                    <TextBlock Text="Keep the folder with the" VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <ComboBox x:Name="KeepBox" Width="140">
+                <TextBlock Foreground="#777" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap" Text="Finds subfolders of a folder that belong together and moves everything from the others into the one to keep. Name clashes are renamed to name (2)." />
+                <StackPanel Margin="0,0,0,6">
+                    <TextBlock Text="Parent folder" VerticalAlignment="Center" Margin="0,4,0,2" TextWrapping="Wrap" />
+                    <TextBox x:Name="FolderBox" Margin="0,0,0,6" HorizontalAlignment="Stretch" />
+                    <Button Content="Browse..." Width="88" Click="Browse_Click" Margin="0,0,0,6" HorizontalAlignment="Left" />
+                </StackPanel>
+                <StackPanel Margin="0,0,0,6">
+                    <TextBlock Text="Same when" VerticalAlignment="Center" Margin="0,4,0,2" TextWrapping="Wrap" />
+                    <TextBox x:Name="ConditionBox" ToolTip="Two folders A and B belong together when this is true. $A $B are the names, $A1 $B2 their split parts. Example: $A1 == $B1" Margin="0,0,0,6" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Margin="0,0,0,6">
+                    <TextBlock Text="Split $A1 $B1 by" VerticalAlignment="Center" Margin="0,0,6,0" TextWrapping="Wrap" />
+                    <TextBox x:Name="SepBox" MaxLength="1" Margin="0,0,16,0" HorizontalAlignment="Stretch" />
+                    <TextBlock Text="Keep the folder with the" VerticalAlignment="Center" Margin="0,0,6,0" TextWrapping="Wrap" />
+                    <ComboBox x:Name="KeepBox" HorizontalAlignment="Stretch">
                         <ComboBoxItem Content="first name (A-Z)" />
                         <ComboBoxItem Content="last name (A-Z)" />
                         <ComboBoxItem Content="shortest name" />
@@ -42,14 +34,12 @@
                         <ComboBoxItem Content="newest change" />
                         <ComboBoxItem Content="oldest change" />
                     </ComboBox>
-                </WrapPanel>
-                <TextBlock Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"
-                           Text="Nothing is moved here or by Run preview: folders are merged only on Run and save files, after every step worked and you confirm." />
-                <StackPanel Orientation="Horizontal">
-                    <Button Content="Variables..." Width="88" Margin="0,0,6,0" Click="Variables_Click" />
                 </StackPanel>
+                <TextBlock Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6" Text="Nothing is moved here or by Run preview: folders are merged only on Run and save files, after every step worked and you confirm." />
+                <WrapPanel>
+                    <Button Content="Variables..." Width="88" Margin="0,0,6,4" Click="Variables_Click" HorizontalAlignment="Left" />
+                </WrapPanel>
             </StackPanel>
         </GroupBox>
-
-    </DockPanel>
+    </StackPanel>
 </UserControl>

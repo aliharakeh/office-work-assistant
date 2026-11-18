@@ -936,7 +936,8 @@ namespace OfficeWorkAssistant.Features.FileOps
             list.Add(new VariableHelp { Name = "$IsFolder", Description = "TRUE for a folder, FALSE for a file." });
             list.Add(new VariableHelp { Name = "$Size", Description = "File size in bytes. Blank for a folder." });
             list.Add(new VariableHelp { Name = "$Modified", Description = "Last write time." });
-            list.Add(new VariableHelp { Name = "$1", Description = "First part of the stem split by the split character. $2 is the second.", Example = "A100" });
+            list.Add(new VariableHelp { Name = "$1", Description = "First part of the stem split by the split character.", Example = "A100" });
+            list.Add(new VariableHelp { Name = "$2", Description = "Second split part of the stem. Use $3, $4, ... for later parts.", Example = "report" });
             return list;
         }
 

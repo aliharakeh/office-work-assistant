@@ -48,22 +48,21 @@ namespace OfficeWorkAssistant.Features.Highlight
                 down.Click += (s, e) => MoveRule(index, 1);
                 var remove = new Button { Content = "Remove", Width = 64 };
                 remove.Click += (s, e) => RemoveRule(index);
-                var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                var buttons = new WrapPanel { Margin = new Thickness(0, 4, 0, 4) };
                 buttons.Children.Add(edit);
                 buttons.Children.Add(up);
                 buttons.Children.Add(down);
                 buttons.Children.Add(remove);
-                var row = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
-                DockPanel.SetDock(buttons, Dock.Right);
-                row.Children.Add(buttons);
+                var row = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
                 row.Children.Add(new TextBlock
                 {
                     Text = text,
                     ToolTip = text,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    TextWrapping = TextWrapping.Wrap,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 8, 0)
                 });
+                row.Children.Add(buttons);
                 RulePanel.Children.Add(row);
             }
         }

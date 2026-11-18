@@ -18,9 +18,9 @@ namespace OfficeWorkAssistant.Features.Highlight
         readonly DataTable _input;
         readonly int _number;
         readonly ComboBox _target = new ComboBox();
-        readonly StackPanel _columnsPanel = new StackPanel { Margin = new Thickness(90, 0, 0, 4) };
+        readonly StackPanel _columnsPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
         readonly TextBox _condition = new TextBox { Margin = new Thickness(0, 0, 6, 0) };
-        readonly TextBlock _hint = new TextBlock { Foreground = Brushes.Gray, Margin = new Thickness(90, 0, 0, 4), TextWrapping = TextWrapping.Wrap };
+        readonly TextBlock _hint = new TextBlock { Foreground = Brushes.Gray, Margin = new Thickness(0, 0, 0, 4), TextWrapping = TextWrapping.Wrap };
         readonly ComboBox _buildColumn = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
         readonly ComboBox _buildOp = new ComboBox { Margin = new Thickness(0, 0, 6, 0) };
         readonly TextBox _buildValue = new TextBox { Margin = new Thickness(0, 0, 6, 0), ToolTip = "A number, text, or a built-in such as $Today." };
@@ -45,8 +45,10 @@ namespace OfficeWorkAssistant.Features.Highlight
             Title = seed == null ? "Add highlight rule" : "Edit highlight rule";
             Owner = owner;
             WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen;
-            ResizeMode = ResizeMode.NoResize;
-            SizeToContent = SizeToContent.Height;
+            ResizeMode = ResizeMode.CanResize;
+            Height = 640;
+            MinHeight = 300;
+            MinWidth = 280;
             Width = 620;
 
             FormulaField.Watch(_condition);
@@ -70,13 +72,8 @@ namespace OfficeWorkAssistant.Features.Highlight
                 _buildOp.Items.Add(op);
             var use = new Button { Content = "Use", Width = 50 };
             use.Click += Build_Click;
-            var buildGrid = new Grid();
-            buildGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-            buildGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            buildGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(_buildOp, 0);
-            Grid.SetColumn(_buildValue, 1);
-            Grid.SetColumn(use, 2);
+            var buildGrid = new StackPanel();
+
             buildGrid.Children.Add(_buildOp);
             buildGrid.Children.Add(_buildValue);
             buildGrid.Children.Add(use);
@@ -88,29 +85,25 @@ namespace OfficeWorkAssistant.Features.Highlight
             help.Click += (sender, e) => ExpressionHelp.Show(this,
                 "A condition is a formula that is true or false. $Qty or $A is a column of the row (A = 1st); $Value is the cell itself when each cell is tested on its own. " +
                 "Compare with == != > >= < <=, join with && (and) || (or), and use the functions below.");
-            var conditionRow = new Grid { Margin = new Thickness(0, 0, 0, 2) };
-            conditionRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-            conditionRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            conditionRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var conditionRow = new StackPanel { Margin = new Thickness(0, 0, 0, 2) };
+
             var conditionLabel = new TextBlock { Text = "Condition", VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(_condition, 1);
-            Grid.SetColumn(help, 2);
+
             conditionRow.Children.Add(conditionLabel);
             conditionRow.Children.Add(_condition);
             conditionRow.Children.Add(help);
 
-            var targetRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
-            targetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-            targetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var targetRow = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
+
             var targetLabel = new TextBlock { Text = "Style", VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(_target, 1);
+
             targetRow.Children.Add(targetLabel);
             targetRow.Children.Add(_target);
 
             var ok = new Button { Content = "OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
             ok.Click += Ok_Click;
             var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+            var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);
 
@@ -119,13 +112,15 @@ namespace OfficeWorkAssistant.Features.Highlight
             root.Children.Add(_columnsPanel);
             root.Children.Add(conditionRow);
             root.Children.Add(_hint);
-            root.Children.Add(new Expander { Header = "Build a condition", Margin = new Thickness(90, 0, 0, 6), Content = build });
+            root.Children.Add(new Expander { Header = "Build a condition", Margin = new Thickness(0, 0, 0, 6), Content = build });
             root.Children.Add(new TextBlock { Text = "Look", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 4, 0, 4) });
             root.Children.Add(_style);
             root.Children.Add(_stop);
             root.Children.Add(_error);
             root.Children.Add(buttons);
-            Content = root;
+            Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/OfficeWorkAssistant;component/Excel/EditorStyles.xaml", UriKind.Relative) });
+            Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
 
             LoadRule(s, columnItems);
             UpdateTarget();

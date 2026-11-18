@@ -47,11 +47,51 @@
       <HintPath>packages\ExcelNumberFormat.1.0.10\lib\net20\ExcelNumberFormat.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="Microsoft.VisualBasic" />
-    <Reference Include="Tesseract">
-      <HintPath>packages\Tesseract.5.2.0\lib\net48\Tesseract.dll</HintPath>
+    <Reference Include="PdfSharp-wpf">
+      <HintPath>packages\PDFsharp-WPF.6.2.4\lib\net462\PdfSharp-wpf.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="PdfSharp.Shared">
+      <HintPath>packages\PDFsharp-WPF.6.2.4\lib\net462\PdfSharp.Shared.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="PdfSharp.System">
+      <HintPath>packages\PDFsharp-WPF.6.2.4\lib\net462\PdfSharp.System.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Bcl.AsyncInterfaces">
+      <HintPath>packages\Microsoft.Bcl.AsyncInterfaces.8.0.0\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions">
+      <HintPath>packages\Microsoft.Extensions.DependencyInjection.Abstractions.8.0.2\lib\net462\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging.Abstractions">
+      <HintPath>packages\Microsoft.Extensions.Logging.Abstractions.8.0.3\lib\net462\Microsoft.Extensions.Logging.Abstractions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>packages\System.Buffers.4.5.1\lib\net461\System.Buffers.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>packages\System.Memory.4.5.5\lib\net461\System.Memory.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>packages\System.Numerics.Vectors.4.5.0\lib\net46\System.Numerics.Vectors.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>packages\System.Runtime.CompilerServices.Unsafe.4.5.3\lib\net461\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Threading.Tasks.Extensions">
+      <HintPath>packages\System.Threading.Tasks.Extensions.4.5.4\lib\net461\System.Threading.Tasks.Extensions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Data" />
@@ -65,7 +105,6 @@
       <HintPath>packages\System.IO.Packaging.4.0.0\lib\net46\System.IO.Packaging.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xaml">
       <RequiredTargetFramework>4.0</RequiredTargetFramework>
@@ -143,6 +182,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Features\EditHeaders\EditHeadersPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Features\ArrangeColumns\ArrangeColumnsPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -159,26 +202,14 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Excel\EditorStyles.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Excel\CellStylePicker.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Features\Ocr\OcrPage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Compile Include="Features\Ocr\OcrPage.xaml.cs">
-      <DependentUpon>OcrPage.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Features\Ocr\OcrWork.cs" />
-    <Page Include="Features\LoadImage\LoadImagePage.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Compile Include="Features\LoadImage\LoadImagePage.xaml.cs">
-      <DependentUpon>LoadImagePage.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Features\LoadImage\LoadImageWork.cs" />
     <Page Include="Features\SaveText\SaveTextPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -228,7 +259,10 @@
     <Compile Include="Features\Pipeline\PipelinePage.Steps.cs">
       <DependentUpon>PipelinePage.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Features\Pdf\PdfWork.cs" />
+    <Compile Include="Features\Pdf\PdfEditors.cs" />
     <Compile Include="Features\Pipeline\PipelineWork.cs" />
+    <Compile Include="Features\Pipeline\PipelineStepEditor.cs" />
     <Compile Include="Features\Pipeline\RunnerPage.xaml.cs">
       <DependentUpon>RunnerPage.xaml</DependentUpon>
     </Compile>
@@ -265,6 +299,10 @@
       <DependentUpon>ArrangeColumnsPage.xaml</DependentUpon>
     </Compile>
     <Compile Include="Features\ArrangeColumns\ArrangeColumnsWork.cs" />
+    <Compile Include="Features\EditHeaders\EditHeadersPage.xaml.cs">
+      <DependentUpon>EditHeadersPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Features\EditHeaders\EditHeadersWork.cs" />
     <Compile Include="Features\Append\AppendPage.xaml.cs">
       <DependentUpon>AppendPage.xaml</DependentUpon>
     </Compile>
@@ -297,24 +335,13 @@
     </Compile>
     <None Include="App.config" />
     <None Include="packages.config" />
-    <Content Include="tessdata\eng.traineddata">
+    <Content Include="packages\Microsoft.Extensions.Logging.Abstractions.8.0.3\LICENSE.TXT">
+      <Link>Microsoft-PDF-Dependencies-LICENSE.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="tessdata\ara.traineddata">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="tessdata\LICENSE.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="ThirdPartyNotices.txt">
+    <Content Include="PDFsharp-LICENSE.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="packages\Tesseract.5.2.0\build\Tesseract.targets" Condition="Exists('packages\Tesseract.5.2.0\build\Tesseract.targets')" />
-  <Target Name="CheckOcrDependencies" BeforeTargets="PrepareForBuild">
-    <Error Condition="!Exists('packages\Tesseract.5.2.0\build\Tesseract.targets')" Text="Restore NuGet packages before building (nuget restore OfficeWorkAssistant.sln). Tesseract 5.2.0 is required." />
-    <Error Condition="!Exists('tessdata\eng.traineddata')" Text="The bundled English OCR model tessdata\eng.traineddata is missing. See README.md." />
-    <Error Condition="!Exists('tessdata\ara.traineddata')" Text="The bundled Arabic OCR model tessdata\ara.traineddata is missing. See README.md." />
-  </Target>
 </Project>

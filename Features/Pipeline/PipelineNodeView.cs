@@ -96,8 +96,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 var dot = Port(port);
                 int number = PipelineWork.AppendPortNumber(port);
-                dot.ToolTip = number == ports.Length && node.Kind == PipelineStepKind.Append
-                    ? "Drop a link here to add another table"
+                dot.ToolTip = number == ports.Length && PipelineWork.HasVariableInputs(node.Kind)
+                    ? "Drop a link here to add another input"
                     : "Drop a link here: " + PipelineWork.PortLabel(node.Kind, port);
                 var y = InputY(port);
                 Canvas.SetLeft(dot, -PortSize / 2);

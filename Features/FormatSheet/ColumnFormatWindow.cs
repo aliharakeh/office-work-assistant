@@ -37,8 +37,10 @@ namespace OfficeWorkAssistant.Features.FormatSheet
             Title = seed == null ? "Add column format" : "Edit column format";
             Owner = owner;
             WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen;
-            ResizeMode = ResizeMode.NoResize;
-            SizeToContent = SizeToContent.Height;
+            ResizeMode = ResizeMode.CanResize;
+            Height = 640;
+            MinHeight = 300;
+            MinWidth = 280;
             Width = 520;
 
             _column.ItemsSource = ExcelColumns.Labels(input);
@@ -56,40 +58,39 @@ namespace OfficeWorkAssistant.Features.FormatSheet
             _align.SelectedIndex = Math.Max(0, Math.Min((int)s.Align, _align.Items.Count - 1));
             _wrap.IsChecked = s.Wrap;
 
-            var widthRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            widthRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
-            widthRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            widthRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var widthRow = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+
             widthRow.Children.Add(_width);
-            var formatLabel = new TextBlock { Text = "Format ", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 6, 0) };
-            Grid.SetColumn(formatLabel, 1);
+            var formatLabel = new TextBlock { Text = "Format ", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 6, 0, 2) };
+
             widthRow.Children.Add(formatLabel);
-            Grid.SetColumn(_number, 2);
+
             widthRow.Children.Add(_number);
-            var wrapRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            wrapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            wrapRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var wrapRow = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+
             wrapRow.Children.Add(_align);
-            Grid.SetColumn(_wrap, 1);
+
             wrapRow.Children.Add(_wrap);
 
             var ok = new Button { Content = "OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
             ok.Click += Ok_Click;
             var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);
 
             var root = new StackPanel { Margin = new Thickness(12) };
             root.Children.Add(Label("Column"));
             root.Children.Add(_column);
-            root.Children.Add(Label("Width and number format"));
+            root.Children.Add(Label("Column width (blank = automatic)"));
             root.Children.Add(widthRow);
             root.Children.Add(Label("Align"));
             root.Children.Add(wrapRow);
             root.Children.Add(_error);
             root.Children.Add(buttons);
-            Content = root;
+            Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/OfficeWorkAssistant;component/Excel/EditorStyles.xaml", UriKind.Relative) });
+            Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         }
 
         // Returns the format the user saved, or null when the window was cancelled.

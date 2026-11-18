@@ -4,9 +4,12 @@ using System.Data;
 using System.Globalization;
 using System.IO;
 using OfficeWorkAssistant.Excel;
+using OfficeWorkAssistant.Features.ExcelProcessing;
+using OfficeWorkAssistant.Features.FillColumns;
+using OfficeWorkAssistant.Features.Highlight;
+using OfficeWorkAssistant.Expressions;
 using OfficeWorkAssistant.Features.FileOps;
 using OfficeWorkAssistant.Features.FilterSort;
-using OfficeWorkAssistant.Features.LoadImage;
 using OfficeWorkAssistant.Features.Pipeline;
 using OfficeWorkAssistant.Features.SaveText;
 
@@ -93,17 +96,15 @@ internal static class RunnerSmokeTests
         return true;
     }
 
-    // Load -> Filter & Sort -> Save, List folder -> File action, plus a Load image and a Save text:
-    // seven steps and six choices.
-    static PipelineDefinition FullDefinition(string source, string output, string textOutput, string scan, string copies, string image)
+    // Load -> Filter & Sort -> Save, List folder -> File action, plus Save text.
+    // Six steps and five choices.
+    static PipelineDefinition FullDefinition(string source, string output, string textOutput, string scan, string copies)
     {
         var def = new PipelineDefinition();
         var load = PipelineWork.AddNode(def, PipelineStepKind.Load, 0, 0);
         load.Settings = new LoadStepSettings { Path = source, Sheet = "" };
         var listed = PipelineWork.AddNode(def, PipelineStepKind.ListFolder, 0, 100);
         listed.Settings = new FolderScanSettings { Folder = scan };
-        var picture = PipelineWork.AddNode(def, PipelineStepKind.LoadImage, 0, 200);
-        picture.Settings = new LoadImageSettings { Path = image };
         var filter = PipelineWork.AddNode(def, PipelineStepKind.FilterSort, 100, 0);
         filter.Settings = new FilterSortSettings();
         var action = PipelineWork.AddNode(def, PipelineStepKind.FileAction, 100, 100);
@@ -146,19 +147,17 @@ internal static class RunnerSmokeTests
         string copies = Path.Combine(folder, "input-copies");
         Directory.CreateDirectory(scan);
         Directory.CreateDirectory(copies);
-        string image = Path.Combine(folder, "input-image.png");
-        File.WriteAllBytes(image, new byte[] { 0, 1, 2 });
-        var def = FullDefinition(source, output, textOutput, scan, copies, image);
+        var def = FullDefinition(source, output, textOutput, scan, copies);
         string file = Path.Combine(folder, "input-runner.xml");
         PipelineWork.SaveFile(def, file);
         byte[] saved = File.ReadAllBytes(file);
 
         var inputs = RunnerWork.Inputs(def);
-        Check(inputs.Count == 6, "A full pipeline should ask six things, not " + inputs.Count + ".");
+        Check(inputs.Count == 5, "A full pipeline should ask five things, not " + inputs.Count + ".");
         var kinds = new List<string>();
         foreach (var input in inputs)
             kinds.Add(input.Kind.ToString());
-        Check(string.Join(", ", kinds.ToArray()) == "ExcelFile, Folder, ImageFile, Folder, ExcelOutput, TextOutput",
+        Check(string.Join(", ", kinds.ToArray()) == "ExcelFile, Folder, Folder, ExcelOutput, TextOutput",
             "The choices are not the expected kinds in running order: " + string.Join(", ", kinds.ToArray()));
         // Every choice follows the running order of the step it belongs to.
         var running = PipelineWork.Order(def);
@@ -179,9 +178,6 @@ internal static class RunnerSmokeTests
         var scanInput = Choice(inputs, Of(def, PipelineStepKind.ListFolder).Id);
         Check(scanInput.Kind == RunnerInputKind.Folder && scanInput.Value == scan && !scanInput.IsOutput,
             "The List folder step did not ask for its folder.");
-        var imageInput = Choice(inputs, Of(def, PipelineStepKind.LoadImage).Id);
-        Check(imageInput.Kind == RunnerInputKind.ImageFile && imageInput.Value == image && !imageInput.IsOutput && !imageInput.HasSheet,
-            "The Load image step did not ask for its image.");
         var actionInput = Choice(inputs, Of(def, PipelineStepKind.FileAction).Id);
         Check(actionInput.Kind == RunnerInputKind.Folder && actionInput.Value == copies && !actionInput.IsOutput,
             "The File action step did not ask where the copies go.");
@@ -277,7 +273,7 @@ internal static class RunnerSmokeTests
         Directory.CreateDirectory(scan);
         Directory.CreateDirectory(copies);
         var def = FullDefinition(source, Path.Combine(folder, "describe-out.xlsx"), Path.Combine(folder, "describe.txt"),
-            scan, copies, Path.Combine(folder, "describe-image.png"));
+            scan, copies);
         var order = PipelineWork.Order(def);
         var notes = RunnerWork.Describe(def);
         var lined = true;
@@ -289,14 +285,14 @@ internal static class RunnerSmokeTests
             if (string.IsNullOrWhiteSpace(notes[i].Text))
                 described = false;
         }
-        Check(notes.Count == 7 && notes.Count == order.Count && lined, "Describe should give one line per step in running order.");
+        Check(notes.Count == 6 && notes.Count == order.Count && lined, "Describe should give one line per step in running order.");
         Check(described, "A step has no plain-language description.");
         var saveNote = Note(notes, PipelineStepKind.Save);
         Check(saveNote != null && Says(saveNote.Text, "Excel file"), "The Save line does not mention the Excel file.");
         var actionNote = Note(notes, PipelineStepKind.FileAction);
         Check(actionNote != null && Says(actionNote.Text, "Copies"), "The File action line is not about copying.");
         string headline = RunnerWork.Headline(def);
-        Check(Says(headline, "7 steps") && Says(headline, "4 inputs") && Says(headline, "2 outputs"),
+        Check(Says(headline, "6 steps") && Says(headline, "3 inputs") && Says(headline, "2 outputs"),
             "The headline should count the steps, inputs and outputs: " + headline);
 
         var quiet = SimpleDefinition(source, Path.Combine(folder, "describe-out.xlsx"));
@@ -467,6 +463,99 @@ internal static class RunnerSmokeTests
             "The runner does not read the saved Load choice back.");
     }
 
+    static void MatchRuleChecks(string folder)
+    {
+        var a = new DataTable();
+        ExcelFile.AddColumn(a, "Code"); ExcelFile.AddColumn(a, "Region"); ExcelFile.AddColumn(a, "Result");
+        a.Rows.Add("x", "north", "first");
+        a.Rows.Add("y", "south", "second");
+        var b = a.Clone();
+        b.Rows.Add("x", "south", "original");
+        b.Rows.Add("z", "none", "unmatched");
+        b.Rows.Add("", "north", "blank");
+        var compare = new ExcelProcessingSettings();
+        compare.Matches.Add(new ExcelProcessingMatch { ColumnA = "Code", ColumnB = "Code", ExpressionA = "$Value", ExpressionB = "$Value" });
+        compare.Matches.Add(new ExcelProcessingMatch { ColumnA = "Region", ColumnB = "Region", ExpressionA = "$Value", ExpressionB = "$Value" });
+        Check(compare.MatchAll && new FillColumnsSettings().MatchAll, "New match settings must default to AND.");
+        Check(ExcelProcessingWork.Run(a, b, compare).Rows.Count == 0, "AND should require both keys.");
+        compare.MatchAll = false;
+        Check(ExcelProcessingWork.Run(a, b, compare).Rows.Count == 3, "OR should include either key, including a nonblank key beside a blank one.");
+        compare.Operation = "AOnly";
+        Check(ExcelProcessingWork.Run(a, b, compare).Rows.Count == 0, "AOnly must exclude any matched A row.");
+        compare.Operation = "BOnly";
+        Check(ExcelProcessingWork.Run(a, b, compare).Rows.Count == 1, "BOnly must keep only the row with no OR match.");
+        var fill = new FillColumnsSettings();
+        fill.Keys.Add(new FillColumnsKey { FormulaA = "$Code", FormulaB = "$Code" });
+        fill.Keys.Add(new FillColumnsKey { FormulaA = "$Region", FormulaB = "$Region" });
+        fill.Rules.Add(new FillColumnsRule { Target = "Result", When = "$Matched", Value = "$A_Result" });
+        Check((string)FillColumnsWork.Run(a, b, fill).Rows[0][2] == "original", "AND fill should not match just one key.");
+        fill.MatchAll = false;
+        var filled = FillColumnsWork.Run(a, b, fill);
+        Check((string)filled.Rows[0][2] == "first" && (string)filled.Rows[2][2] == "first", "OR fill must choose the earliest A row and ignore blank keys independently.");
+        Check((string)b.Rows[0][2] == "original", "Matching must not mutate its input.");
+        b.Rows.Add("x", "north", "both");
+        compare.Operation = "Common";
+        Check(ExcelProcessingWork.Run(a, b, compare).Rows.Count == 4, "A pair matching both OR rules must appear once.");
+
+        var def = new PipelineDefinition();
+        var node = PipelineWork.AddNode(def, PipelineStepKind.Compare, 0, 0);
+        node.Settings = compare;
+        Check(RunnerWork.RuleGroups(node).Count == 0, "Run rules must default to hidden.");
+        node.EditMatchRulesInRunMode = true;
+        var groups = RunnerWork.RuleGroups(node);
+        Check(groups.Count == 1 && groups[0].CanAdd && !groups[0].GetMatchAll(), "Allowed compare rules and OR mode should be exposed.");
+        var path = Path.Combine(folder, "match-rules.xml");
+        PipelineWork.SaveFile(def, path);
+        var before = File.ReadAllText(path);
+        var loaded = PipelineWork.LoadFile(path);
+        var loadedNode = loaded.Nodes[0];
+        Check(loadedNode.EditMatchRulesInRunMode && !((ExcelProcessingSettings)loadedNode.Settings).MatchAll, "Rule permission and OR mode must survive XML.");
+        groups = RunnerWork.RuleGroups(loadedNode);
+        groups[0].SetMatchAll(true);
+        ((ExcelProcessingMatch)groups[0].Rows[0]).ExpressionA = "changed";
+        Check(File.ReadAllText(path) == before && !((ExcelProcessingSettings)PipelineWork.LoadFile(path).Nodes[0].Settings).MatchAll,
+            "Run rule edits must never change the saved file.");
+        var oldXml = before.Replace("<MatchAll>false</MatchAll>", "").Replace(" EditMatchRulesInRunMode=\"true\"", "");
+        File.WriteAllText(path, oldXml);
+        loadedNode = PipelineWork.LoadFile(path).Nodes[0];
+        Check(((ExcelProcessingSettings)loadedNode.Settings).MatchAll && !loadedNode.EditMatchRulesInRunMode,
+            "Older pipelines must load as AND with run editing disabled.");
+        node.Kind = PipelineStepKind.FillColumns; node.Settings = fill;
+        groups = RunnerWork.RuleGroups(node);
+        Check(groups.Count == 2 && groups[1].Fields.Length == 1 && groups[1].Fields[0] == "When", "Fill actions must expose only their condition.");
+        node.Kind = PipelineStepKind.Highlight; node.Settings = new HighlightSettings { Rules = new List<HighlightRule> { new HighlightRule() } };
+        Check(RunnerWork.RuleGroups(node)[0].Fields[0] == "Condition" && !RunnerWork.RuleGroups(node)[0].CanAdd, "Highlight style settings must remain fixed.");
+    }
+
+    static bool HasVariable(RunnerRuleGroup group, string name)
+    {
+        foreach (var variable in group.Variables)
+            if (variable.Name == name) return true;
+        return false;
+    }
+
+    static void RuleHelpChecks()
+    {
+        var node = new PipelineNode { Kind = PipelineStepKind.Compare, Settings = new ExcelProcessingSettings(), EditMatchRulesInRunMode = true };
+        var group = RunnerWork.RuleGroups(node)[0];
+        Check(HasVariable(group, "$Value") && HasVariable(group, "$1") && HasVariable(group, "$2") && group.HelpText.Contains("Expression A"), "Compare help must explain each side, selected values and split parts.");
+        node.Kind = PipelineStepKind.FillColumns;
+        node.Settings = new FillColumnsSettings { Rules = new List<FillColumnsRule> { new FillColumnsRule() } };
+        var groups = RunnerWork.RuleGroups(node);
+        Check(!HasVariable(groups[0], "$Matched") && HasVariable(groups[1], "$Matched") && HasVariable(groups[1], "$Value"), "Fill key help must be separate from fill condition variables.");
+        Check(groups[1].HelpText.Contains("$Value == \"\"") && !groups[1].HelpText.Contains("\\"), "Formula examples should show literal quotes without escape characters.");
+        node.Kind = PipelineStepKind.FindFiles; node.Settings = new FindFilesSettings();
+        groups = RunnerWork.RuleGroups(node);
+        Check(!HasVariable(groups[0], "$Key") && HasVariable(groups[1], "$Key") && HasVariable(groups[1], "$Ext") && HasVariable(groups[1], "$Value") && HasVariable(groups[1], "$1") && HasVariable(groups[1], "$2"), "Scan help must exclude key variables, while file match help includes them.");
+        node.Kind = PipelineStepKind.MergeFolders; node.Settings = new OfficeWorkAssistant.Features.MergeDuplicates.MergeFoldersSettings();
+        group = RunnerWork.RuleGroups(node)[0];
+        Check(HasVariable(group, "$A / $B") && !HasVariable(group, "$A, $B, ..."), "Merge help must describe folder names rather than spreadsheet columns.");
+        node.Kind = PipelineStepKind.Highlight; node.Settings = new HighlightSettings { Rules = new List<HighlightRule> { new HighlightRule() } };
+        Check(HasVariable(RunnerWork.RuleGroups(node)[0], "$Value"), "Highlight help must explain cell values.");
+        node.Kind = PipelineStepKind.FilterSort; node.Settings = new FilterSortSettings();
+        Check(RunnerWork.RuleGroups(node)[0].HelpText.Contains("Kind = Formula"), "Filter help must explain which fields to use for formulas.");
+    }
+
     static int Main()
     {
         string folder = Path.Combine(Path.GetTempPath(), "OfficeWorkAssistant-Runner-" + Guid.NewGuid().ToString("N"));
@@ -474,6 +563,8 @@ internal static class RunnerSmokeTests
         bool passed = false;
         try
         {
+            RuleHelpChecks();
+            MatchRuleChecks(folder);
             InputChecks(folder);
             SheetChecks(folder);
             ProblemChecks(folder);

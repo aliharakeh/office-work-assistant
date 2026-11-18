@@ -27,11 +27,13 @@ namespace OfficeWorkAssistant.Features.FillColumns
     public sealed class FillColumnsSettings
     {
         public List<FillColumnsKey> Keys { get; set; }
+        public bool MatchAll { get; set; }
         public List<FillColumnsRule> Rules { get; set; }
 
         public FillColumnsSettings()
         {
             Keys = new List<FillColumnsKey>();
+            MatchAll = true;
             Rules = new List<FillColumnsRule>();
         }
     }
@@ -57,7 +59,7 @@ namespace OfficeWorkAssistant.Features.FillColumns
 
         // maxRows <= 0 fills every B row (used for saving); a positive value keeps the preview small.
         public static FillColumnsResult Fill(DataTable a, DataTable b, IList<FillColumnsKey> keys,
-            IList<FillColumnsRule> rules, int maxRows)
+            IList<FillColumnsRule> rules, int maxRows, bool matchAll = true)
         {
             if (a == null || b == null)
                 throw new InvalidOperationException("Open both Excel files first.");
@@ -69,13 +71,11 @@ namespace OfficeWorkAssistant.Features.FillColumns
             var shared = new HashSet<string>(StringComparer.Ordinal);
             foreach (DataRow row in a.Rows)
             {
-                var k = Key(a, row, keys, true);
-                if (k.Length == 0)
-                    continue;
-                if (lookup.ContainsKey(k))
-                    shared.Add(k);
-                else
-                    lookup[k] = row;
+                foreach (var k in MatchKeys(a, row, keys, true, matchAll))
+                {
+                    if (lookup.ContainsKey(k)) shared.Add(k);
+                    else lookup[k] = row;
+                }
             }
 
             var table = b.Clone();
@@ -101,9 +101,13 @@ namespace OfficeWorkAssistant.Features.FillColumns
                     dest[c] = b.Rows[r][c];
 
                 DataRow match = null;
-                var k = Key(b, b.Rows[r], keys, false);
-                if (k.Length > 0)
-                    lookup.TryGetValue(k, out match);
+                foreach (var k in MatchKeys(b, b.Rows[r], keys, false, matchAll))
+                {
+                    DataRow candidate;
+                    if (lookup.TryGetValue(k, out candidate) &&
+                        (match == null || a.Rows.IndexOf(candidate) < a.Rows.IndexOf(match)))
+                        match = candidate;
+                }
                 if (match != null)
                     result.Matched++;
                 else
@@ -141,7 +145,7 @@ namespace OfficeWorkAssistant.Features.FillColumns
         {
             if (settings == null)
                 throw new InvalidOperationException("Set up the merge first.");
-            return Fill(a, b, settings.Keys, settings.Rules, 0).Table;
+            return Fill(a, b, settings.Keys, settings.Rules, 0, settings.MatchAll).Table;
         }
 
         // $names that no column or built-in answers. They evaluate as blank, which is usually a typo.
@@ -180,6 +184,21 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 yield break;
             foreach (Match m in Names.Matches(formula))
                 yield return m.Groups[1].Value;
+        }
+
+        static IEnumerable<string> MatchKeys(DataTable table, DataRow row, IList<FillColumnsKey> keys, bool isA, bool matchAll)
+        {
+            if (matchAll)
+            {
+                var key = Key(table, row, keys, isA);
+                if (key.Length > 0) yield return key;
+                yield break;
+            }
+            for (var i = 0; i < keys.Count; i++)
+            {
+                var key = Key(table, row, new[] { keys[i] }, isA);
+                if (key.Length > 0) yield return i + ":" + key;
+            }
         }
 
         static string Key(DataTable table, DataRow row, IList<FillColumnsKey> keys, bool isA)

@@ -14,7 +14,7 @@ namespace OfficeWorkAssistant.Features.Templates
         readonly DataTable _input;
         readonly IList<TemplateColumn> _existing;
         readonly int _editingIndex;
-        readonly TextBox _name = new TextBox { Margin = new Thickness(0, 0, 12, 0) };
+        readonly TextBox _name = new TextBox { Margin = new Thickness(0, 0, 0, 6) };
         readonly ComboBox _kind = new ComboBox();
         readonly TextBox _fixedValue = new TextBox();
         readonly ComboBox _copySource = new ComboBox();
@@ -47,8 +47,10 @@ namespace OfficeWorkAssistant.Features.Templates
             Title = seed == null ? "Add column" : "Edit column";
             Owner = owner;
             WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen;
-            ResizeMode = ResizeMode.NoResize;
-            SizeToContent = SizeToContent.Height;
+            ResizeMode = ResizeMode.CanResize;
+            Height = 640;
+            MinHeight = 300;
+            MinWidth = 280;
             Width = 640;
 
             _name.Text = s.Name != null ? s.Name : "";
@@ -88,16 +90,12 @@ namespace OfficeWorkAssistant.Features.Templates
             _panelConditional.Children.Add(_falseValue);
             _panelConditional.Children.Add(Hint("Condition uses > >= == < <= != with && || !, e.g. $A > 10 && $B == \"OK\" or $C > $Today. Then/Else are formulas like $B * 2 or text in quotes."));
 
-            var nameRow = new Grid { Margin = new Thickness(0, 0, 0, 6) };
-            nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-            nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
-            nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var nameRow = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
+
             var nameLabel = new TextBlock { Text = "Col name", VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(_name, 1);
+
             var kindLabel = new TextBlock { Text = "Kind", VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(kindLabel, 2);
-            Grid.SetColumn(_kind, 3);
+
             nameRow.Children.Add(nameLabel);
             nameRow.Children.Add(_name);
             nameRow.Children.Add(kindLabel);
@@ -109,7 +107,7 @@ namespace OfficeWorkAssistant.Features.Templates
             var ok = new Button { Content = "OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
             ok.Click += Ok_Click;
             var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);
 
@@ -120,11 +118,12 @@ namespace OfficeWorkAssistant.Features.Templates
             root.Children.Add(_panelConcat);
             root.Children.Add(_panelMath);
             root.Children.Add(_panelConditional);
-            root.Children.Add(new DockPanel { Margin = new Thickness(0, 0, 0, 6), LastChildFill = false });
             root.Children.Add(variables);
             root.Children.Add(_error);
             root.Children.Add(buttons);
-            Content = root;
+            Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("/OfficeWorkAssistant;component/Excel/EditorStyles.xaml", UriKind.Relative) });
+            Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
 
             LoadEditor(s);
         }

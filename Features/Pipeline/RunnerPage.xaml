@@ -72,6 +72,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" MinHeight="120" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <Grid>
@@ -82,7 +83,9 @@
                                    TextWrapping="Wrap" TextAlignment="Center" Text="Pick a pipeline on the left to see what it needs." />
                     </Grid>
 
-                    <Border x:Name="ResultBox" Grid.Row="1" Background="#F7F9FA" BorderBrush="#DDE3E8" BorderThickness="1"
+                    <StackPanel x:Name="SharedButtons" Grid.Row="1" Margin="4,8,4,0" />
+
+                    <Border x:Name="ResultBox" Grid.Row="2" Background="#F7F9FA" BorderBrush="#DDE3E8" BorderThickness="1"
                             CornerRadius="4" Padding="10" Margin="0,8,0,0" Visibility="Collapsed">
                         <StackPanel>
                             <TextBlock x:Name="ResultTitle" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,4" />

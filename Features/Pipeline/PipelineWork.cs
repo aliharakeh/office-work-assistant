@@ -7,15 +7,15 @@ using System.Xml.Serialization;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Features.Append;
 using OfficeWorkAssistant.Features.ArrangeColumns;
+using OfficeWorkAssistant.Features.EditHeaders;
 using OfficeWorkAssistant.Features.CleanText;
 using OfficeWorkAssistant.Features.ExcelProcessing;
 using OfficeWorkAssistant.Features.FileOps;
 using OfficeWorkAssistant.Features.FormatSheet;
 using OfficeWorkAssistant.Features.Highlight;
 using OfficeWorkAssistant.Features.MergeDuplicates;
-using OfficeWorkAssistant.Features.LoadImage;
-using OfficeWorkAssistant.Features.Ocr;
 using OfficeWorkAssistant.Features.SaveText;
+using OfficeWorkAssistant.Features.Pdf;
 using OfficeWorkAssistant.Features.FilterSort;
 using OfficeWorkAssistant.Features.FillColumns;
 using OfficeWorkAssistant.Features.RemoveDuplicates;
@@ -46,9 +46,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
         Append,
         Highlight,
         FormatSheet,
-        Ocr,
-        LoadImage,
-        SaveText
+        SaveText,
+        EditHeaders,
+        LoadPdf,
+        ArrangePdf,
+        MergePdf,
+        SplitPdf,
+        SavePdf
     }
 
     public enum SaveStepMode
@@ -62,6 +66,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         public string Path { get; set; }
         // Blank = the first sheet.
         public string Sheet { get; set; }
+        public bool FirstRowIsData { get; set; }
     }
 
     public sealed class SaveStepSettings
@@ -109,6 +114,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
         [XmlAttribute]
         public double Y { get; set; }
 
+        [XmlAttribute]
+        public bool EditMatchRulesInRunMode { get; set; }
+
+        [XmlAttribute]
+        public bool ShowInRunMode { get; set; }
+
         // null = the step is not set up yet.
         [XmlElement("Load", typeof(LoadStepSettings))]
         [XmlElement("FilterSort", typeof(FilterSortSettings))]
@@ -126,12 +137,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
         [XmlElement("CombineColumns", typeof(CombineColumnsSettings))]
         [XmlElement("RemoveDuplicates", typeof(RemoveDuplicatesSettings))]
         [XmlElement("ArrangeColumns", typeof(ArrangeColumnsSettings))]
+        [XmlElement("EditHeaders", typeof(EditHeadersSettings))]
         [XmlElement("Append", typeof(AppendSettings))]
         [XmlElement("Highlight", typeof(HighlightSettings))]
         [XmlElement("FormatSheet", typeof(FormatSheetSettings))]
-        [XmlElement("Ocr", typeof(OcrSettings))]
-        [XmlElement("LoadImage", typeof(LoadImageSettings))]
         [XmlElement("SaveText", typeof(SaveTextSettings))]
+        [XmlElement("LoadPdf", typeof(LoadPdfSettings))]
+        [XmlElement("ArrangePdf", typeof(ArrangePdfSettings))]
+        [XmlElement("MergePdf", typeof(MergePdfSettings))]
+        [XmlElement("SplitPdf", typeof(SplitPdfSettings))]
+        [XmlElement("SavePdf", typeof(SavePdfSettings))]
         public object Settings { get; set; }
     }
 
@@ -175,12 +190,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
         // The ports a kind starts with. Append grows: see InputPorts.
         public static string[] Ports(PipelineStepKind kind)
         {
-            if (kind == PipelineStepKind.Load || kind == PipelineStepKind.ListFolder || kind == PipelineStepKind.MergeFolders ||
-                kind == PipelineStepKind.LoadImage)
+            if (kind == PipelineStepKind.Load || kind == PipelineStepKind.ListFolder || kind == PipelineStepKind.MergeFolders)
                 return NoPorts;
-            if (kind == PipelineStepKind.Compare || kind == PipelineStepKind.FillColumns)
+            if (kind == PipelineStepKind.Compare || kind == PipelineStepKind.FillColumns || kind == PipelineStepKind.ArrangePdf)
                 return TwoPorts;
-            if (kind == PipelineStepKind.Append)
+            if (HasVariableInputs(kind))
                 return new[] { AppendPort(1) };
             return OnePort;
         }
@@ -188,13 +202,24 @@ namespace OfficeWorkAssistant.Features.Pipeline
         // The ports a step on the canvas has now. Append has one per linked table plus a free one.
         public static string[] InputPorts(PipelineDefinition def, PipelineNode node)
         {
-            if (node.Kind != PipelineStepKind.Append)
+            if (!HasVariableInputs(node.Kind))
                 return Ports(node.Kind);
             var count = AppendLinks(def, node.Id).Count;
             var ports = new string[count + 1];
             for (var i = 0; i < ports.Length; i++)
                 ports[i] = AppendPort(i + 1);
             return ports;
+        }
+
+        public static bool HasVariableInputs(PipelineStepKind kind)
+        {
+            return kind == PipelineStepKind.Append || kind == PipelineStepKind.MergePdf;
+        }
+
+        public static bool IsOptionalInput(PipelineStepKind kind, string port)
+        {
+            return kind == PipelineStepKind.ValueList || HasVariableInputs(kind) ||
+                kind == PipelineStepKind.LoadPdf || (kind == PipelineStepKind.ArrangePdf && port == PortB);
         }
 
         static string AppendPort(int n)
@@ -230,7 +255,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         public static bool CompactPorts(PipelineDefinition def, string nodeId)
         {
             var node = Find(def, nodeId);
-            if (node == null || node.Kind != PipelineStepKind.Append)
+            if (node == null || !HasVariableInputs(node.Kind))
                 return false;
             var changed = false;
             var links = AppendLinks(def, nodeId);
@@ -265,12 +290,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.CombineColumns: return "Combine columns";
                 case PipelineStepKind.RemoveDuplicates: return "Remove duplicates";
                 case PipelineStepKind.ArrangeColumns: return "Arrange columns";
+                case PipelineStepKind.EditHeaders: return "Edit headers";
                 case PipelineStepKind.Append: return "Append tables";
                 case PipelineStepKind.Highlight: return "Highlight";
                 case PipelineStepKind.FormatSheet: return "Format sheet";
-                case PipelineStepKind.Ocr: return "OCR images";
-                case PipelineStepKind.LoadImage: return "Load image";
                 case PipelineStepKind.SaveText: return "Save text / JSON";
+                case PipelineStepKind.LoadPdf: return "Load PDF";
+                case PipelineStepKind.ArrangePdf: return "Arrange PDF pages";
+                case PipelineStepKind.MergePdf: return "Merge PDFs";
+                case PipelineStepKind.SplitPdf: return "Split PDF";
+                case PipelineStepKind.SavePdf: return "Save PDF";
                 default: return "Save file";
             }
         }
@@ -295,12 +324,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.CombineColumns: return "Join several columns into one.";
                 case PipelineStepKind.RemoveDuplicates: return "Keep one row per key, or show the repeats.";
                 case PipelineStepKind.ArrangeColumns: return "Pick, reorder and rename columns.";
+                case PipelineStepKind.EditHeaders: return "Add, clear or rename headers with text or formulas.";
                 case PipelineStepKind.Append: return "Stack the rows of several tables.";
                 case PipelineStepKind.Highlight: return "Colour cells or rows that match a condition.";
                 case PipelineStepKind.FormatSheet: return "Header style, widths, freeze, filter, formats.";
-                case PipelineStepKind.Ocr: return "Read text from images into a new column, offline.";
-                case PipelineStepKind.LoadImage: return "Choose one image file to feed into OCR images.";
                 case PipelineStepKind.SaveText: return "Save column text, lists, sets or maps to a text / JSON file.";
+                case PipelineStepKind.LoadPdf: return "Read one PDF file or a column of PDF paths.";
+                case PipelineStepKind.ArrangePdf: return "Select, reorder, rotate, duplicate or insert pages.";
+                case PipelineStepKind.MergePdf: return "Combine PDF documents in input order or interleave their pages.";
+                case PipelineStepKind.SplitPdf: return "Divide PDF documents into groups of pages.";
+                case PipelineStepKind.SavePdf: return "Write the PDF documents to disk.";
                 default: return "Write the result to an Excel file.";
             }
         }
@@ -315,9 +348,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.FindFiles:
                 case PipelineStepKind.FileAction:
                 case PipelineStepKind.MergeFolders:
-                case PipelineStepKind.Ocr:
-                case PipelineStepKind.LoadImage:
                 case PipelineStepKind.SaveText:
+                case PipelineStepKind.LoadPdf:
+                case PipelineStepKind.ArrangePdf:
+                case PipelineStepKind.MergePdf:
+                case PipelineStepKind.SplitPdf:
+                case PipelineStepKind.SavePdf:
                     return true;
                 default:
                     return false;
@@ -327,7 +363,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         // Terminal saves write only after all computations and file actions have succeeded.
         public static bool IsSaveKind(PipelineStepKind kind)
         {
-            return kind == PipelineStepKind.Save || kind == PipelineStepKind.SaveText;
+            return kind == PipelineStepKind.Save || kind == PipelineStepKind.SaveText || kind == PipelineStepKind.SavePdf;
         }
 
         // Steps that style the table for Save. Their result keeps the style; every other step drops it.
@@ -359,6 +395,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 return port == PortA ? "File A" : "File B";
             if (kind == PipelineStepKind.FindFiles)
                 return "keys input";
+            if (kind == PipelineStepKind.ArrangePdf)
+                return port == PortA ? "A (main PDF)" : "B (insert pages)";
+            if (kind == PipelineStepKind.LoadPdf)
+                return "optional PDF paths";
+            if (kind == PipelineStepKind.MergePdf)
+                return "PDF input " + AppendPortNumber(port).ToString(CultureInfo.InvariantCulture);
             if (kind == PipelineStepKind.Append)
                 return "table " + AppendPortNumber(port).ToString(CultureInfo.InvariantCulture);
             return "input";
@@ -392,8 +434,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 node.Settings = new LoadStepSettings();
             else if (kind == PipelineStepKind.Save)
                 node.Settings = new SaveStepSettings();
-            else if (kind == PipelineStepKind.LoadImage)
-                node.Settings = new LoadImageSettings();
+            else if (kind == PipelineStepKind.LoadPdf)
+                node.Settings = new LoadPdfSettings();
+            else if (kind == PipelineStepKind.ArrangePdf)
+                node.Settings = new ArrangePdfSettings();
+            else if (kind == PipelineStepKind.MergePdf)
+                node.Settings = new MergePdfSettings();
+            else if (kind == PipelineStepKind.SplitPdf)
+                node.Settings = new SplitPdfSettings();
+            else if (kind == PipelineStepKind.SavePdf)
+                node.Settings = new SavePdfSettings();
             def.Nodes.Add(node);
             return node;
         }
@@ -418,7 +468,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             foreach (var l in def.Links)
             {
                 var to = Find(def, l.To);
-                if (l.From == id && l.To != id && to != null && to.Kind == PipelineStepKind.Append && !fed.Contains(l.To))
+                if (l.From == id && l.To != id && to != null && HasVariableInputs(to.Kind) && !fed.Contains(l.To))
                     fed.Add(l.To);
             }
             def.Nodes.RemoveAll(n => n.Id == id);
@@ -570,7 +620,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         static bool PortFits(PipelineStepKind kind, string port)
         {
-            if (kind == PipelineStepKind.Append)
+            if (HasVariableInputs(kind))
                 return AppendPortNumber(port) > 0;
             return Array.IndexOf(Ports(kind), port) >= 0;
         }
@@ -596,12 +646,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.CombineColumns: return settings is CombineColumnsSettings;
                 case PipelineStepKind.RemoveDuplicates: return settings is RemoveDuplicatesSettings;
                 case PipelineStepKind.ArrangeColumns: return settings is ArrangeColumnsSettings;
+                case PipelineStepKind.EditHeaders: return settings is EditHeadersSettings;
                 case PipelineStepKind.Append: return settings is AppendSettings;
                 case PipelineStepKind.Highlight: return settings is HighlightSettings;
                 case PipelineStepKind.FormatSheet: return settings is FormatSheetSettings;
-                case PipelineStepKind.Ocr: return settings is OcrSettings;
-                case PipelineStepKind.LoadImage: return settings is LoadImageSettings;
                 case PipelineStepKind.SaveText: return settings is SaveTextSettings;
+                case PipelineStepKind.LoadPdf: return settings is LoadPdfSettings;
+                case PipelineStepKind.ArrangePdf: return settings is ArrangePdfSettings;
+                case PipelineStepKind.MergePdf: return settings is MergePdfSettings;
+                case PipelineStepKind.SplitPdf: return settings is SplitPdfSettings;
+                case PipelineStepKind.SavePdf: return settings is SavePdfSettings;
                 default: return settings is SaveStepSettings;
             }
         }
@@ -697,6 +751,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (dedupe != null)
                 return RemoveDuplicatesWork.KeepLabel(dedupe.Keep) + (dedupe.UseFormula ? " by " + dedupe.KeyFormula
                     : dedupe.Keys.Count == 0 ? " (whole rows)" : " by " + string.Join(", ", dedupe.Keys.ToArray()));
+            var headers = s as EditHeadersSettings;
+            if (headers != null)
+                return headers.Columns.Count + " header edits" + (string.IsNullOrWhiteSpace(headers.Formula) ? "" : ", formula for all headers");
             var arrange = s as ArrangeColumnsSettings;
             if (arrange != null)
                 return ArrangeColumnsWork.Summary(arrange);
@@ -711,12 +768,21 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var format = s as FormatSheetSettings;
             if (format != null)
                 return FormatSheetWork.Summary(format);
-            var ocr = s as OcrSettings;
-            if (ocr != null)
-                return ocr.PathColumn + " -> " + ocr.TextHeader + " (" + ocr.Languages + ")";
-            var image = s as LoadImageSettings;
-            if (image != null)
-                return string.IsNullOrWhiteSpace(image.Path) ? "Choose an image file." : Path.GetFileName(image.Path);
+            var pdfLoad = s as LoadPdfSettings;
+            if (pdfLoad != null)
+                return string.IsNullOrWhiteSpace(pdfLoad.PathColumn) ? Path.GetFileName(pdfLoad.Path) : pdfLoad.PathColumn;
+            var arrangePdf = s as ArrangePdfSettings;
+            if (arrangePdf != null)
+                return arrangePdf.Pages;
+            var mergePdf = s as MergePdfSettings;
+            if (mergePdf != null)
+                return mergePdf.Interleave ? "Interleave pages" : "In input order";
+            var splitPdf = s as SplitPdfSettings;
+            if (splitPdf != null)
+                return string.IsNullOrWhiteSpace(splitPdf.Ranges) ? splitPdf.PagesPerFile + " pages per file" : splitPdf.Ranges;
+            var pdfSave = s as SavePdfSettings;
+            if (pdfSave != null)
+                return Path.GetFileName(pdfSave.Path);
             var textSave = s as SaveTextSettings;
             if (textSave != null)
                 return SaveTextWork.FormatLabel(textSave.Format) + " -> " +
@@ -794,9 +860,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 }
             }
 
-            if (!CheckSaveTargets(saves, result))
+            var sources = PdfSources(order, wanted, cache);
+            if (!CheckSaveTargets(saves, cache, sources, result))
                 return result;
-            if (writeFiles && RunActions(def, order, wanted, cache, result))
+            if (!writeFiles)
+                return result;
+
+            var pdfTargets = PdfReplacements(saves, cache);
+            if (RunActions(def, order, wanted, cache, result) &&
+                CheckSaveTargets(saves, cache, PdfSources(order, wanted, cache), result) &&
+                CheckPdfReplacements(saves, cache, pdfTargets, result))
                 WriteSaves(saves, cache, result);
             return result;
         }
@@ -846,17 +919,75 @@ namespace OfficeWorkAssistant.Features.Pipeline
             return true;
         }
 
-        // Check before any disk action: text output must not collide with another save,
-        // including an Excel step that would add a sheet to the same path.
-        static bool CheckSaveTargets(List<PipelineNode> saves, PipelineRunResult result)
+        static HashSet<string> PdfSources(List<PipelineNode> order, HashSet<string> wanted, IDictionary<string, DataTable> cache)
+        {
+            var sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var node in order)
+            {
+                if (node.Kind == PipelineStepKind.LoadPdf && (wanted == null || wanted.Contains(node.Id)))
+                    sources.UnionWith(PdfWork.Sources(cache[node.Id]));
+            }
+            return sources;
+        }
+
+        static Dictionary<string, HashSet<string>> PdfReplacements(List<PipelineNode> saves, IDictionary<string, DataTable> cache)
+        {
+            var replacements = new Dictionary<string, HashSet<string>>();
+            foreach (var save in saves)
+            {
+                if (save.Kind == PipelineStepKind.SavePdf)
+                    replacements[save.Id] = new HashSet<string>(PdfWork.Targets(cache[save.Id], true), StringComparer.OrdinalIgnoreCase);
+            }
+            return replacements;
+        }
+
+        static bool CheckPdfReplacements(List<PipelineNode> saves, IDictionary<string, DataTable> cache,
+            Dictionary<string, HashSet<string>> before, PipelineRunResult result)
+        {
+            foreach (var save in saves)
+            {
+                if (save.Kind != PipelineStepKind.SavePdf)
+                    continue;
+                foreach (string path in PdfWork.Targets(cache[save.Id], true))
+                {
+                    if (before[save.Id].Contains(path))
+                        continue;
+                    result.FailedNodeId = save.Id;
+                    result.Error = "A PDF output now needs a new replacement confirmation. Run again to review: " + path;
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Check every planned file, including the numbered outputs of Split PDF.
+        static bool CheckSaveTargets(List<PipelineNode> saves, IDictionary<string, DataTable> cache,
+            HashSet<string> pdfSources, PipelineRunResult result)
         {
             var created = new Dictionary<string, PipelineNode>(StringComparer.OrdinalIgnoreCase);
             foreach (var node in saves)
             {
-                string path;
                 try
                 {
-                    path = SaveTargetPath(node);
+                    foreach (string path in SaveTargetPaths(node, cache))
+                    {
+                        if (pdfSources.Contains(path))
+                            throw new InvalidOperationException("Choose a new output path to keep the source PDF: " + path);
+                        PipelineNode other;
+                        if (!created.TryGetValue(path, out other))
+                        {
+                            created[path] = node;
+                            continue;
+                        }
+                        var currentExcel = node.Settings as SaveStepSettings;
+                        var otherExcel = other.Settings as SaveStepSettings;
+                        if (currentExcel == null || otherExcel == null ||
+                            (currentExcel.Mode == SaveStepMode.NewFile && otherExcel.Mode == SaveStepMode.NewFile))
+                            throw new InvalidOperationException("This step and '" + other.Title + "' both write " + path +
+                                ". Choose different output files (Excel steps may instead add new sheets).");
+                        if (currentExcel.Mode == SaveStepMode.NewFile)
+                            created[path] = node;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -864,26 +995,15 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     result.Error = ex.Message;
                     return false;
                 }
-                PipelineNode other;
-                if (created.TryGetValue(path, out other))
-                {
-                    var currentExcel = node.Settings as SaveStepSettings;
-                    var otherExcel = other.Settings as SaveStepSettings;
-                    // Text output may not share a file; Excel steps may, as long as only one replaces it
-                    // (a new file writes first, sheets are added to it afterwards).
-                    if (currentExcel == null || otherExcel == null ||
-                        (currentExcel.Mode == SaveStepMode.NewFile && otherExcel.Mode == SaveStepMode.NewFile))
-                    {
-                        result.FailedNodeId = node.Id;
-                        result.Error = "This step and '" + other.Title + "' both write " + path +
-                            ". Choose different output files (Excel steps may instead add new sheets).";
-                        return false;
-                    }
-                    continue;
-                }
-                created[path] = node;
             }
             return true;
+        }
+
+        static IEnumerable<string> SaveTargetPaths(PipelineNode node, IDictionary<string, DataTable> cache)
+        {
+            if (node.Kind == PipelineStepKind.SavePdf)
+                return PdfWork.Targets(cache[node.Id], false);
+            return new[] { SaveTargetPath(node) };
         }
 
         public static string SaveTargetPath(PipelineNode node)
@@ -922,6 +1042,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 try
                 {
+                    if (node.Kind == PipelineStepKind.SavePdf)
+                    {
+                        cache[node.Id] = PdfWork.Write(cache[node.Id], result.Written);
+                        continue;
+                    }
                     if (node.Kind == PipelineStepKind.SaveText)
                     {
                         cache[node.Id] = SaveTextWork.Write(cache[node.Id]);
@@ -951,6 +1076,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
             // Save passes its input through; that table belongs to the step before it.
             if (!IsStyleKind(node.Kind) && node.Kind != PipelineStepKind.Save)
                 ExcelFile.ClearStyle(table);
+            if (node.Kind != PipelineStepKind.Save && node.Kind != PipelineStepKind.LoadPdf &&
+                node.Kind != PipelineStepKind.ArrangePdf && node.Kind != PipelineStepKind.MergePdf && node.Kind != PipelineStepKind.SplitPdf)
+                PdfWork.ClearDocuments(table);
             return table;
         }
 
@@ -966,10 +1094,34 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     var s = (LoadStepSettings)node.Settings;
                     if (string.IsNullOrWhiteSpace(s.Path))
                         throw new InvalidOperationException("Choose a file to load.");
-                    return ExcelFile.Load(s.Path, string.IsNullOrEmpty(s.Sheet) ? null : s.Sheet, 0).Table;
+                    return ExcelFile.Load(s.Path, string.IsNullOrEmpty(s.Sheet) ? null : s.Sheet, 0, !s.FirstRowIsData).Table;
                 }
-                case PipelineStepKind.LoadImage:
-                    return LoadImageWork.Run((LoadImageSettings)node.Settings);
+                case PipelineStepKind.LoadPdf:
+                {
+                    var input = OptionalInput(def, node, PortIn, cache);
+                    var settings = (LoadPdfSettings)node.Settings;
+                    if (input != null)
+                    {
+                        settings = Clone(settings);
+                        string header = string.IsNullOrEmpty(settings.PathColumn) ? "Path" : settings.PathColumn;
+                        settings.PathColumn = LetterOf(input, header, true);
+                    }
+                    return PdfWork.Load(input, settings);
+                }
+                case PipelineStepKind.ArrangePdf:
+                    return PdfWork.Arrange(Input(def, node, PortA, cache), OptionalInput(def, node, PortB, cache),
+                        (ArrangePdfSettings)node.Settings);
+                case PipelineStepKind.MergePdf:
+                {
+                    var tables = new List<DataTable>();
+                    foreach (var link in AppendLinks(def, node.Id))
+                        tables.Add(Input(def, node, link.Port, cache));
+                    return PdfWork.Merge(tables, (MergePdfSettings)node.Settings);
+                }
+                case PipelineStepKind.SplitPdf:
+                    return PdfWork.Split(Input(def, node, PortIn, cache), (SplitPdfSettings)node.Settings);
+                case PipelineStepKind.SavePdf:
+                    return PdfWork.PlanSave(Input(def, node, PortIn, cache), (SavePdfSettings)node.Settings);
                 case PipelineStepKind.SaveText:
                 {
                     var input = Input(def, node, PortIn, cache);
@@ -1025,6 +1177,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     var input = Input(def, node, PortIn, cache);
                     return RemoveDuplicatesWork.Run(input, RemoveDuplicatesToLetters((RemoveDuplicatesSettings)node.Settings, input, true));
                 }
+                case PipelineStepKind.EditHeaders:
+                {
+                    var input = Input(def, node, PortIn, cache);
+                    return EditHeadersWork.Run(input, HeadersToLetters((EditHeadersSettings)node.Settings, input, true));
+                }
                 case PipelineStepKind.ArrangeColumns:
                 {
                     var input = Input(def, node, PortIn, cache);
@@ -1054,11 +1211,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     var input = Input(def, node, PortIn, cache);
                     return FormatSheetWork.Run(input, FormatSheetToLetters((FormatSheetSettings)node.Settings, input, true));
                 }
-                case PipelineStepKind.Ocr:
-                {
-                    var input = Input(def, node, PortIn, cache);
-                    return OcrWork.Run(input, OcrToLetters((OcrSettings)node.Settings, input, true));
-                }
                 default:
                 {
                     // Files are written after every step worked; see WriteSaves.
@@ -1079,6 +1231,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (!string.Equals(Path.GetExtension(s.Path), ".xlsx", StringComparison.OrdinalIgnoreCase))
                 return "Save to a .xlsx file.";
             return ExcelFile.CheckSheetName(s.SheetName);
+        }
+
+        static DataTable OptionalInput(PipelineDefinition def, PipelineNode node, string port, IDictionary<string, DataTable> cache)
+        {
+            return InputLink(def, node.Id, port) == null ? null : Input(def, node, port, cache);
         }
 
         static DataTable Input(PipelineDefinition def, PipelineNode node, string port, IDictionary<string, DataTable> cache)
@@ -1162,6 +1319,20 @@ namespace OfficeWorkAssistant.Features.Pipeline
             return t;
         }
 
+        public static LoadPdfSettings LoadPdfToNames(LoadPdfSettings settings, DataTable input)
+        {
+            var result = Clone(settings);
+            result.PathColumn = NameOf(input, result.PathColumn);
+            return result;
+        }
+
+        public static LoadPdfSettings LoadPdfToLetters(LoadPdfSettings settings, DataTable input)
+        {
+            var result = Clone(settings ?? new LoadPdfSettings());
+            result.PathColumn = LetterOf(input, result.PathColumn, false) ?? result.PathColumn;
+            return result;
+        }
+
         public static SaveTextSettings SaveTextToNames(SaveTextSettings settings, DataTable input)
         {
             var s = Clone(settings);
@@ -1175,20 +1346,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var s = Clone(settings);
             s.Column = LetterOf(input, s.Column, strict) ?? "";
             s.ValueColumn = LetterOf(input, s.ValueColumn, strict && SaveTextWork.IsMap(s.Format)) ?? "";
-            return s;
-        }
-
-        public static OcrSettings OcrToNames(OcrSettings settings, DataTable input)
-        {
-            var s = Clone(settings);
-            s.PathColumn = NameOf(input, s.PathColumn);
-            return s;
-        }
-
-        public static OcrSettings OcrToLetters(OcrSettings settings, DataTable input, bool strict)
-        {
-            var s = Clone(settings);
-            s.PathColumn = LetterOf(input, s.PathColumn, strict) ?? "";
             return s;
         }
 
@@ -1257,6 +1414,46 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var s = Clone(settings);
             foreach (var c in s.Columns)
                 c.Source = NameOf(input, c.Source);
+            return s;
+        }
+
+        public static EditHeadersSettings HeadersToNames(EditHeadersSettings settings, DataTable input)
+        {
+            var s = Clone(settings);
+            foreach (var edit in s.Columns)
+            {
+                if (string.IsNullOrWhiteSpace(edit.Source)) continue;
+                var column = input.Columns[ExcelColumns.Index(input, edit.Source)];
+                string header = ExcelFile.Header(column);
+                int matches = 0;
+                foreach (DataColumn c in input.Columns)
+                    if (string.Equals(ExcelFile.Header(c), header, StringComparison.OrdinalIgnoreCase)) matches++;
+                // Binding ids identify blank and duplicate headers unambiguously.
+                edit.SourceIsId = string.IsNullOrWhiteSpace(header) || matches > 1;
+                edit.Source = edit.SourceIsId ? column.ColumnName : header;
+            }
+            return s;
+        }
+
+        public static EditHeadersSettings HeadersToLetters(EditHeadersSettings settings, DataTable input, bool strict)
+        {
+            var s = Clone(settings);
+            s.Columns.RemoveAll(edit =>
+            {
+                if (string.IsNullOrWhiteSpace(edit.Source)) return false;
+                string letter;
+                if (edit.SourceIsId)
+                {
+                    var column = input.Columns[edit.Source];
+                    if (column == null && strict) throw new InvalidOperationException("Header column is missing: " + edit.Source);
+                    letter = column == null ? null : ExcelColumns.Letter(column.Ordinal);
+                }
+                else letter = LetterOf(input, edit.Source, strict);
+                if (letter == null) return true;
+                edit.Source = letter;
+                edit.SourceIsId = false;
+                return false;
+            });
             return s;
         }
 
@@ -1336,7 +1533,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
             int index;
             if (FilterSortWork.TryParseColumnLetter(FilterSortWork.ExtractLetter(letter), out index) &&
                 index < input.Columns.Count)
-                return ExcelFile.Header(input.Columns[index]);
+                return string.IsNullOrWhiteSpace(ExcelFile.Header(input.Columns[index]))
+                    ? input.Columns[index].ColumnName : ExcelFile.Header(input.Columns[index]);
             return letter;
         }
 

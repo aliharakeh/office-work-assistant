@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using Microsoft.Win32;
 using OfficeWorkAssistant.Excel;
+using OfficeWorkAssistant.Features.Pdf;
 using OfficeWorkAssistant.Features.Append;
 using OfficeWorkAssistant.Features.ArrangeColumns;
 using OfficeWorkAssistant.Features.CleanText;
@@ -64,16 +65,18 @@ namespace OfficeWorkAssistant.Features.Pipeline
             new[] { PipelineStepKind.Load,
                 PipelineStepKind.FilterSort, PipelineStepKind.RemoveDuplicates,
                 PipelineStepKind.CleanText, PipelineStepKind.Templates, PipelineStepKind.SplitColumn,
-                PipelineStepKind.CombineColumns, PipelineStepKind.ArrangeColumns,
+                PipelineStepKind.CombineColumns, PipelineStepKind.ArrangeColumns, PipelineStepKind.EditHeaders,
                 PipelineStepKind.Compare, PipelineStepKind.Append, PipelineStepKind.FillColumns,
                 PipelineStepKind.Highlight, PipelineStepKind.FormatSheet,
                 PipelineStepKind.Save },
-            new[] { PipelineStepKind.LoadImage, PipelineStepKind.ValueList, PipelineStepKind.ListFolder, PipelineStepKind.FindFiles,
-                PipelineStepKind.Ocr, PipelineStepKind.SaveText, PipelineStepKind.FileAction, PipelineStepKind.MergeFolders }
+            new[] { PipelineStepKind.ValueList, PipelineStepKind.ListFolder, PipelineStepKind.FindFiles,
+                PipelineStepKind.SaveText, PipelineStepKind.FileAction, PipelineStepKind.MergeFolders },
+            new[] { PipelineStepKind.LoadPdf, PipelineStepKind.ArrangePdf, PipelineStepKind.MergePdf,
+                PipelineStepKind.SplitPdf, PipelineStepKind.SavePdf }
         };
         static readonly string[] PaletteHeaders =
         {
-            "Excel", "Files and folders"
+            "Excel", "Files and folders", "PDF"
         };
 
         public PipelinePage()
@@ -440,12 +443,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
             if (saves.Count == 0 && actions.Count == 0)
             {
-                Alert("Add a Save file, Save text / JSON, File action or Merge folders step: those are the steps that write or change files.", "Nothing to save", MessageBoxImage.Warning);
+                Alert("Add a Save file, Save text / JSON, Save PDF, File action or Merge folders step: those are the steps that write or change files.", "Nothing to save", MessageBoxImage.Warning);
                 return;
             }
 
             // Start clean so every Load step reads its file again.
             _cache.Clear();
+
+            bool hasPdfSave = saves.Exists(node => node.Kind == PipelineStepKind.SavePdf);
+            if ((hasPdfSave || actions.Count > 0) && !RunPreview(null))
+                return;
 
             var warnings = new List<string>();
             var replaced = new List<string>();
@@ -454,8 +461,15 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 try
                 {
                     var excel = node.Settings as SaveStepSettings;
+                    if (excel != null && excel.Mode != SaveStepMode.NewFile)
+                        continue;
+                    if (node.Kind == PipelineStepKind.SavePdf)
+                    {
+                        replaced.AddRange(PdfWork.Targets(_cache[node.Id], true));
+                        continue;
+                    }
                     string path = PipelineWork.SaveTargetPath(node);
-                    if ((excel == null || excel.Mode == SaveStepMode.NewFile) && System.IO.File.Exists(path))
+                    if (System.IO.File.Exists(path))
                         replaced.Add(path);
                 }
                 catch (Exception ex)
@@ -468,9 +482,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 warnings.Add("These files will be replaced:\n" + string.Join("\n", replaced.ToArray()));
             if (actions.Count > 0)
             {
-                // A dry run first, so the question can say how many items each action touches.
-                if (!RunPreview(null))
-                    return;
                 var lines = new List<string>();
                 foreach (var node in actions)
                 {
@@ -488,7 +499,10 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var result = Execute(null, true, true);
             if (result.Error != null)
             {
-                Alert(result.Error, "Pipeline stopped", MessageBoxImage.Error);
+                string message = result.Error;
+                if (result.Written.Count > 0)
+                    message += "\n\nFiles already saved:\n" + string.Join("\n", result.Written.ToArray());
+                Alert(message, "Pipeline stopped", MessageBoxImage.Error);
                 return;
             }
             var done = new List<string>();
@@ -528,7 +542,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
             // Building a chain: the new step reads from the selected one.
             var ports = PipelineWork.Ports(kind);
-            if (from != null && ports.Length > 0)
+            if (from != null && ports.Length > 0 && kind != PipelineStepKind.LoadPdf)
                 Connect(from.Id, node.Id, ports[0]);
 
             MarkDirty();
@@ -539,9 +553,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             BringIntoView(node);
             if (kind == PipelineStepKind.Load)
                 BrowseLoad(node);
-            else if (kind == PipelineStepKind.LoadImage)
-                BrowseImage(node);
-            else if (PipelineWork.Ports(kind).Length == 0 || from != null)
+            else if (ports.Length == 0 || kind == PipelineStepKind.LoadPdf || from != null)
                 SetStatus("Added " + node.Title + ". Set it up in the panel on the right.");
             else
                 SetStatus("Added " + node.Title + ". Link an earlier step's right dot to its left dot, then set it up in the panel on the right.");
@@ -601,11 +613,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
             Board.Children.Add(view.Root);
         }
 
-        // An Append step's ports follow its links, so its box is built again when they change.
+        // Variable input ports follow their links.
         void RebuildView(string id)
         {
             PipelineNodeView old;
-            if (!_views.TryGetValue(id, out old) || old.Node.Kind != PipelineStepKind.Append)
+            if (!_views.TryGetValue(id, out old) || !PipelineWork.HasVariableInputs(old.Node.Kind))
                 return;
             Board.Children.Remove(old.Root);
             AddView(old.Node);
@@ -629,11 +641,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
             if (e.ClickCount == 2 && view.Node.Kind == PipelineStepKind.Save)
             {
                 BrowseSave(view.Node);
-                return;
-            }
-            if (e.ClickCount == 2 && view.Node.Kind == PipelineStepKind.LoadImage)
-            {
-                BrowseImage(view.Node);
                 return;
             }
             if (e.ClickCount == 2 && view.Node.Kind == PipelineStepKind.SaveText)

@@ -7,14 +7,16 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Data;
+using OfficeWorkAssistant.Expressions;
 using Microsoft.Win32;
 using Forms = System.Windows.Forms;
 
 namespace OfficeWorkAssistant.Features.Pipeline
 {
     // Run mode: the page for the person who did not build the pipeline. It shows the saved
-    // pipelines as cards on the left, asks only for the files, folders and output names a run
-    // needs, says in plain words what the pipeline does, and runs it. What is filled in here
+    // pipelines as cards on the left, shows the steps and settings selected by the builder,
+    // says in plain words what the pipeline does, and runs it. What is filled in here
     // applies to this run only: nothing on this page is ever saved back to the pipeline.
     public partial class RunnerPage : Page
     {
@@ -28,6 +30,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             public TextBlock SheetProblem;
             public TextBlock Problem;
             public StackPanel Root;
+            public TabItem Branch;
             // The sheet combo is filled in here, so its SelectionChanged is not the user's.
             public bool Filling;
         }
@@ -50,6 +53,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         string _openPath;
         Border _openCard;
         Button _openFolder;
+        TabControl _branchTabs;
 
         public RunnerPage()
         {
@@ -243,6 +247,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
             _blocks.Clear();
             _openFolder = null;
             Form.Children.Clear();
+            SharedButtons.Children.Clear();
+            _branchTabs = null;
             FormScroll.Visibility = Visibility.Collapsed;
             NoSelection.Visibility = Visibility.Visible;
             ResultBox.Visibility = Visibility.Collapsed;
@@ -253,7 +259,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
         // Built from the loaded pipeline: what to fill in, where the results go, what it does.
         void BuildForm()
         {
+            var selected = _branchTabs != null ? _branchTabs.SelectedItem as TabItem : null;
+            var selectedSink = selected != null ? selected.Tag as string : null;
             Form.Children.Clear();
+            SharedButtons.Children.Clear();
+            _branchTabs = null;
             _inputs.Clear();
             _blocks.Clear();
             _openFolder = null;
@@ -300,7 +310,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 Form.Children.Add(new TextBlock
                 {
                     Text = "This pipeline does not write or change anything yet, so there is nothing to run. " +
-                        "Ask whoever built it to add a Save file, Save text / JSON, File action or Merge folders step.",
+                        "Ask whoever built it to add a Save file, Save text / JSON, Save PDF, File action or Merge folders step.",
                     Foreground = Brushes.Gray,
                     TextWrapping = TextWrapping.Wrap
                 });
@@ -308,37 +318,77 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
 
             _inputs.AddRange(inputs);
-            var reads = new List<RunnerInput>();
-            var writes = new List<RunnerInput>();
-            foreach (var input in inputs)
+            var order = PipelineWork.Order(_def);
+            var feeds = new HashSet<string>();
+            foreach (var link in _def.Links) feeds.Add(link.From);
+            _branchTabs = new TabControl { Margin = new Thickness(0, 6, 0, 0) };
+            foreach (var sink in _def.Nodes)
             {
-                if (input.IsOutput)
-                    writes.Add(input);
-                else
-                    reads.Add(input);
+                if (feeds.Contains(sink.Id)) continue;
+                var upstream = PipelineWork.Upstream(_def, sink.Id);
+                var panel = new StackPanel { Margin = new Thickness(6) };
+                var tab = new TabItem
+                {
+                    Tag = sink.Id,
+                    Header = new TextBlock { Text = sink.Title, MaxWidth = 140, TextWrapping = TextWrapping.Wrap },
+                    ToolTip = "The steps that lead to " + sink.Title,
+                    Content = panel
+                };
+                for (var i = 0; i < order.Count; i++)
+                {
+                    var node = order[i];
+                    if (!upstream.Contains(node.Id) || !node.ShowInRunMode) continue;
+                    panel.Children.Add(Separator());
+                    panel.Children.Add(SectionHeader(node.Title));
+                    foreach (var input in inputs)
+                    {
+                        if (input.NodeId != node.Id) continue;
+                        panel.Children.Add(InputRow(input));
+                        _blocks[_blocks.Count - 1].Branch = tab;
+                    }
+                    var editNode = node;
+                    var edit = new Button { Content = "Edit step settings...", HorizontalAlignment = HorizontalAlignment.Left,
+                        Margin = new Thickness(0, 4, 0, 8), Padding = new Thickness(8, 3, 8, 3) };
+                    edit.Click += (s, e) => EditSettings(editNode);
+                    panel.Children.Add(edit);
+                }
+                panel.Children.Add(Separator());
+                panel.Children.Add(SectionHeader("WHAT THIS BRANCH DOES"));
+                int number = 0;
+                for (var i = 0; i < order.Count; i++)
+                    if (upstream.Contains(order[i].Id)) panel.Children.Add(NoteRow(notes[i], ++number));
+                _branchTabs.Items.Add(tab);
+                if (sink.Id == selectedSink) _branchTabs.SelectedItem = tab;
             }
+            if (_branchTabs.SelectedIndex < 0 && _branchTabs.Items.Count > 0) _branchTabs.SelectedIndex = 0;
+            Form.Children.Add(_branchTabs);
+            SharedButtons.Children.Add(new TextBlock { Text = "Check and Run include every branch.", TextWrapping = TextWrapping.Wrap,
+                Foreground = Brushes.Gray, FontSize = 11, Margin = new Thickness(0, 0, 0, 4) });
+            SharedButtons.Children.Add(ButtonRow());
+        }
 
-            if (reads.Count > 0)
+        void EditSettings(PipelineNode node)
+        {
+            try
             {
-                Form.Children.Add(SectionHeader("FILL IN"));
-                foreach (var input in reads)
-                    Form.Children.Add(InputRow(input));
+                var dialog = new Window { Title = node.Title, Owner = Window.GetWindow(this), Width = 720, Height = 650,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner };
+                var editor = PipelineStepEditor.Prepare(_def, node, settings =>
+                {
+                    node.Settings = settings;
+                    dialog.DialogResult = true;
+                });
+                dialog.Content = new ScrollViewer { Content = editor, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(12) };
+                if (dialog.ShowDialog() == true)
+                {
+                    _cache.Clear();
+                    ResultBox.Visibility = Visibility.Collapsed;
+                    BuildForm();
+                    SetStatus("Updated " + node.Title + " for this run only.");
+                }
             }
-            if (writes.Count > 0)
-            {
-                Form.Children.Add(Separator());
-                Form.Children.Add(SectionHeader("WHERE THE RESULTS GO"));
-                foreach (var input in writes)
-                    Form.Children.Add(InputRow(input));
-            }
-
-            Form.Children.Add(Separator());
-            Form.Children.Add(SectionHeader("WHAT THIS PIPELINE DOES"));
-            for (var i = 0; i < notes.Count; i++)
-                Form.Children.Add(NoteRow(notes[i], i + 1));
-
-            Form.Children.Add(Separator());
-            Form.Children.Add(ButtonRow());
+            catch (Exception ex) { SetStatus("Cannot edit " + node.Title + ": " + ex.Message); }
         }
 
         // One file or folder the person running the pipeline has to choose.
@@ -358,13 +408,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     Margin = new Thickness(0, 1, 0, 4)
                 });
 
-            var row = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
-            var browse = new Button { Content = "Browse...", Width = 84, Margin = new Thickness(6, 0, 0, 0) };
+            var row = new StackPanel { Margin = new Thickness(0, 4, 0, 4) };
+            var browse = new Button { Content = "Browse...", Width = 84, Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
             browse.Click += (s, e) => Browse(block);
-            DockPanel.SetDock(browse, Dock.Right);
-            block.Box = new TextBox { IsReadOnly = true, Text = input.Value, TextWrapping = TextWrapping.NoWrap };
-            row.Children.Add(browse);
+            block.Box = new TextBox { IsReadOnly = true, Text = input.Value, TextWrapping = TextWrapping.Wrap };
             row.Children.Add(block.Box);
+            row.Children.Add(browse);
             panel.Children.Add(row);
 
             if (input.Kind == RunnerInputKind.ExcelFile)
@@ -391,7 +440,10 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     return;
                 var name = block.Sheet.SelectedItem as string;
                 if (name != null)
+                {
                     block.Input.Sheet = name;
+                    RefreshInputBlocks(block.Input.NodeId);
+                }
             };
             panel.Children.Add(block.Sheet);
 
@@ -475,7 +527,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         FrameworkElement ButtonRow()
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
+            var row = new WrapPanel { Margin = new Thickness(0, 2, 0, 0) };
 
             var check = new Button { Content = "Check", Style = StyleOf("BarButton"), Margin = new Thickness(0) };
             check.Click += Check_Click;
@@ -491,7 +543,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 FontWeight = FontWeights.SemiBold
             };
             run.Click += Run_Click;
-            run.ToolTip = "Run the pipeline and write the results.";
+            run.ToolTip = "Run every branch and write all results.";
             row.Children.Add(run);
 
             _openFolder = new Button { Content = "Open output folder", Style = StyleOf("BarButton"), Visibility = Visibility.Collapsed };
@@ -525,24 +577,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
         {
             var input = block.Input;
             var chosen = "";
-            if (input.Kind == RunnerInputKind.ExcelFile)
+            if (input.Kind == RunnerInputKind.ExcelFile || input.Kind == RunnerInputKind.PdfFile)
             {
+                bool pdf = input.Kind == RunnerInputKind.PdfFile;
                 var dlg = new OpenFileDialog
                 {
-                    Filter = "Excel files (*.xlsx;*.xlsm)|*.xlsx;*.xlsm",
-                    Title = "Choose the Excel file for " + input.StepTitle,
-                    CheckFileExists = true
-                };
-                if (dlg.ShowDialog() != true)
-                    return;
-                chosen = dlg.FileName;
-            }
-            else if (input.Kind == RunnerInputKind.ImageFile)
-            {
-                var dlg = new OpenFileDialog
-                {
-                    Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff)|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff",
-                    Title = "Choose the image for " + input.StepTitle,
+                    Filter = pdf ? "PDF files (*.pdf)|*.pdf" : "Excel files (*.xlsx;*.xlsm)|*.xlsx;*.xlsm",
+                    Title = "Choose the file for " + input.StepTitle,
                     CheckFileExists = true
                 };
                 if (dlg.ShowDialog() != true)
@@ -562,17 +603,18 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     chosen = dlg.SelectedPath;
                 }
             }
-            else if (input.Kind == RunnerInputKind.ExcelOutput)
+            else if (input.Kind == RunnerInputKind.ExcelOutput || input.Kind == RunnerInputKind.PdfOutput)
             {
+                bool pdf = input.Kind == RunnerInputKind.PdfOutput;
                 var dlg = new SaveFileDialog
                 {
-                    Filter = "Excel workbook (*.xlsx)|*.xlsx",
-                    DefaultExt = ".xlsx",
+                    Filter = pdf ? "PDF files (*.pdf)|*.pdf" : "Excel workbook (*.xlsx)|*.xlsx",
+                    DefaultExt = input.DefaultExtension,
                     AddExtension = true,
                     // Replacing an output file is normal here; Run asks before it happens.
                     OverwritePrompt = false,
                     Title = "Where should the result be saved?",
-                    FileName = FileNameOf(input, "result.xlsx")
+                    FileName = FileNameOf(input, "result" + input.DefaultExtension)
                 };
                 if (dlg.ShowDialog() != true)
                     return;
@@ -596,9 +638,19 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
 
             input.Value = chosen;
-            block.Box.Text = chosen;
-            RefreshSheet(block);
-            block.Problem.Text = RunnerWork.InputProblem(input) ?? "";
+            RefreshInputBlocks(input.NodeId);
+        }
+
+        // Shared steps appear in several tabs, but all copies edit the same run settings.
+        void RefreshInputBlocks(string nodeId)
+        {
+            foreach (var block in _blocks)
+            {
+                if (block.Input.NodeId != nodeId) continue;
+                block.Box.Text = block.Input.Value;
+                RefreshSheet(block);
+                block.Problem.Text = RunnerWork.InputProblem(block.Input) ?? "";
+            }
         }
 
         // The file name the save dialog starts with: the one already chosen, or a sensible default.
@@ -620,13 +672,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         // ---------- checking and running ----------
 
-        // The boxes are read-only and filled by Browse, so the paths are already in the pipeline;
-        // copy them back anyway, then show every problem under its own box.
+        // Validate every branch, including choices in tabs that have not been selected.
         bool Validate()
         {
-            foreach (var block in _blocks)
-                block.Input.Value = block.Box.Text;
-
             InputBlock first = null;
             foreach (var block in _blocks)
             {
@@ -636,11 +684,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     first = block;
             }
 
-            if (RunnerWork.CheckInputs(_inputs) == null)
-                return true;
+            string inputProblem = RunnerWork.CheckInputs(_inputs);
+            if (inputProblem == null) return true;
+            SetStatus(inputProblem);
 
             if (first != null)
             {
+                _branchTabs.SelectedItem = first.Branch;
                 SetStatus(first.Problem.Text);
                 first.Root.BringIntoView();
                 first.Box.Focus();
@@ -674,14 +724,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 return;
 
             var warnings = new List<string>();
-            var replaced = RunnerWork.ReplacedFiles(_def);
-            if (replaced.Count > 0)
-                warnings.Add("These files will be replaced:\n" + string.Join("\n", replaced.ToArray()));
-
-            if (HasActions())
+            bool hasActions = HasActions();
+            bool hasPdfSave = _def.Nodes.Exists(node => node.Kind == PipelineStepKind.SavePdf);
+            _cache.Clear();
+            if (hasActions || hasPdfSave)
             {
-                // A dry run first, so the question can say how many items each action touches.
-                _cache.Clear();
                 var plan = RunPipeline(false);
                 if (plan.Error != null)
                 {
@@ -689,16 +736,18 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     SetStatus("This pipeline needs a change before it can run.");
                     return;
                 }
-                warnings.Add("These file actions will run:\n" + string.Join("\n", RunnerWork.ActionLines(_def, _cache).ToArray()));
             }
+            var replaced = RunnerWork.ReplacedFiles(_def, _cache);
+            if (replaced.Count > 0)
+                warnings.Add("These files will be replaced:\n" + string.Join("\n", replaced.ToArray()));
+            if (hasActions)
+                warnings.Add("These file actions will run:\n" + string.Join("\n", RunnerWork.ActionLines(_def, _cache).ToArray()));
 
             if (warnings.Count > 0 &&
                 MessageBox.Show(Window.GetWindow(this), string.Join("\n\n", warnings.ToArray()) + "\n\nContinue?", "Run the pipeline",
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
-            // Read every file again, then carry out the file steps and write the results.
-            _cache.Clear();
             var result = RunPipeline(true);
             if (result.Error != null)
             {

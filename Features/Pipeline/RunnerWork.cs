@@ -1,17 +1,22 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
+using System.ComponentModel;
+using OfficeWorkAssistant.Features.FillColumns;
+using OfficeWorkAssistant.Features.Highlight;
 using System.Data;
 using System.Globalization;
 using System.IO;
 using OfficeWorkAssistant.Excel;
+using OfficeWorkAssistant.Expressions;
 using OfficeWorkAssistant.Features.CleanText;
 using OfficeWorkAssistant.Features.ExcelProcessing;
 using OfficeWorkAssistant.Features.FileOps;
 using OfficeWorkAssistant.Features.FilterSort;
-using OfficeWorkAssistant.Features.LoadImage;
 using OfficeWorkAssistant.Features.MergeDuplicates;
 using OfficeWorkAssistant.Features.RemoveDuplicates;
 using OfficeWorkAssistant.Features.SaveText;
+using OfficeWorkAssistant.Features.Pdf;
 using OfficeWorkAssistant.Features.Templates;
 
 namespace OfficeWorkAssistant.Features.Pipeline
@@ -20,14 +25,15 @@ namespace OfficeWorkAssistant.Features.Pipeline
     public enum RunnerInputKind
     {
         ExcelFile,
-        ImageFile,
         Folder,
         ExcelOutput,
-        TextOutput
+        TextOutput,
+        PdfFile,
+        PdfOutput
     }
 
     // One thing the person running a saved pipeline must fill in: a file or folder the pipeline
-    // reads or writes. Everything else comes from the saved pipeline. Get and Set change the
+    // reads or writes. Optional match rules are exposed separately by RuleGroups. Get and Set change the
     // pipeline in memory only; the saved pipeline file is never written.
     public sealed class RunnerInput
     {
@@ -81,7 +87,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
         public bool IsOutput
         {
-            get { return Kind == RunnerInputKind.ExcelOutput || Kind == RunnerInputKind.TextOutput; }
+            get { return Kind == RunnerInputKind.ExcelOutput || Kind == RunnerInputKind.TextOutput || Kind == RunnerInputKind.PdfOutput; }
         }
 
         public string Value
@@ -142,6 +148,46 @@ namespace OfficeWorkAssistant.Features.Pipeline
         }
     }
 
+    public sealed class RunnerDuplicateRules
+    {
+        readonly RemoveDuplicatesSettings _settings;
+        public RunnerDuplicateRules(RemoveDuplicatesSettings settings) { _settings = settings; }
+        public bool UseFormula { get { return _settings.UseFormula; } set { _settings.UseFormula = value; } }
+        public string KeyFormula { get { return _settings.KeyFormula; } set { _settings.KeyFormula = value; } }
+        public string Columns
+        {
+            get { return string.Join(", ", (_settings.Keys ?? new List<string>()).ToArray()); }
+            set
+            {
+                var keys = new List<string>();
+                foreach (var key in (value ?? "").Split(','))
+                    if (key.Trim().Length > 0) keys.Add(key.Trim());
+                _settings.Keys = keys;
+            }
+        }
+    }
+
+    // Only these explicitly selected properties may be edited during a run.
+    public sealed class RunnerRuleGroup
+    {
+        public string Label;
+        public string HelpText;
+        public List<VariableHelp> Variables;
+        public IList Rows;
+        public string[] Fields;
+        public bool CanAdd;
+        public Func<bool> GetMatchAll;
+        public Action<bool> SetMatchAll;
+
+        public RunnerRuleGroup(string label, IList rows, bool canAdd, params string[] fields)
+        {
+            Label = label;
+            Rows = rows;
+            CanAdd = canAdd;
+            Fields = fields;
+        }
+    }
+
     // One line of the plain-language list of what a saved pipeline does.
     public sealed class RunnerStepNote
     {
@@ -179,15 +225,26 @@ namespace OfficeWorkAssistant.Features.Pipeline
                             () => load.Path, v => load.Path = v, null, () => load.Sheet, v => load.Sheet = v));
                         break;
                     }
-                    case PipelineStepKind.LoadImage:
+                    case PipelineStepKind.LoadPdf:
                     {
-                        var s = node.Settings as LoadImageSettings;
-                        if (s == null)
+                        var load = node.Settings as LoadPdfSettings;
+                        if (load == null || PipelineWork.InputLink(def, node.Id, PipelineWork.PortIn) != null)
                             break;
-                        var image = s;
-                        found.Add(new RunnerInput(node.Id, node.Title, RunnerInputKind.ImageFile,
-                            "The image file to read", step + " - reads this one image",
-                            () => image.Path, v => image.Path = v));
+                        found.Add(new RunnerInput(node.Id, node.Title, RunnerInputKind.PdfFile,
+                            "The PDF file to read", step + " - reads the document's pages",
+                            () => load.Path, v => load.Path = v));
+                        break;
+                    }
+                    case PipelineStepKind.SavePdf:
+                    {
+                        var save = node.Settings as SavePdfSettings;
+                        if (save == null)
+                            break;
+                        var output = new RunnerInput(node.Id, node.Title, RunnerInputKind.PdfOutput,
+                            "Where to save the PDF result", step + " - adds numbers to the filenames when saving several PDFs",
+                            () => save.Path, v => save.Path = v);
+                        output.DefaultExtension = ".pdf";
+                        found.Add(output);
                         break;
                     }
                     case PipelineStepKind.ListFolder:
@@ -272,6 +329,148 @@ namespace OfficeWorkAssistant.Features.Pipeline
             return found;
         }
 
+        public static bool HasMatchRules(PipelineStepKind kind)
+        {
+            switch (kind)
+            {
+                case PipelineStepKind.Compare:
+                case PipelineStepKind.FillColumns:
+                case PipelineStepKind.FilterSort:
+                case PipelineStepKind.Highlight:
+                case PipelineStepKind.Templates:
+                case PipelineStepKind.ListFolder:
+                case PipelineStepKind.FindFiles:
+                case PipelineStepKind.MergeFolders:
+                case PipelineStepKind.RemoveDuplicates:
+                    return true;
+                default: return false;
+            }
+        }
+
+        public static List<RunnerRuleGroup> RuleGroups(PipelineNode node)
+        {
+            var groups = new List<RunnerRuleGroup>();
+            if (!node.EditMatchRulesInRunMode || node.Settings == null || !HasMatchRules(node.Kind))
+                return groups;
+            var compare = node.Settings as ExcelProcessingSettings;
+            if (compare != null)
+            {
+                if (compare.Matches == null) compare.Matches = new List<ExcelProcessingMatch>();
+                var group = new RunnerRuleGroup("Match rules", new BindingList<ExcelProcessingMatch>(compare.Matches), true,
+                    "ColumnA", "ExpressionA", "SplitA", "Operator", "ColumnB", "ExpressionB", "SplitB");
+                group.GetMatchAll = () => compare.MatchAll;
+                group.SetMatchAll = v => compare.MatchAll = v;
+                groups.Add(group);
+            }
+            var fill = node.Settings as FillColumnsSettings;
+            if (fill != null)
+            {
+                if (fill.Keys == null) fill.Keys = new List<FillColumnsKey>();
+                var group = new RunnerRuleGroup("Match rows", new BindingList<FillColumnsKey>(fill.Keys), true, "FormulaA", "FormulaB");
+                group.GetMatchAll = () => fill.MatchAll;
+                group.SetMatchAll = v => fill.MatchAll = v;
+                groups.Add(group);
+                foreach (var rule in fill.Rules ?? new List<FillColumnsRule>())
+                    groups.Add(new RunnerRuleGroup("Fill condition for " + rule.Target, new[] { rule }, false, "When"));
+            }
+            var filter = node.Settings as FilterSortSettings;
+            if (filter != null)
+            {
+                if (filter.Conditions == null) filter.Conditions = new List<FilterCondition>();
+                var group = new RunnerRuleGroup("Filter rules", new BindingList<FilterCondition>(filter.Conditions), true,
+                    "Kind", "Column", "Operator", "Value", "Expression");
+                group.GetMatchAll = () => filter.MatchAll;
+                group.SetMatchAll = v => filter.MatchAll = v;
+                groups.Add(group);
+            }
+            var highlight = node.Settings as HighlightSettings;
+            if (highlight != null)
+                foreach (var rule in highlight.Rules ?? new List<HighlightRule>())
+                    groups.Add(new RunnerRuleGroup(rule.ToString(), new[] { rule }, false, "Condition"));
+            var template = node.Settings as TemplateDefinition;
+            if (template != null)
+                foreach (var column in template.Columns ?? new List<TemplateColumn>())
+                    if (column.Kind == TemplateColumnKind.Conditional)
+                        groups.Add(new RunnerRuleGroup("Condition for " + column.Name, new[] { column }, false, "Condition"));
+            var scan = node.Settings as FolderScanSettings;
+            var find = node.Settings as FindFilesSettings;
+            if (find != null) scan = find.Scan;
+            if (scan != null)
+                groups.Add(new RunnerRuleGroup("Folder scan filters (blank means all)", new[] { scan }, false, "FileFilter", "FolderFilter"));
+            if (find != null)
+                groups.Add(new RunnerRuleGroup("File matching", new[] { find }, false, "Match", "FileFormula", "FolderFormula"));
+            var merge = node.Settings as MergeFoldersSettings;
+            if (merge != null)
+                groups.Add(new RunnerRuleGroup("Folder match", new[] { merge }, false, "Condition"));
+            var dedupe = node.Settings as RemoveDuplicatesSettings;
+            if (dedupe != null)
+                groups.Add(new RunnerRuleGroup("Duplicate key (column headers separated by commas; blank means all columns)",
+                    new[] { new RunnerDuplicateRules(dedupe) }, false, "UseFormula", "KeyFormula", "Columns"));
+            foreach (var group in groups)
+                AddRuleHelp(group);
+            return groups;
+        }
+
+        static void AddRuleHelp(RunnerRuleGroup group)
+        {
+            group.HelpText = "Use $A for the first column, $B for the second, or a header such as $Qty. " +
+                "Compare with == != > >= < <=. Join conditions with && (AND) or || (OR). Put text in double quotes, for example $Status == \"Late\". " +
+                "Built-in variables and functions are listed below.";
+            group.Variables = new List<VariableHelp>
+            {
+                new VariableHelp { Name = "$A, $B, ...", Description = "Columns of the current row by Excel letter (A = first column)." },
+                new VariableHelp { Name = "$Qty", Description = "Example of a column by header name; use your own header. Excel letters take precedence over headers." }
+            };
+            if (group.Rows is BindingList<ExcelProcessingMatch>)
+            {
+                group.HelpText = "Expression A reads only the A row; Expression B reads only the B row. Column A / Column B choose the column used by $Value. " +
+                    "Split A / Split B set the separator for $1, $2, ... on that side. Example: TRIM($Value) on both sides with operator ==. " +
+                    "Leave one expression blank to test the other side as a true/false formula. At least one rule must use both sides.";
+                group.Variables.Add(new VariableHelp { Name = "$Value", Description = "Value of the chosen column on this side." });
+                group.Variables.Add(new VariableHelp { Name = "$1", Description = "First part of the chosen column after splitting with this side's separator.", Example = "Acme" });
+                group.Variables.Add(new VariableHelp { Name = "$2", Description = "Second split part. Use $3, $4, ... for later parts.", Example = "2024" });
+            }
+            else if (group.Rows is BindingList<FillColumnsKey>)
+            {
+                group.HelpText = "Formula A reads only the A row; Formula B reads only the B row. Their results are compared without case or surrounding spaces. " +
+                    "Blank keys do not match. Example: TRIM($Code) on both sides. The first matching A row supplies the fill values.";
+                group.Variables.Add(new VariableHelp { Name = "$A_Code / $B_Code", Description = "In Formula A, $A_Code refers to A's Code column. In Formula B, $B_Code refers to B's Code column. Each formula sees only its own side." });
+            }
+            else if (group.Rows is FillColumnsRule[])
+            {
+                group.HelpText = "When is true/false; blank means always. Fill conditions can read both rows and earlier fill results. " +
+                    "Example: $Matched && $Value == \"\". An unprefixed column reads B first, then A if B has no such header.";
+                group.Variables.Add(new VariableHelp { Name = "$A_Name / $A_C", Description = "Column by header or letter of the matched A row; blank when no row matched." });
+                group.Variables.Add(new VariableHelp { Name = "$B_Name / $B_C", Description = "Column of the B row being filled, including earlier fill results." });
+                group.Variables.Add(new VariableHelp { Name = "$Value", Description = "Current value of the target cell." });
+                group.Variables.Add(new VariableHelp { Name = "$Matched", Description = "TRUE when an A row matched this B row." });
+            }
+            else if (group.Rows is FolderScanSettings[] || group.Rows is FindFilesSettings[])
+            {
+                var matching = group.Rows is FindFilesSettings[];
+                group.HelpText = matching
+                    ? "In Formula match mode, File Formula and Folder Formula return true when an item belongs to the input key. Example: $1 == $Key && $Ext == \".pdf\"."
+                    : "File Filter and Folder Filter test items while scanning, before key matching. Blank means keep all. Example: $Ext == \".pdf\". Key variables are unavailable in scan filters.";
+                group.Variables = FileOpsWork.FileVariableHelp(matching, false);
+            }
+            else if (group.Rows is MergeFoldersSettings[])
+            {
+                group.HelpText = "Compare two subfolders A and B. A true condition groups them for merging. Example: $A1 == $B1. Split parts use the separator saved by the builder.";
+                group.Variables = new List<VariableHelp>
+                {
+                    new VariableHelp { Name = "$A / $B", Description = "Name of folder A / folder B.", Example = "Acme_2024" },
+                    new VariableHelp { Name = "$A1, $A2, ...", Description = "Split parts of folder A's name.", Example = "Acme" },
+                    new VariableHelp { Name = "$B1, $B2, ...", Description = "Split parts of folder B's name.", Example = "Acme" }
+                };
+            }
+            else if (group.Rows is HighlightRule[])
+                group.Variables.Add(new VariableHelp { Name = "$Value", Description = "Current cell, only for rules that test each cell separately. Row and column rules use row columns instead." });
+            else if (group.Rows is RunnerDuplicateRules[])
+                group.HelpText += " With Use Formula enabled, rows with the same Key Formula result are duplicates; otherwise Columns lists header names without $.";
+            else if (group.Rows is BindingList<FilterCondition>)
+                group.HelpText += " For Kind = Formula, use Expression. For Kind = Column, use the saved header in Column (without $), Operator and Value; Value also accepts built-in variables.";
+        }
+
         static string DescribeScan(FolderScanSettings scan)
         {
             var what = scan.Include == FileInclude.Files ? "lists the files"
@@ -335,11 +534,10 @@ namespace OfficeWorkAssistant.Features.Pipeline
                         return "The file has no sheet named \"" + input.Sheet + "\". It has: " + Join(names) + ".";
                 }
             }
-            else if (input.Kind == RunnerInputKind.ImageFile)
-            {
-                if (!File.Exists(path))
-                    return "The file does not exist: " + path;
-            }
+            else if (input.Kind == RunnerInputKind.PdfFile)
+                PdfWork.InputPath(path);
+            else if (input.Kind == RunnerInputKind.PdfOutput)
+                PdfWork.OutputPath(new SavePdfSettings { Path = path });
             else if (input.Kind == RunnerInputKind.Folder)
             {
                 if (!Directory.Exists(path))
@@ -396,8 +594,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 case PipelineStepKind.Load:
                     return "Reads one sheet of an Excel file.";
-                case PipelineStepKind.LoadImage:
-                    return "Reads one image file.";
                 case PipelineStepKind.Save:
                 {
                     var save = s as SaveStepSettings;
@@ -500,8 +696,6 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     return "Colours the cells or rows that match the saved rules.";
                 case PipelineStepKind.FormatSheet:
                     return "Sets the sheet's look: header style, widths, freeze and number formats.";
-                case PipelineStepKind.Ocr:
-                    return "Reads the text from each image into a new column, offline.";
                 default:
                     return PipelineWork.KindDescription(node.Kind);
             }
@@ -516,7 +710,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var actions = 0;
             foreach (var node in order)
             {
-                if (HasSourceInput(node))
+                if (HasSourceInput(def, node))
                     reads++;
                 if (PipelineWork.IsSaveKind(node.Kind))
                     writes++;
@@ -535,12 +729,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
         }
 
         // A step whose file or folder the user chooses (not one that only reads the row it is given).
-        static bool HasSourceInput(PipelineNode node)
+        static bool HasSourceInput(PipelineDefinition def, PipelineNode node)
         {
             switch (node.Kind)
             {
+                case PipelineStepKind.LoadPdf:
+                    return node.Settings != null && PipelineWork.InputLink(def, node.Id, PipelineWork.PortIn) == null;
                 case PipelineStepKind.Load:
-                case PipelineStepKind.LoadImage:
                 case PipelineStepKind.ListFolder:
                 case PipelineStepKind.FindFiles:
                 case PipelineStepKind.MergeFolders:
@@ -585,6 +780,17 @@ namespace OfficeWorkAssistant.Features.Pipeline
             {
                 if (!PipelineWork.IsSaveKind(node.Kind))
                     continue;
+                if (node.Kind == PipelineStepKind.SavePdf)
+                {
+                    DataTable plan;
+                    if (cache != null && cache.TryGetValue(node.Id, out plan))
+                    {
+                        foreach (DataRow output in plan.Rows)
+                            lines.Add("Writes " + output["Path"] + " - " + Count((int)output["Pages"], "page") +
+                                ((string)output["Status"] == "Overwrite" ? ", replacing the file." : "."));
+                    }
+                    continue;
+                }
                 string path;
                 try
                 {
@@ -632,7 +838,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         }
 
         // Files that exist and would be replaced, for the confirmation before a run.
-        public static List<string> ReplacedFiles(PipelineDefinition def)
+        public static List<string> ReplacedFiles(PipelineDefinition def, IDictionary<string, DataTable> cache = null)
         {
             var files = new List<string>();
             foreach (var node in PipelineWork.Order(def))
@@ -644,6 +850,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     continue;
                 try
                 {
+                    if (node.Kind == PipelineStepKind.SavePdf)
+                    {
+                        DataTable plan;
+                        if (cache != null && cache.TryGetValue(node.Id, out plan))
+                            files.AddRange(PdfWork.Targets(plan, true));
+                        continue;
+                    }
                     var path = PipelineWork.SaveTargetPath(node);
                     if (File.Exists(path))
                         files.Add(path);

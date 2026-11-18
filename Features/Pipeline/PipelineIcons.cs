@@ -48,18 +48,20 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.RemoveDuplicates: return "M8,8 H20 V20 H8 Z M16,8 V4 H4 V16 H8";
                 // Three columns with a move arrow.
                 case PipelineStepKind.ArrangeColumns: return "M3,3 H8 V14 H3 Z M10,3 H15 V14 H10 Z M17,3 H21 V14 H17 Z M5,19 H19 M16,16 L19,19 L16,22";
+                case PipelineStepKind.EditHeaders: return "M3,4 H21 V20 H3 Z M3,10 H21 M9,10 V20 M15,10 V20 M6,7 H10 M14,7 H18";
                 // Two tables stacked, plus.
                 case PipelineStepKind.Append: return "M4,3 H20 V8 H4 Z M4,10 H20 V15 H4 Z M12,17 V23 M9,20 H15";
                 // Marker pen.
                 case PipelineStepKind.Highlight: return "M15,4 L20,9 L10,19 L5,19 L5,14 Z M4,22 H20";
                 // Table with a header row.
                 case PipelineStepKind.FormatSheet: return "M3,4 H21 V20 H3 Z M3,9 H21 M9,9 V20 M15,9 V20";
-                // Scan corners around lines of text.
-                case PipelineStepKind.Ocr: return "M3,8 V3 H8 M16,3 H21 V8 M21,16 V21 H16 M8,21 H3 V16 M7,8 H17 M7,12 H17 M7,16 H14";
-                // Image frame, sun and mountains.
-                case PipelineStepKind.LoadImage: return "M3,3 H21 V21 H3 Z M3,18 L9,11 L13,15 L16,12 L21,18 M16,6 A2,2 0 1 1 16,10 A2,2 0 1 1 16,6";
                 // Text page with a save arrow.
                 case PipelineStepKind.SaveText: return "M4,2 H15 L20,7 V13 M15,2 V7 H20 M4,2 V22 H11 M7,10 H15 M7,14 H11 M17,14 V22 M13,18 L17,22 L21,18";
+                case PipelineStepKind.LoadPdf: return "M5,2 H14 L19,7 V22 H5 Z M14,2 V7 H19 M8,13 H16 M12,9 V17 M9,14 L12,17 L15,14";
+                case PipelineStepKind.ArrangePdf: return "M3,4 H15 M3,12 H15 M3,20 H15 M19,5 V19 M17,7 L19,5 L21,7 M17,17 L19,19 L21,17";
+                case PipelineStepKind.MergePdf: return "M3,3 H10 V10 H3 Z M14,3 H21 V10 H14 Z M6,10 V14 H12 M18,10 V14 H12 M12,14 V21 M9,18 L12,21 L15,18";
+                case PipelineStepKind.SplitPdf: return "M8,3 H16 V10 H8 Z M12,10 V14 H5 V20 M12,14 H19 V20 M3,18 L5,20 L7,18 M17,18 L19,20 L21,18";
+                case PipelineStepKind.SavePdf: return "M4,2 H13 L18,7 V12 M13,2 V7 H18 M4,2 V22 H11 M15,13 V22 M11,18 L15,22 L19,18";
                 default: return "M4,4 H20 V20 H4 Z";
             }
         }
