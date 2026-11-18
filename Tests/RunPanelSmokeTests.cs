@@ -126,8 +126,8 @@ internal static class RunPanelSmokeTests
             var dialogCases = new object[][]
             {
                 new object[] { "ExcelProcessing.MatchRuleWindow", new object[] { null, table, table, null } },
-                new object[] { "FillColumns.MatchKeyWindow", new object[] { null, null } },
-                new object[] { "FillColumns.FillRuleWindow", new object[] { null, table, null } },
+                new object[] { "FillColumns.MatchKeyWindow", new object[] { null, null, 0, new[] { table }, table } },
+                new object[] { "FillColumns.FillRuleWindow", new object[] { null, new[] { table }, 0, null } },
                 new object[] { "Templates.TemplateColumnWindow", new object[] { null, table, null,
                     new List<OfficeWorkAssistant.Features.Templates.TemplateColumn>(), -1 } },
                 new object[] { "Highlight.HighlightRuleWindow", new object[] { null, table, null, 1 } },

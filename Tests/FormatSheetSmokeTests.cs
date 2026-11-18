@@ -200,7 +200,7 @@ internal static class FormatSheetSmokeTests
             Check(duplicateSheet.FailedNodeId == save.Id && duplicateSheet.Error.Contains("Formatted"),
                 "Preview missed a sheet already in the destination.");
 
-            CheckPairedInputs(pipeline, january, february);
+            CheckPairedInputs(pipeline, january, february, folder);
             CheckSeparateOutputs(pipeline, sort, style, january, februaryOutput);
             februaryData.Columns[0].Caption = "Other";
             ExcelFile.Save(februaryData, februaryPath);
@@ -259,8 +259,71 @@ internal static class FormatSheetSmokeTests
         Check(run.Error == null, "A surviving output could not be routed: " + run.Error);
     }
 
-    static void CheckPairedInputs(PipelineDefinition pipeline, PipelineNode january, PipelineNode february)
+    static void CheckPairedInputs(PipelineDefinition pipeline, PipelineNode january, PipelineNode february, string folder)
     {
+        var joint = PipelineWork.AddNode(pipeline, PipelineStepKind.FillColumns, 0, 0);
+        var settings = (FillColumnsSettings)joint.Settings;
+        settings.OutputInput = 0;
+        settings.Rules.Add(new FillColumnsRule { Target = "Total", When = "$Amount == 8", Value = "$Amount + 1" });
+        var ports = PipelineWork.InputPorts(pipeline, joint);
+        Check(ports.Length == 1 && ports[0] == "In", "The first canvas drop must select the sheet to fill.");
+        Link(pipeline, january, joint, ports[0]);
+        var previous = PipelineWork.Clone(pipeline);
+        PipelineWork.InputLink(previous, joint.Id, "In").Port = "A";
+        var previousPath = Path.Combine(folder, "one-sheet.xml");
+        PipelineWork.SaveFile(previous, previousPath);
+        Check(PipelineWork.InputLink(PipelineWork.LoadFile(previousPath), joint.Id, "In") != null,
+            "Reopening an old single-sheet connection did not restore the target.");
+        var jointCache = new Dictionary<string, DataTable>();
+        var single = PipelineWork.Run(pipeline, jointCache, joint.Id, false);
+        Check(single.Error == null && Convert.ToInt32(jointCache[joint.Id].Rows[0][2]) == 9 &&
+            jointCache[joint.Id].Rows[1].IsNull(2), "Target-only conditional fill failed: " + single.Error);
+        Link(pipeline, january, joint, "A");
+        Link(pipeline, february, joint, "A2");
+        settings.Keys.Add(new FillColumnsKey { FormulaA = "1", FormulaB = "1" });
+        settings.Keys.Add(new FillColumnsKey { Source = 1, FormulaA = "$Amount", FormulaB = "6" });
+        settings.Rules[0].When = "$Matched && $Matched2";
+        settings.Rules[0].Value = "$A_Amount + $A2_Amount";
+        jointCache.Remove(joint.Id);
+        var multi = PipelineWork.Run(PipelineWork.Clone(pipeline), jointCache, joint.Id, false);
+        Check(multi.Error == null && PipelineWork.ResultItems(jointCache[joint.Id]).Count == 1 &&
+            Convert.ToInt32(jointCache[joint.Id].Rows[0][2]) == 14 &&
+            PipelineWork.ResultLayout(pipeline)[joint.Id].Length == 1, "Joint lookup fill failed: " + multi.Error);
+        settings.Keys[0].FormulaA = "$2_Amount";
+        settings.Keys[0].FormulaB = "$1_Amount";
+        settings.Keys[1].FormulaA = "$3_Amount";
+        settings.Keys[1].FormulaB = "$2_Amount - 2";
+        settings.Rules[0].Value = "$1_Amount + $2_Amount + $3_Amount";
+        jointCache.Remove(joint.Id);
+        var ordered = PipelineWork.Run(PipelineWork.Clone(pipeline), jointCache, joint.Id, false);
+        Check(ordered.Error == null && Convert.ToInt32(jointCache[joint.Id].Rows[0][2]) == 22,
+            "A match against an earlier input did not resolve the numbered sheets: " + ordered.Error);
+        settings.Keys.RemoveAt(0);
+        jointCache.Remove(joint.Id);
+        var partial = PipelineWork.Run(pipeline, jointCache, joint.Id, false);
+        Check(partial.Error == null && Convert.ToInt32(jointCache[joint.Id].Rows[0][2]) == 22,
+            "A keyed lookup could not use an input with no keys: " + partial.Error);
+        settings.Keys.Clear();
+        settings.Rules[0].When = "";
+        settings.Rules[0].Value = "$2_Amount";
+        jointCache.Remove(joint.Id);
+        var unkeyed = PipelineWork.Run(pipeline, jointCache, joint.Id, false);
+        Check(unkeyed.Error == null && Equals(jointCache[joint.Id].Rows[1][2], jointCache[january.Id].Rows[1][1]),
+            "Inputs without keys did not follow data row order: " + unkeyed.Error);
+        settings.OutputInput = 3;
+        settings.MatchFormula = "$1_Amount == 8 && $2_Amount == 8 && $3_Amount == 6";
+        settings.Rules[0].Value = "$1_Amount + $2_Amount + $3_Amount";
+        jointCache.Remove(joint.Id);
+        var selected = PipelineWork.Run(PipelineWork.Clone(pipeline), jointCache, joint.Id, false);
+        Check(selected.Error == null && PipelineWork.ResultItems(jointCache[joint.Id])[0].Name == "February" &&
+            Convert.ToInt32(jointCache[joint.Id].Rows[0][2]) == 22,
+            "The selected output did not use the shared match formula: " + selected.Error);
+        settings.MatchFormula = "FALSE";
+        jointCache.Remove(joint.Id);
+        var noMatch = PipelineWork.Run(pipeline, jointCache, joint.Id, false);
+        Check(noMatch.Error == null && jointCache[joint.Id].Rows[0].IsNull(2),
+            "Fill rules ran on an output row that did not match: " + noMatch.Error);
+        PipelineWork.RemoveNode(pipeline, joint.Id);
         var fill = PipelineWork.AddNode(pipeline, PipelineStepKind.FillColumns, 0, 0);
         fill.Settings = new FillColumnsSettings
         {
@@ -270,6 +333,11 @@ internal static class FormatSheetSmokeTests
         Link(pipeline, january, fill, "A");
         Link(pipeline, january, fill, "B");
         Link(pipeline, february, fill, "B2");
+        var oldPath = Path.Combine(folder, "paired-fill.xml");
+        PipelineWork.SaveFile(pipeline, oldPath);
+        PipelineWork.RemoveNode(pipeline, fill.Id);
+        pipeline = PipelineWork.LoadFile(oldPath);
+        fill = PipelineWork.Find(pipeline, fill.Id);
         var cache = new Dictionary<string, DataTable>();
         var run = PipelineWork.Run(pipeline, cache, fill.Id, false);
         Check(run.Error == null, "Reusing one lookup for both workbooks failed: " + run.Error);

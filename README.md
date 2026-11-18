@@ -27,7 +27,7 @@ Run mode uses one tab per branch, named after its final step, just like the Buil
   - Link steps by dragging from a step's right dot to another step's left dot. After you connect an input, a new socket appears for the next one. You can connect several Load file steps to one Filter & Sort or Format sheet step and set it up once for every workbook.
   - Steps that process workbooks separately show one numbered output socket per result. Connect each socket to the destination it needs. A socket can feed several branches. Adding the next step from the palette connects all those sockets to it.
   - Compare A/B, Append tables, and Merge PDF show one output socket. Existing links that carried several results continue to carry them and appear as several lines to the same input.
-  - Compare A/B, Fill columns, and Arrange PDF keep their A and B inputs. Connect one result on one side to reuse it with each result on the other side. When both sides have several results, they must have the same count and are paired in input order.
+  - Compare A/B and Arrange PDF keep their A and B inputs. Connect one result on one side to reuse it with each result on the other side. When both sides have several results, they must have the same count and are paired in input order. Older saved Fill columns steps keep this pairing too.
   - Links that would make a loop are refused.
   - To remove a link or step, select it and press Delete.
 - **Editing steps:** the Steps sidebar on the right shows every step's settings at once, one section per step in running order, with the earlier step's result already loaded. A pipeline that splits (one file feeding two branches) gets one tab per branch, so each branch's settings stay separate; a shared step appears in each tab. Selecting a step on the canvas jumps to its section; clicking a section selects its step. Changes apply by themselves a moment after you edit (there is no Apply button); a step that cannot apply yet shows why in its section. Steps are named automatically (Filter / Sort 1, 2, ...). Double-click a Load file or Save file step to browse for its file.
@@ -59,14 +59,11 @@ Two inputs, A and B.
 - The result is the rows only in A, the rows only in B, or the rows common to both. When both sides have a column with the same name, the result keeps both, with `_A` and `_B` suffixes.
 
 ### Fill columns
-Fills columns of B with values from the matching row of A.
-- **Match rules** compare a formula on the A row with a formula on the B row, for example `TRIM($ID)` == `$Code`. Choose AND to require all rules or OR to accept any rule. Text compares ignore case, and the first matching A row is used. **Add** opens a window for one key; the step lists each key with **Edit** and **Remove**.
-- **Fill rules** each have a target column (one of B's columns, or a new name to add a column), an optional When condition, and a Value formula. For each column, the first rule that fires fills the cell. **Add** opens a window for one rule; the step lists each rule with **Edit**, **Up** and **Remove**.
-- **Variables:**
-  - `$A_Price` reads the matched A row.
-  - `$Price` reads the B row.
-  - `$Value` is the cell's current value.
-  - `$Matched` is true when an A row matched.
+Connect the sheet you want to fill and choose **Add fill rule**. Select an existing column or type a new header. Under **Rows to fill**, choose **Every row**, **Only empty cells in this column**, or **Rows that meet a condition**. For example, set `Status` to `"In stock"` when `$Qty > 0`. Rules run in order. The first qualifying rule for a cell supplies its value.
+
+Choose the input to fill under **Output sheet**. Use the input numbers shown in the editor to reference any connected sheet. An optional **Match formula**, such as `$1_ID == $2_ID && $2_Region == $3_Region`, takes the first combination of rows that satisfies the formula for each output row. If no combination qualifies, the output row keeps its values. Inputs left out of the formula use the same data row number as the output sheet. With a blank formula, all inputs use row order.
+
+Fill rules can use those values, for example `$1_Qty * $2_Price * $3_Rate`. Unqualified columns such as `$Qty` read the selected output row first. Saved steps with match keys keep using them until you enter a match formula or select a different output sheet.
 
 ## Tidy and reshape steps
 

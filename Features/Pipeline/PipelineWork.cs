@@ -195,13 +195,16 @@ namespace OfficeWorkAssistant.Features.Pipeline
         static readonly string[] NoPorts = new string[0];
         static readonly string[] OnePort = { PortIn };
         static readonly string[] TwoPorts = { PortA, PortB };
+        static readonly string[] FillPorts = { PortA, PortIn };
 
         // The ports a kind starts with.
         public static string[] Ports(PipelineStepKind kind)
         {
             if (kind == PipelineStepKind.Load || kind == PipelineStepKind.ListFolder || kind == PipelineStepKind.MergeFolders)
                 return NoPorts;
-            if (kind == PipelineStepKind.Compare || kind == PipelineStepKind.FillColumns || kind == PipelineStepKind.ArrangePdf)
+            if (kind == PipelineStepKind.FillColumns)
+                return FillPorts;
+            if (kind == PipelineStepKind.Compare || kind == PipelineStepKind.ArrangePdf)
                 return TwoPorts;
             if (CombinesInputs(kind))
                 return new[] { AppendPort(1) };
@@ -214,11 +217,19 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var roles = Ports(node.Kind);
             if (roles.Length == 0)
                 return roles;
+            if (node.Kind == PipelineStepKind.FillColumns)
+            {
+                if (!def.Links.Exists(link => link.To == node.Id))
+                    return OnePort;
+                roles = new[] { PortIn, PortA };
+            }
             var ports = new List<string>(roles);
-            foreach (var role in roles)
+            foreach (var role in Ports(node.Kind))
             {
                 var links = BatchLinks(def, node, role);
-                for (var i = 2; i <= links.Count + 1; i++)
+                // Additional sheets on a joint Fill are lookups. Keep existing batch target links visible.
+                int free = JointFill(node) && role == PortIn ? 0 : 1;
+                for (var i = 2; i <= links.Count + free; i++)
                     ports.Add(VariablePort(node.Kind, role, i));
             }
             return ports.ToArray();
@@ -237,6 +248,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
         public static bool IsOptionalInput(PipelineStepKind kind, string port)
         {
             return kind == PipelineStepKind.ValueList || CombinesInputs(kind) ||
+                (kind == PipelineStepKind.FillColumns && port == PortA) ||
                 (port != PortIn && port != PortA && port != PortB) ||
                 kind == PipelineStepKind.LoadPdf || (kind == PipelineStepKind.ArrangePdf && port == PortB);
         }
@@ -326,7 +338,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.FilterSort: return "Keep rows that match, sort, pick columns.";
                 case PipelineStepKind.Templates: return "Add columns built from formulas.";
                 case PipelineStepKind.Compare: return "Rows only in A, only in B, or in both.";
-                case PipelineStepKind.FillColumns: return "Copy values from A into matching rows of B.";
+                case PipelineStepKind.FillColumns: return "Fill cells using columns on the input sheet. Connect lookup sheets for values from other rows.";
                 case PipelineStepKind.ValueList: return "Keys (and values) from rows, or typed in.";
                 case PipelineStepKind.ListFolder: return "Every file and/or folder in a folder.";
                 case PipelineStepKind.FindFiles: return "Files and folders that match the keys.";
@@ -414,7 +426,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     return PortLabel(kind, a > 1 ? PortA : PortB) + " " + Math.Max(a, b).ToString(CultureInfo.InvariantCulture);
             }
             if (kind == PipelineStepKind.FillColumns)
-                return port == PortA ? "A (take values from)" : "B (fill into)";
+                return port.StartsWith(PortA, StringComparison.Ordinal) ? "lookup sheet " + port : "sheet to fill";
             if (kind == PipelineStepKind.Compare)
                 return port == PortA ? "File A" : "File B";
             if (kind == PipelineStepKind.FindFiles)
@@ -458,6 +470,8 @@ namespace OfficeWorkAssistant.Features.Pipeline
             };
             if (kind == PipelineStepKind.Load)
                 node.Settings = new LoadStepSettings();
+            else if (kind == PipelineStepKind.FillColumns)
+                node.Settings = new FillColumnsSettings { JointLookups = true, OutputInput = 1 };
             else if (kind == PipelineStepKind.Save)
                 node.Settings = new SaveStepSettings();
             else if (kind == PipelineStepKind.LoadPdf)
@@ -635,6 +649,15 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 if (node.Settings == null && node.Kind == PipelineStepKind.Save)
                     node.Settings = new SaveStepSettings();
             }
+            // Saved Fill steps formerly used B, B2, ... for the sheets to fill.
+            foreach (var link in def.Links)
+            {
+                if (link == null || !ids.Contains(link.To) || Find(def, link.To).Kind != PipelineStepKind.FillColumns)
+                    continue;
+                int index = InputNumber(PipelineStepKind.FillColumns, link.Port, PortB);
+                if (index > 0)
+                    link.Port = VariablePort(PipelineStepKind.FillColumns, PortIn, index);
+            }
             var ports = new HashSet<string>();
             def.Links.RemoveAll(l => l == null || !ids.Contains(l.From) || !ids.Contains(l.To) ||
                 !PortFits(Find(def, l.To).Kind, l.Port) || !ports.Add(l.To + "|" + l.Port));
@@ -646,7 +669,17 @@ namespace OfficeWorkAssistant.Features.Pipeline
                     linkIds.Add(link.Id);
                 }
             foreach (var node in def.Nodes)
+            {
                 CompactPorts(def, node.Id);
+                // A drop on an empty Fill step in older builds connected the lookup socket.
+                var fill = node.Settings as FillColumnsSettings;
+                if (node.Kind == PipelineStepKind.FillColumns && (fill == null || fill.Keys == null || fill.Keys.Count == 0))
+                {
+                    var incoming = def.Links.FindAll(link => link.To == node.Id);
+                    if (incoming.Count == 1 && incoming[0].Port == PortA)
+                        incoming[0].Port = PortIn;
+                }
+            }
             Order(def); // throws on a loop
             return def;
         }

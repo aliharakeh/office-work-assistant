@@ -7,65 +7,23 @@
         </ResourceDictionary>
     </UserControl.Resources>
     <StackPanel Margin="0,4,0,0">
-        <StackPanel Margin="0,0,0,8" Visibility="Collapsed">
-            <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="#555" TextWrapping="Wrap" />
-                <ComboBox x:Name="PreviewBox" SelectionChanged="PreviewBox_SelectionChanged" HorizontalAlignment="Stretch" />
-            </StackPanel>
-        </StackPanel>
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <StackPanel Margin="0,0,0,8" Visibility="Collapsed">
-                <GroupBox Header="File A (take values from)" Margin="0,0,0,6">
-                    <StackPanel Margin="6">
-                        <TextBox x:Name="PathA" IsReadOnly="True" Margin="0,0,0,6" HorizontalAlignment="Stretch" />
-                        <TextBlock x:Name="InfoA" Margin="0,0,0,6" Foreground="#777" FontSize="11" Text="No file loaded." TextWrapping="Wrap" />
-                        <DataGrid x:Name="GridA" AutoGenerateColumns="True" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" />
-                    </StackPanel>
-                </GroupBox>
-                <GroupBox Header="File B (fill into)" Margin="0,0,0,6">
-                    <StackPanel Margin="6">
-                        <TextBox x:Name="PathB" IsReadOnly="True" Margin="0,0,0,6" HorizontalAlignment="Stretch" />
-                        <TextBlock x:Name="InfoB" Margin="0,0,0,6" Foreground="#777" FontSize="11" Text="No file loaded." TextWrapping="Wrap" />
-                        <DataGrid x:Name="GridB" AutoGenerateColumns="True" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" />
-                    </StackPanel>
-                </GroupBox>
-            </StackPanel>
-            <GroupBox Header="Match rows (A formula == B formula)" Grid.Row="1" Margin="0,0,0,8">
-                <StackPanel Margin="4">
-                    <StackPanel Margin="0,0,0,4">
-                        <Button Content="Add" Width="56" Click="AddKey_Click" HorizontalAlignment="Left" />
-                        <ComboBox x:Name="MatchMode" HorizontalAlignment="Stretch" SelectedIndex="0" SelectionChanged="MatchMode_Changed">
-                            <ComboBoxItem Content="AND — all rules" />
-                            <ComboBoxItem Content="OR — any rule" />
-                        </ComboBox>
-                    </StackPanel>
-                    <StackPanel x:Name="KeyPanel" />
-                </StackPanel>
-            </GroupBox>
-            <GroupBox Header="Fill rules (top to bottom, first rule that fires wins the cell)" Grid.Row="2" Margin="0,0,0,8">
-                <StackPanel Margin="4">
-                    <StackPanel Margin="0,0,0,4">
-                        <Button Content="Add" Width="56" Click="AddRule_Click" HorizontalAlignment="Left" />
-                        <TextBlock VerticalAlignment="Center" FontSize="11" Foreground="#555" TextWrapping="Wrap" Text="Add opens a window for one rule. Rules run top to bottom; the first that fires wins the cell." />
-                    </StackPanel>
-                    <StackPanel x:Name="RulePanel" />
-                </StackPanel>
-            </GroupBox>
-            <GroupBox Header="Apply" Grid.Row="3">
-                <StackPanel Margin="6">
-                    <StackPanel Margin="0,0,0,6">
-                        <Button x:Name="UseBtn" Content="Apply to step" Width="120" Margin="0,0,8,4" Click="UseInPipeline_Click" HorizontalAlignment="Left" />
-                        <TextBlock x:Name="Status" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="#555" Text="Open both files and set a match rule." />
-                    </StackPanel>
-                    <DataGrid x:Name="GridOut" Visibility="Collapsed" AutoGenerateColumns="True" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" />
-                </StackPanel>
-            </GroupBox>
-        </Grid>
+        <TextBlock Text="Output sheet" FontWeight="SemiBold" />
+        <ComboBox x:Name="OutputSheet" Margin="0,2,0,8">
+            <ComboBox.ItemTemplate>
+                <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" /></DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Text="Match formula (optional)" FontWeight="SemiBold" />
+        <TextBox x:Name="MatchFormula" Margin="0,2,0,4" TextWrapping="Wrap" />
+        <TextBlock x:Name="MatchHint" TextWrapping="Wrap" Margin="0,0,0,5" />
+        <Expander Header="Input columns" Margin="0,0,0,12">
+            <TextBlock x:Name="InputColumns" TextWrapping="Wrap" />
+        </Expander>
+        <TextBlock Text="Fill rules" FontWeight="SemiBold" />
+        <TextBlock Text="Rules run from top to bottom. The first matching rule for a cell sets its value." TextWrapping="Wrap" Foreground="#555" Margin="0,2,0,6" />
+        <StackPanel x:Name="RulePanel" />
+        <Button Content="Add fill rule" Click="AddRule_Click" HorizontalAlignment="Left" Margin="0,2,0,8" />
+        <TextBlock x:Name="ErrorText" Visibility="Collapsed" Foreground="Firebrick" TextWrapping="Wrap" Margin="0,4" />
+        <Button x:Name="UseBtn" Content="Apply to step" Click="UseInPipeline_Click" HorizontalAlignment="Left" />
     </StackPanel>
 </UserControl>

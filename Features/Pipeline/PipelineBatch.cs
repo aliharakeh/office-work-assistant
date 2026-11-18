@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Features.Append;
 using OfficeWorkAssistant.Features.FileOps;
+using OfficeWorkAssistant.Features.FillColumns;
 using OfficeWorkAssistant.Features.MergeDuplicates;
 using OfficeWorkAssistant.Features.Pdf;
 using OfficeWorkAssistant.Features.SaveText;
@@ -80,7 +81,13 @@ namespace OfficeWorkAssistant.Features.Pipeline
 
                 var first = InputKeys(def, node, ports[0], layout);
                 var second = ports.Length == 2 ? InputKeys(def, node, ports[1], layout) : new List<string>();
-                var keysForOutputs = PreferSecond(node.Kind, first.Count, second.Count) ? second : first;
+                var fill = node.Settings as FillColumnsSettings;
+                if (fill != null && fill.OutputInput > 0)
+                {
+                    layout.Add(node.Id, new[] { second.Count == 0 ? PortOut : second[0] });
+                    continue;
+                }
+                var keysForOutputs = JointFill(node) || PreferSecond(node.Kind, first.Count, second.Count) ? second : first;
                 layout.Add(node.Id, keysForOutputs.Count == 0 ? new[] { PortOut } : keysForOutputs.ToArray());
             }
             return layout;
@@ -150,6 +157,12 @@ namespace OfficeWorkAssistant.Features.Pipeline
         {
             return secondCount > 0 && (firstCount < secondCount ||
                 (firstCount == secondCount && kind == PipelineStepKind.FillColumns));
+        }
+
+        internal static bool JointFill(PipelineNode node)
+        {
+            var settings = node.Settings as FillColumnsSettings;
+            return settings != null && settings.JointLookups;
         }
 
         // Keep the existing table cache API. A batch gets a dedicated representative table;
@@ -240,8 +253,34 @@ namespace OfficeWorkAssistant.Features.Pipeline
             }
             else if (ports.Length == 2)
             {
-                first = ReadPort(def, node, PortA, cache, layout);
-                second = ReadPort(def, node, PortB, cache, layout);
+                first = ReadPort(def, node, ports[0], cache, layout);
+                second = ReadPort(def, node, ports[1], cache, layout);
+                var selectedFill = node.Settings as FillColumnsSettings;
+                if (selectedFill != null && selectedFill.OutputInput > 0)
+                {
+                    var inputs = new List<PipelineItem>(second);
+                    inputs.AddRange(first);
+                    int selected = selectedFill.OutputInput - 1;
+                    if (selected >= inputs.Count)
+                        throw new InvalidOperationException("Select a connected sheet to fill.");
+                    var target = inputs[selected];
+                    inputs.RemoveAt(selected);
+                    var result = FillColumnsWork.Fill(inputs.ConvertAll(item => item.Table), target.Table, null,
+                        selectedFill.Rules, 0, true, selectedFill.OutputInput, selectedFill.MatchFormula);
+                    return Pack(new List<PipelineItem> { OutputItem(node, result.Table, target.Name) });
+                }
+                if (JointFill(node))
+                {
+                    var settings = (FillColumnsSettings)node.Settings;
+                    var sources = first.ConvertAll(item => item.Table);
+                    var filled = new List<PipelineItem>();
+                    foreach (var target in second)
+                    {
+                        var result = FillColumnsWork.Fill(sources, target.Table, settings.Keys, settings.Rules, 0, settings.MatchAll);
+                        filled.Add(OutputItem(node, result.Table, target.Name));
+                    }
+                    return Pack(filled);
+                }
                 if (first.Count > 1 && second.Count > 1 && first.Count != second.Count)
                     throw new InvalidOperationException("Connect batches of the same size to A and B, or use a single result on one side.");
             }

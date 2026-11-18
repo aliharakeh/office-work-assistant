@@ -1,4 +1,7 @@
 using System;
+using System.Data;
+using System.Collections.Generic;
+using OfficeWorkAssistant.Excel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -20,7 +23,7 @@ namespace OfficeWorkAssistant.Features.FillColumns
         };
         FillColumnsKey _result;
 
-        MatchKeyWindow(Window owner, FillColumnsKey seed)
+        MatchKeyWindow(Window owner, FillColumnsKey seed, int source, IList<DataTable> sources, DataTable target)
         {
             var s = seed ?? new FillColumnsKey();
 
@@ -33,22 +36,25 @@ namespace OfficeWorkAssistant.Features.FillColumns
             MinWidth = 280;
             Width = 560;
 
-            _exprA.Text = s.FormulaA ?? "$A";
-            _exprA.ToolTip = "Formula on the A row, e.g. $ID or TRIM($Code).";
-            _exprB.Text = s.FormulaB ?? "$A";
-            _exprB.ToolTip = "Formula on the B row, e.g. $ID or TRIM($Code).";
+            _exprA.Text = s.FormulaA ?? "$" + (source + 2) + "_A";
+            _exprA.ToolTip = "Formula on the lookup row, e.g. $ID or TRIM($Code).";
+            _exprB.Text = s.FormulaB ?? "$1_A";
+            _exprB.ToolTip = "Formula on the row being filled, e.g. $ID or TRIM($Code).";
             FormulaField.Watch(_exprA);
             FormulaField.Watch(_exprB);
 
             var grid = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
 
-            var boxA = new GroupBox { Header = "File A", Padding = new Thickness(8), Content = _exprA };
-            var eq = new TextBlock { Text = "==", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
-            var boxB = new GroupBox { Header = "File B", Padding = new Thickness(8), Content = _exprB };
+            var boxA = new GroupBox { Header = "Value from input " + (source + 2), Padding = new Thickness(8), Content = _exprA };
+            var eq = new TextBlock { Text = "must equal", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
+            var boxB = new GroupBox { Header = "Value from input 1 or an earlier match", Padding = new Thickness(8), Content = _exprB };
 
             grid.Children.Add(boxA);
+            grid.Children.Add(ColumnGuide(source + 2, sources[source]));
             grid.Children.Add(eq);
             grid.Children.Add(boxB);
+            grid.Children.Add(ColumnGuide(1, target));
+            for (int i = 0; i < source; i++) grid.Children.Add(ColumnGuide(i + 2, sources[i]));
 
             var ok = new Button { Content = "OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
             ok.Click += Ok_Click;
@@ -59,7 +65,7 @@ namespace OfficeWorkAssistant.Features.FillColumns
 
             var hint = new TextBlock
             {
-                Text = "Each side sees only its own file. Text matches ignore case. The first A row with a key is used.",
+                Text = "Use the input number before the column, for example $1_BuyerID for BuyerID on input 1. Empty keys are skipped. Text matches ignore case and surrounding spaces.",
                 FontSize = 11,
                 Foreground = Brushes.DimGray,
                 TextWrapping = TextWrapping.Wrap,
@@ -76,10 +82,17 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         }
 
-        // Returns the key the user saved, or null when the window was cancelled.
-        public static FillColumnsKey Edit(Window owner, FillColumnsKey seed)
+        static TextBlock ColumnGuide(int input, DataTable table)
         {
-            var win = new MatchKeyWindow(owner, seed);
+            return new TextBlock { Text = "Input " + input + " ($" + input + "_A for column A): " + string.Join(", ", ExcelColumns.Labels(table)),
+                TextWrapping = TextWrapping.Wrap };
+        }
+
+        // Returns the key the user saved, or null when the window was cancelled.
+        public static FillColumnsKey Edit(Window owner, FillColumnsKey seed, int source, IList<DataTable> sources, DataTable target)
+        {
+            var win = new MatchKeyWindow(owner, seed, source, sources, target);
+            win.Title += " — input " + (source + 2);
             return win.ShowDialog() == true ? win._result : null;
         }
 

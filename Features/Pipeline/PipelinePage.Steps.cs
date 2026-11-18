@@ -749,7 +749,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
             _views[node.Id].Refresh();
             MarkDirty();
             var down = PipelineWork.Downstream(_def, node.Id);
-            if (node.Kind == PipelineStepKind.ValueList)
+            if (node.Kind == PipelineStepKind.ValueList || node.Kind == PipelineStepKind.FillColumns)
             {
                 PipelineWork.RemoveDisconnectedOutputs(_def);
                 if (RefreshPortViews())

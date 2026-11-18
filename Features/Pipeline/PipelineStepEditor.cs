@@ -63,18 +63,38 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var ports = PipelineWork.InputPorts(def, node);
             int firstCount = 0;
             int secondCount = 0;
+            var fillTargets = new List<PipelineItem>();
+            var fillLookups = new List<PipelineItem>();
+            var fillTargetLabels = new List<string>();
+            var fillLookupLabels = new List<string>();
             for (int i = 0; i < inputs.Length; i++)
             {
                 if (inputs[i] == null)
                     continue;
                 var items = PipelineWork.ResultItems(inputs[i]);
-                if (ports[i].StartsWith(PipelineWork.PortB, StringComparison.Ordinal))
-                    secondCount += items.Count;
-                else
-                    firstCount += items.Count;
+                bool isFill = node.Kind == PipelineStepKind.FillColumns;
+                var targetRole = isFill ? PipelineWork.PortIn : PipelineWork.PortB;
+                bool target = ports[i].StartsWith(targetRole, StringComparison.Ordinal);
+                if (target) secondCount += items.Count;
+                else firstCount += items.Count;
+                if (isFill)
+                {
+                    var sheets = target ? fillTargets : fillLookups;
+                    var sheetLabels = target ? fillTargetLabels : fillLookupLabels;
+                    sheets.AddRange(items);
+                    foreach (var item in items) sheetLabels.Add(items.Count == 1 ? labels[i] : item.Name);
+                }
                 sample[i] = items[0].Table;
                 if (items.Count > 1)
                     sampleLabels[i] = items[0].Name;
+            }
+            if (node.Kind == PipelineStepKind.FillColumns)
+            {
+                if (fillTargets.Count == 0) return Notice("Connect a sheet to fill.");
+                fillTargets.AddRange(fillLookups);
+                fillTargetLabels.AddRange(fillLookupLabels);
+                return new FillColumnsPage(fillTargets.ConvertAll(item => item.Table), fillTargetLabels,
+                    PipelineWork.Clone(node.Settings as FillColumnsSettings), r => use(r));
             }
             var editor = CreateEditor(node, sample, sampleLabels, use);
             int count = Math.Max(firstCount, secondCount);
@@ -227,8 +247,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                         r => use(PipelineWork.FormatSheetToNames(r, input)));
                 }
                 default:
-                    return new FillColumnsPage(inputs[0], labels[0], inputs[1], labels[1],
-                        PipelineWork.Clone(node.Settings as FillColumnsSettings), r => use(r));
+                    throw new InvalidOperationException("No editor for " + node.Kind + ".");
             }
         }
 

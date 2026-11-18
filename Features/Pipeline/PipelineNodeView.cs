@@ -94,17 +94,20 @@ namespace OfficeWorkAssistant.Features.Pipeline
             Root.Children.Add(Box);
             Root.Children.Add(caption);
 
-            foreach (var port in ports)
+            for (int i = 0; i < ports.Length; i++)
             {
+                var port = ports[i];
                 var dot = Port(port);
                 int number = port == PipelineWork.PortIn ? 1 : PipelineWork.AppendPortNumber(port);
+                if (node.Kind == PipelineStepKind.FillColumns)
+                    number = i + 1;
                 dot.ToolTip = "Drop a link here: " + PipelineWork.PortLabel(node.Kind, port);
                 var y = InputY(port);
                 Canvas.SetLeft(dot, -PortSize / 2);
                 Canvas.SetTop(dot, y - PortSize / 2);
                 Root.Children.Add(dot);
                 Inputs[port] = dot;
-                if (port != PipelineWork.PortIn || ports.Length > 1)
+                if (node.Kind == PipelineStepKind.FillColumns || port != PipelineWork.PortIn || ports.Length > 1)
                 {
                     var name = number > 0 ? number.ToString(System.Globalization.CultureInfo.InvariantCulture) : port;
                     var label = new TextBlock { Text = name, FontSize = 10, FontWeight = FontWeights.Bold, Foreground = PortFill, IsHitTestVisible = false };

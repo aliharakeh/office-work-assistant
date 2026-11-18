@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using OfficeWorkAssistant.Excel;
 using OfficeWorkAssistant.Expressions;
@@ -10,6 +11,8 @@ namespace OfficeWorkAssistant.Features.FillColumns
     // One match rule: the A formula on an A row must equal the B formula on a B row.
     public sealed class FillColumnsKey
     {
+        // Zero-based lookup index; old keys belong to A.
+        public int Source { get; set; }
         public string FormulaA { get; set; }
         public string FormulaB { get; set; }
     }
@@ -26,6 +29,9 @@ namespace OfficeWorkAssistant.Features.FillColumns
     // Everything one merge needs, so it can be stored (XML) and run again.
     public sealed class FillColumnsSettings
     {
+        public int OutputInput { get; set; }
+        public string MatchFormula { get; set; }
+        public bool JointLookups { get; set; }
         public List<FillColumnsKey> Keys { get; set; }
         public bool MatchAll { get; set; }
         public List<FillColumnsRule> Rules { get; set; }
@@ -45,6 +51,7 @@ namespace OfficeWorkAssistant.Features.FillColumns
         public int Unmatched { get; set; }
         public int SharedKeys { get; set; }
         public int Filled { get; set; }
+        public int[] FilledByRule { get; set; }
     }
 
     // Names inside fill formulas:
@@ -55,27 +62,60 @@ namespace OfficeWorkAssistant.Features.FillColumns
     //   $Matched         true when an A row matched
     public static class FillColumnsWork
     {
-        static readonly Regex Names = new Regex(@"\$(\w+)", RegexOptions.Compiled);
-
         // maxRows <= 0 fills every B row (used for saving); a positive value keeps the preview small.
-        public static FillColumnsResult Fill(DataTable a, DataTable b, IList<FillColumnsKey> keys,
-            IList<FillColumnsRule> rules, int maxRows, bool matchAll = true)
+        public static FillColumnsResult Fill(IList<DataTable> sources, DataTable b, IList<FillColumnsKey> keys,
+            IList<FillColumnsRule> rules, int maxRows, bool matchAll = true, int outputInput = 1, string matchFormula = null)
         {
-            if (a == null || b == null)
-                throw new InvalidOperationException("Open both Excel files first.");
-            if (keys == null || keys.Count == 0)
-                throw new InvalidOperationException("Add a match rule.");
-
-            // First A row per key wins; later rows with the same key are counted, not used.
-            var lookup = new Dictionary<string, DataRow>(StringComparer.Ordinal);
-            var shared = new HashSet<string>(StringComparer.Ordinal);
-            foreach (DataRow row in a.Rows)
+            if (b == null)
+                throw new InvalidOperationException("Connect the sheet you want to fill.");
+            var inputTables = new List<DataTable>(sources);
+            inputTables.Insert(outputInput - 1, b);
+            var inputRows = new DataRow[inputTables.Count];
+            var searched = new List<int>();
+            Func<Func<string, object>, object> match = null;
+            if (!string.IsNullOrWhiteSpace(matchFormula))
             {
-                foreach (var k in MatchKeys(a, row, keys, true, matchAll))
+                match = ExpressionEngine.Compile(matchFormula);
+                var references = new SortedSet<int>();
+                foreach (Match token in Regex.Matches(matchFormula, "\"[^\"]*\"|'[^']*'|\\$([0-9]+)_"))
                 {
-                    if (lookup.ContainsKey(k)) shared.Add(k);
-                    else lookup[k] = row;
+                    if (!token.Groups[1].Success) continue;
+                    int input;
+                    if (!int.TryParse(token.Groups[1].Value, out input) || input < 1 || input > inputTables.Count)
+                        throw new InvalidOperationException("Match formula refers to an input that is not connected.");
+                    if (input != outputInput) references.Add(input - 1);
                 }
+                searched.AddRange(references);
+            }
+            var groups = new List<FillColumnsKey>[sources.Count];
+            var indexes = new Dictionary<string, int>[sources.Count];
+            int duplicates = 0;
+            for (int s = 0; s < sources.Count; s++)
+            {
+                groups[s] = new List<FillColumnsKey>();
+                indexes[s] = new Dictionary<string, int>(StringComparer.Ordinal);
+            }
+            foreach (var key in keys ?? new List<FillColumnsKey>())
+            {
+                if (key.Source < 0 || key.Source >= sources.Count)
+                    throw new InvalidOperationException("Reconnect input " + (key.Source + 2) + " or remove its match key.");
+                groups[key.Source].Add(key);
+            }
+            for (int s = 0; s < sources.Count; s++)
+            {
+                if (groups[s].Count == 0)
+                    continue;
+                int input = s + 2;
+                var lookup = sources[s];
+                var shared = new HashSet<string>();
+                for (int i = 0; i < lookup.Rows.Count; i++)
+                {
+                    var row = lookup.Rows[i];
+                    foreach (var k in MatchKeys(groups[s], true, matchAll, name => LookupKeyValue(lookup, row, input, name)))
+                        if (indexes[s].ContainsKey(k)) shared.Add(k);
+                        else indexes[s].Add(k, i);
+                }
+                duplicates += shared.Count;
             }
 
             var table = b.Clone();
@@ -90,7 +130,8 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 targets[i] = ExcelFile.FindColumn(table, name.Trim()) ?? ExcelFile.AddColumn(table, name);
             }
 
-            var result = new FillColumnsResult { Table = table, SharedKeys = shared.Count };
+            var result = new FillColumnsResult { Table = table, SharedKeys = duplicates, FilledByRule = new int[targets.Length] };
+            var matches = new DataRow[sources.Count];
             var done = new HashSet<DataColumn>();
             for (var r = 0; r < b.Rows.Count; r++)
             {
@@ -100,15 +141,50 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 for (var c = 0; c < b.Columns.Count; c++)
                     dest[c] = b.Rows[r][c];
 
-                DataRow match = null;
-                foreach (var k in MatchKeys(b, b.Rows[r], keys, false, matchAll))
+                bool any = false;
+                for (int s = 0; s < sources.Count; s++)
                 {
-                    DataRow candidate;
-                    if (lookup.TryGetValue(k, out candidate) &&
-                        (match == null || a.Rows.IndexOf(candidate) < a.Rows.IndexOf(match)))
-                        match = candidate;
+                    if (groups[s].Count == 0)
+                    {
+                        matches[s] = r < sources[s].Rows.Count ? sources[s].Rows[r] : null;
+                        any |= matches[s] != null;
+                        continue;
+                    }
+                    int best = int.MaxValue;
+                    foreach (var k in MatchKeys(groups[s], false, matchAll,
+                        name => ComparisonValue(b, b.Rows[r], sources, matches, s, name)))
+                    {
+                        int index;
+                        if (indexes[s].TryGetValue(k, out index)) best = Math.Min(best, index);
+                    }
+                    matches[s] = best == int.MaxValue ? null : sources[s].Rows[best];
+                    any |= matches[s] != null;
                 }
+                for (int i = 0, source = 0; i < inputRows.Length; i++)
+                    inputRows[i] = i == outputInput - 1 ? b.Rows[r] : matches[source++];
                 if (match != null)
+                {
+                    bool found;
+                    try
+                    {
+                        found = FindMatch(inputTables, inputRows, searched, 0, match, b, b.Rows[r]);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException("Match formula on output data row " + (r + 1) + ": " + ex.Message, ex);
+                    }
+                    if (!found)
+                    {
+                        result.Unmatched++;
+                        table.Rows.Add(dest);
+                        continue;
+                    }
+                    for (int i = 0, source = 0; i < inputRows.Length; i++)
+                        if (i != outputInput - 1) matches[source++] = inputRows[i];
+                    any = true;
+                }
+                inputRows[outputInput - 1] = dest;
+                if (any)
                     result.Matched++;
                 else
                     result.Unmatched++;
@@ -120,7 +196,13 @@ namespace OfficeWorkAssistant.Features.FillColumns
                     if (done.Contains(col))
                         continue;
                     var rule = rules[i];
-                    Func<string, object> names = delegate(string n) { return Find(a, match, table, dest, col, n); };
+                    Func<string, object> names = name =>
+                    {
+                        object value;
+                        if (!TryNumberedCell(inputTables, inputRows, outputInput, table, name, out value))
+                            Resolve(sources, matches, table, dest, col, name, out value);
+                        return value;
+                    };
                     try
                     {
                         if (!string.IsNullOrWhiteSpace(rule.When) &&
@@ -130,78 +212,80 @@ namespace OfficeWorkAssistant.Features.FillColumns
                     }
                     catch (Exception ex)
                     {
-                        throw new InvalidOperationException("B data row " + (r + 1) + ", fill rule " + (i + 1) +
+                        throw new InvalidOperationException("Input data row " + (r + 1) + ", fill rule " + (i + 1) +
                             " (" + ExcelFile.Header(col) + "): " + ex.Message, ex);
                     }
                     done.Add(col);
                     result.Filled++;
+                    result.FilledByRule[i]++;
                 }
                 table.Rows.Add(dest);
             }
             return result;
         }
 
+        static bool FindMatch(IList<DataTable> inputs, DataRow[] rows, IList<int> searched, int depth,
+            Func<Func<string, object>, object> formula, DataTable target, DataRow targetRow)
+        {
+            if (depth == searched.Count)
+            {
+                return ExpressionEngine.ToBool(formula(name =>
+                {
+                    object value;
+                    if (!TryNumberedCell(inputs, rows, 0, null, name, out value))
+                        TrySide(target, targetRow, name, false, out value);
+                    return value;
+                }));
+            }
+            int input = searched[depth];
+            if (inputs[input].Rows.Count == 0)
+                return FindMatch(inputs, rows, searched, depth + 1, formula, target, targetRow);
+
+            foreach (DataRow row in inputs[input].Rows)
+            {
+                rows[input] = row;
+                if (FindMatch(inputs, rows, searched, depth + 1, formula, target, targetRow))
+                    return true;
+            }
+            return false;
+        }
+
+        static bool TryNumberedCell(IList<DataTable> inputs, DataRow[] rows, int outputInput,
+            DataTable output, string name, out object value)
+        {
+            string column;
+            int input = InputReference(name, out column);
+            value = null;
+            if (input == 0) return false;
+            if (input > inputs.Count)
+                throw new InvalidOperationException("Input " + input + " is not connected.");
+            TryCell(input == outputInput ? output : inputs[input - 1], rows[input - 1], column, true, out value);
+            return true;
+        }
+
         public static DataTable Run(DataTable a, DataTable b, FillColumnsSettings settings)
         {
             if (settings == null)
-                throw new InvalidOperationException("Set up the merge first.");
-            return Fill(a, b, settings.Keys, settings.Rules, 0, settings.MatchAll).Table;
+                throw new InvalidOperationException("Set up the fill rules first.");
+            return Fill(a == null ? new DataTable[0] : new[] { a }, b, settings.Keys, settings.Rules, 0, settings.MatchAll).Table;
         }
 
-        // $names that no column or built-in answers. They evaluate as blank, which is usually a typo.
-        // b should be Merge's result table so new target columns count as known.
-        public static string[] UnknownNames(DataTable a, DataTable b, IList<FillColumnsKey> keys, IList<FillColumnsRule> rules)
-        {
-            var missing = new List<string>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            object v;
-            if (keys != null)
-            {
-                foreach (var key in keys)
-                {
-                    foreach (var n in NamesIn(key.FormulaA))
-                        if (!TrySide(a, null, n, true, out v) && seen.Add(n)) missing.Add(n);
-                    foreach (var n in NamesIn(key.FormulaB))
-                        if (!TrySide(b, null, n, false, out v) && seen.Add(n)) missing.Add(n);
-                }
-            }
-            if (rules != null)
-            {
-                foreach (var rule in rules)
-                {
-                    var names = new List<string>(NamesIn(rule.When));
-                    names.AddRange(NamesIn(rule.Value));
-                    foreach (var n in names)
-                        if (!TryFind(a, null, b, null, null, n, out v) && seen.Add(n)) missing.Add(n);
-                }
-            }
-            return missing.ToArray();
-        }
-
-        static IEnumerable<string> NamesIn(string formula)
-        {
-            if (string.IsNullOrEmpty(formula))
-                yield break;
-            foreach (Match m in Names.Matches(formula))
-                yield return m.Groups[1].Value;
-        }
-
-        static IEnumerable<string> MatchKeys(DataTable table, DataRow row, IList<FillColumnsKey> keys, bool isA, bool matchAll)
+        static IEnumerable<string> MatchKeys(IList<FillColumnsKey> keys, bool isA, bool matchAll, Func<string, object> names)
         {
             if (matchAll)
             {
-                var key = Key(table, row, keys, isA);
+                var key = Key(keys, isA, names);
                 if (key.Length > 0) yield return key;
                 yield break;
             }
             for (var i = 0; i < keys.Count; i++)
             {
-                var key = Key(table, row, new[] { keys[i] }, isA);
+                var key = Key(new[] { keys[i] }, isA, names);
                 if (key.Length > 0) yield return i + ":" + key;
             }
         }
 
-        static string Key(DataTable table, DataRow row, IList<FillColumnsKey> keys, bool isA)
+        static string Key(IList<FillColumnsKey> keys, bool isA, Func<string, object> names)
         {
             var k = "";
             for (var i = 0; i < keys.Count; i++)
@@ -210,11 +294,11 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 object value;
                 try
                 {
-                    value = ExpressionEngine.Evaluate(formula, delegate(string n) { object v; TrySide(table, row, n, isA, out v); return v; });
+                    value = ExpressionEngine.Evaluate(formula, names);
                 }
                 catch (Exception ex)
                 {
-                    throw new InvalidOperationException("Match rule " + (i + 1) + " (" + (isA ? "A" : "B") + " side): " + ex.Message, ex);
+                    throw new InvalidOperationException("Match rule " + (i + 1) + " (" + (isA ? "lookup" : "input") + " side): " + ex.Message, ex);
                 }
                 var part = ExpressionEngine.ToText(value).Trim().ToLowerInvariant();
                 if (part.Length == 0)
@@ -224,6 +308,45 @@ namespace OfficeWorkAssistant.Features.FillColumns
                 k += part;
             }
             return k;
+        }
+
+        // $1_Name reads the target. $2_Name and higher read lookups in input order.
+        static int InputReference(string name, out string column)
+        {
+            column = null;
+            if (string.IsNullOrEmpty(name) || !char.IsDigit(name[0])) return 0;
+            int split = name.IndexOf('_');
+            int input;
+            if (split < 1 || !int.TryParse(name.Substring(0, split), NumberStyles.None,
+                CultureInfo.InvariantCulture, out input)) return 0;
+            if (input < 1 || split == name.Length - 1)
+                throw new InvalidOperationException("Use a numbered input and column, for example $1_Code.");
+            column = name.Substring(split + 1);
+            return input;
+        }
+
+        static object LookupKeyValue(DataTable lookup, DataRow row, int ownInput, string name)
+        {
+            string column;
+            int input = InputReference(name, out column);
+            object value;
+            if (input == 0) TrySide(lookup, row, name, true, out value);
+            else if (input == ownInput) TryCell(lookup, row, column, true, out value);
+            else throw new InvalidOperationException("The lookup key for input " + ownInput + " must read that input.");
+            return value;
+        }
+
+        static object ComparisonValue(DataTable target, DataRow row, IList<DataTable> sources,
+            DataRow[] matches, int source, string name)
+        {
+            string column;
+            int input = InputReference(name, out column);
+            object value;
+            if (input == 0) TrySide(target, row, name, false, out value);
+            else if (input == 1) TryCell(target, row, column, true, out value);
+            else if (input <= source + 1) TryCell(sources[input - 2], matches[input - 2], column, true, out value);
+            else throw new InvalidOperationException("Match input " + (source + 2) + " against input 1 or an earlier matched input.");
+            return value;
         }
 
         // Match formulas see only their own file. The file's own prefix ($A_ on A) is accepted too.
@@ -239,11 +362,26 @@ namespace OfficeWorkAssistant.Features.FillColumns
             return TryCell(table, row, name, true, out value);
         }
 
-        static object Find(DataTable a, DataRow rowA, DataTable b, DataRow rowB, DataColumn target, string name)
+        public static string Alias(int index)
         {
-            object v;
-            TryFind(a, rowA, b, rowB, target, name, out v);
-            return v;
+            return index == 0 ? "A" : "A" + (index + 1);
+        }
+
+        static bool Resolve(IList<DataTable> sources, DataRow[] rows, DataTable b, DataRow rowB, DataColumn target, string name, out object value)
+        {
+            for (int i = 1; i < sources.Count; i++)
+            {
+                var prefix = Alias(i) + "_";
+                if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return TryCell(sources[i], rows == null ? null : rows[i], name.Substring(prefix.Length), true, out value);
+                if (string.Equals(name, "Matched" + (i + 1), StringComparison.OrdinalIgnoreCase))
+                {
+                    value = rows != null && rows[i] != null;
+                    return true;
+                }
+            }
+            return TryFind(sources.Count == 0 ? null : sources[0], rows == null || rows.Length == 0 ? null : rows[0],
+                b, rowB, target, name, out value);
         }
 
         static bool TryFind(DataTable a, DataRow rowA, DataTable b, DataRow rowB, DataColumn target, string name, out object value)
