@@ -108,14 +108,14 @@ These steps decide how the Save file step writes the sheet. The data itself does
   - `$Due < $Today`: Due column yellow
 
   The look can set a fill colour, text colour, bold, italic, underline, strikethrough, border, alignment, wrap and number format. Colours are a name from the list or `#RRGGBB`. Later rules paint over earlier ones, unless a rule is set to stop. Build a condition fills in the formula from a column, an operator and a value.
-- **Format sheet** sets the sheet's look:
-  - header row style (bold on light blue with thin borders by default)
-  - freeze the header row and the first N columns
-  - filter buttons on the header
-  - column widths fitted to their contents
-  - thin borders on every cell
-  - every second row shaded
-  - per-column width, number format (for example `#,##0.00` or `dd/MM/yyyy`), alignment and wrap. **Add format** opens a window for one column; the step lists each format with **Edit** and **Remove**.
+- **Format sheet** has five sections. Each offers fill and text colours, bold, text wrap, borders, horizontal and vertical alignment, and Excel number formats.
+  - **Sheet** applies to the header and the data range. Sheet borders can cover the entire range or only cells with values. This section also controls frozen panes and automatic column widths.
+  - **Header row** controls filter buttons and header styling. The default header is bold on light blue with thin borders.
+  - **Data rows** styles the rows below the header and can shade every second row.
+  - **Column defaults** sets a common width and style for all data columns.
+  - **Individual columns** lets you choose any input column and give it its own width and cell style.
+
+  Settings you leave blank or unchanged inherit the broader style. For data cells, the sheet style comes first, followed by data rows, column defaults, row banding, and individual columns. Highlight rules apply on top.
 
 Example: Load file -> Clean text -> Remove duplicates -> Highlight (`$Qty == 0` row light red) -> Format sheet -> Save file.
 

@@ -8,34 +8,53 @@
     </UserControl.Resources>
     <StackPanel Margin="0,4,0,0">
         <TextBlock x:Name="InputInfo" Foreground="#777" FontSize="11" Margin="0,0,0,6" TextWrapping="Wrap" />
-        <GroupBox Header="Header row">
+        <Expander Header="Sheet" IsExpanded="True">
             <StackPanel Margin="6">
-                <CheckBox x:Name="HeaderBox" Content="Style the header row" Margin="0,0,0,6" />
-                <excel:CellStylePicker x:Name="HeaderPicker" />
-            </StackPanel>
-        </GroupBox>
-        <GroupBox Header="Sheet" Margin="0,8,0,0">
-            <StackPanel Margin="6">
-                <CheckBox x:Name="FreezeBox" Content="Freeze the header row (it stays on screen when scrolling)" Margin="0,0,0,2" />
+                <CheckBox x:Name="FreezeBox" Content="Freeze the header row" Margin="0,0,0,2" />
                 <StackPanel Margin="0,0,0,2">
                     <TextBlock Text="Frozen columns (0 = none)" VerticalAlignment="Center" Margin="0,4,0,2" TextWrapping="Wrap" />
                     <TextBox x:Name="FreezeColsBox" Margin="0,0,0,6" HorizontalAlignment="Stretch" />
                 </StackPanel>
-                <CheckBox x:Name="FilterBox" Content="Filter buttons on the header" Margin="0,0,0,2" />
                 <CheckBox x:Name="FitBox" Content="Fit column widths to their contents" Margin="0,0,0,2" />
-                <CheckBox x:Name="BordersBox" Content="Thin borders on every cell" Margin="0,0,0,2" />
-                <StackPanel>
-                    <CheckBox x:Name="BandBox" Content="Shade every second row" VerticalAlignment="Center" Margin="0,0,0,6" />
-                    <ComboBox x:Name="BandColor" IsEditable="True" ToolTip="A colour name, or #RRGGBB." Margin="0,0,0,6" HorizontalAlignment="Stretch" />
-                </StackPanel>
+                <Expander Header="Sheet-wide cell style" Margin="0,6,0,0">
+                    <StackPanel Margin="6">
+                        <CheckBox x:Name="BorderValuesBox" Margin="0,0,0,6">
+                            <TextBlock Text="Apply sheet borders only to cells with values" TextWrapping="Wrap" />
+                        </CheckBox>
+                        <excel:CellStylePicker x:Name="SheetPicker" BasicOptions="True" />
+                    </StackPanel>
+                </Expander>
             </StackPanel>
-        </GroupBox>
-        <GroupBox Header="Column formats" Margin="0,8,0,0">
+        </Expander>
+        <Expander Header="Header row" Margin="0,8,0,0">
             <StackPanel Margin="6">
-                <Button Content="Add format" Width="100" HorizontalAlignment="Left" Margin="0,0,0,4" Click="Add_Click" />
+                <CheckBox x:Name="FilterBox" Content="Show filter buttons" Margin="0,0,0,6" />
+                <CheckBox x:Name="HeaderBox" Content="Style the header row" Margin="0,0,0,6" />
+                <excel:CellStylePicker x:Name="HeaderPicker" BasicOptions="True" IsEnabled="{Binding IsChecked, ElementName=HeaderBox}" />
+            </StackPanel>
+        </Expander>
+        <Expander Header="Data rows" Margin="0,8,0,0">
+            <StackPanel Margin="6">
+                <CheckBox x:Name="BandBox" Content="Shade every second data row" Margin="0,0,0,6" />
+                <ComboBox x:Name="BandColor" IsEditable="True" ToolTip="A colour name, or #RRGGBB." Margin="0,0,0,6"
+                          IsEnabled="{Binding IsChecked, ElementName=BandBox}" />
+                <excel:CellStylePicker x:Name="RowsPicker" BasicOptions="True" />
+            </StackPanel>
+        </Expander>
+        <Expander Header="Column defaults" Margin="0,8,0,0">
+            <StackPanel Margin="6">
+                <TextBlock Text="Default column width (blank = automatic)" Margin="0,0,0,2" TextWrapping="Wrap" />
+                <TextBox x:Name="DefaultWidthBox" Margin="0,0,0,6" />
+                <excel:CellStylePicker x:Name="DefaultColumnPicker" BasicOptions="True" />
+            </StackPanel>
+        </Expander>
+        <Expander Header="Individual columns" Margin="0,8,0,0">
+            <StackPanel Margin="6">
+                <ComboBox x:Name="ColumnBox" Margin="0,0,0,6" />
+                <Button x:Name="EditColumnButton" Content="Edit selected column" HorizontalAlignment="Left" Margin="0,0,0,6" Click="EditSelected_Click" />
                 <StackPanel x:Name="FormatPanel" />
             </StackPanel>
-        </GroupBox>
+        </Expander>
         <Button Content="Apply to step" Width="120" HorizontalAlignment="Left" Margin="0,8,0,6" Click="Apply_Click" />
         <TextBlock x:Name="Status" Foreground="#777" FontSize="11" TextWrapping="Wrap" />
     </StackPanel>

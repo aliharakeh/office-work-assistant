@@ -9,7 +9,7 @@
     <StackPanel>
         <StackPanel Margin="0,0,0,4">
             <TextBlock Text="Fill" VerticalAlignment="Center" Margin="0,4,0,2" TextWrapping="Wrap" />
-            <ComboBox x:Name="FillBox" IsEditable="True" ToolTip="A colour name, or #RRGGBB. Blank = no fill." Margin="0,0,0,6" HorizontalAlignment="Stretch" />
+            <ComboBox x:Name="FillBox" IsEditable="True" ToolTip="A colour name, or #RRGGBB. Blank = unchanged." Margin="0,0,0,6" HorizontalAlignment="Stretch" />
         </StackPanel>
         <StackPanel Margin="0,0,0,4">
             <TextBlock Text="Text colour" VerticalAlignment="Center" Margin="0,4,0,2" TextWrapping="Wrap" />
@@ -25,23 +25,30 @@
         <StackPanel Margin="0,0,0,4">
             <TextBlock Text="Border" VerticalAlignment="Center" Margin="0,4,0,2" TextWrapping="Wrap" />
             <ComboBox x:Name="BorderBox" Margin="0,0,0,6" HorizontalAlignment="Stretch">
-                <ComboBoxItem Content="No border" />
+                <ComboBoxItem Content="Leave unchanged" />
                 <ComboBoxItem Content="Thin border" />
                 <ComboBoxItem Content="Thick border" />
             </ComboBox>
-            <TextBlock Text="Alignment" TextWrapping="Wrap" Margin="0,4,0,2" />
+            <TextBlock Text="Horizontal alignment" TextWrapping="Wrap" Margin="0,4,0,2" />
             <ComboBox x:Name="AlignBox" Margin="0,0,0,6" HorizontalAlignment="Stretch">
-                <ComboBoxItem Content="Align as Excel does" />
+                <ComboBoxItem Content="Leave unchanged" />
                 <ComboBoxItem Content="Align left" />
                 <ComboBoxItem Content="Align center" />
                 <ComboBoxItem Content="Align right" />
+            </ComboBox>
+            <TextBlock Text="Vertical alignment" TextWrapping="Wrap" Margin="0,4,0,2" />
+            <ComboBox x:Name="VerticalAlignBox" Margin="0,0,0,6" HorizontalAlignment="Stretch">
+                <ComboBoxItem Content="Leave unchanged" />
+                <ComboBoxItem Content="Align top" />
+                <ComboBoxItem Content="Align center" />
+                <ComboBoxItem Content="Align bottom" />
             </ComboBox>
         </StackPanel>
         <StackPanel Margin="0,0,0,4">
             <TextBlock Text="Number format" VerticalAlignment="Center" Margin="0,4,0,2" TextWrapping="Wrap" />
             <ComboBox x:Name="FormatBox" IsEditable="True" ToolTip="An Excel number format. Blank = unchanged." Margin="0,0,0,6" HorizontalAlignment="Stretch" />
         </StackPanel>
-        <Border x:Name="Sample" Margin="0,2,0,0" BorderBrush="#CCC" BorderThickness="1" Padding="8,3" HorizontalAlignment="Left">
+        <Border x:Name="Sample" Margin="0,2,0,0" BorderBrush="#CCC" BorderThickness="1" Padding="8,3" MinHeight="40">
             <TextBlock x:Name="SampleText" Text="Sample 1,234.50" TextWrapping="Wrap" />
         </Border>
     </StackPanel>

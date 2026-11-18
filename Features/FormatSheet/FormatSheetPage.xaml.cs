@@ -5,7 +5,6 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Media;
 using OfficeWorkAssistant.Excel;
 
 namespace OfficeWorkAssistant.Features.FormatSheet
@@ -21,7 +20,12 @@ namespace OfficeWorkAssistant.Features.FormatSheet
             InitializeComponent();
             _input = input;
             _use = use;
-            InputInfo.Text = label + " - the look Save writes. Highlight colours from an earlier step stay on top.";
+            InputInfo.Text = label + " · Sheet styles apply to the header and data. Column styles apply to data cells.";
+            ColumnBox.ItemsSource = ExcelColumns.Labels(input);
+            if (ColumnBox.Items.Count > 0)
+                ColumnBox.SelectedIndex = 0;
+            else
+                EditColumnButton.IsEnabled = false;
             foreach (var name in NamedColors.FillNames)
                 BandColor.Items.Add(name);
 
@@ -32,7 +36,11 @@ namespace OfficeWorkAssistant.Features.FormatSheet
             FreezeColsBox.Text = s.FreezeColumns.ToString(CultureInfo.InvariantCulture);
             FilterBox.IsChecked = s.AutoFilter;
             FitBox.IsChecked = s.AutoFit;
-            BordersBox.IsChecked = s.Borders;
+            SheetPicker.Value = s.SheetCells;
+            BorderValuesBox.IsChecked = s.BorderValuesOnly;
+            RowsPicker.Value = s.GetDataRowStyle();
+            DefaultColumnPicker.Value = s.DefaultColumn;
+            DefaultWidthBox.Text = s.DefaultColumnWidth > 0 ? s.DefaultColumnWidth.ToString(CultureInfo.InvariantCulture) : "";
             BandBox.IsChecked = s.BandRows;
             BandColor.Text = NamedColors.NameOf(s.BandFill);
             _formats.AddRange(s.Columns);
@@ -42,63 +50,50 @@ namespace OfficeWorkAssistant.Features.FormatSheet
         void RebuildFormats()
         {
             FormatPanel.Children.Clear();
-            if (_formats.Count == 0)
-            {
-                FormatPanel.Children.Add(new TextBlock { Text = "No column formats yet.", Foreground = Brushes.Gray, Margin = new Thickness(0, 0, 0, 4) });
-                return;
-            }
             for (var i = 0; i < _formats.Count; i++)
             {
                 var index = i;
-                var text = Describe(_formats[i]);
+                var format = _formats[i];
+                var column = ExcelColumns.IndexOf(_input, format.Column);
+                var label = column >= 0 ? ExcelColumns.Label(_input, column) : format.Column;
                 var edit = new Button { Content = "Edit", Width = 56, Margin = new Thickness(0, 0, 6, 0) };
-                edit.Click += (s, e) => EditFormat(index);
+                edit.IsEnabled = column >= 0;
+                edit.Click += (s, e) => EditFormat(index, column);
                 var remove = new Button { Content = "Remove", Width = 64 };
                 remove.Click += (s, e) => RemoveFormat(index);
                 var buttons = new WrapPanel { Margin = new Thickness(0, 4, 0, 4) };
                 buttons.Children.Add(edit);
                 buttons.Children.Add(remove);
-                var row = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+                var row = new StackPanel { Margin = new Thickness(6) };
                 row.Children.Add(new TextBlock
                 {
-                    Text = text,
-                    ToolTip = text,
+                    Text = format.Describe(),
                     TextWrapping = TextWrapping.Wrap,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 8, 0)
                 });
                 row.Children.Add(buttons);
-                FormatPanel.Children.Add(row);
+                FormatPanel.Children.Add(new GroupBox
+                {
+                    Header = new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap },
+                    Content = row,
+                    Margin = new Thickness(0, 0, 0, 6)
+                });
             }
         }
 
-        // "C - City: width 20, format #,##0" reads better than the raw letter.
-        string Describe(ColumnFormat f)
+        void EditSelected_Click(object sender, RoutedEventArgs e)
         {
-            var at = ExcelColumns.IndexOf(_input, f.Column);
-            var label = at >= 0 ? ExcelColumns.Label(_input, at) : f.Column;
-            var parts = new List<string>();
-            if (f.Width > 0)
-                parts.Add("width " + f.Width.ToString("0.#", CultureInfo.InvariantCulture));
-            if (!string.IsNullOrWhiteSpace(f.NumberFormat))
-                parts.Add("format " + f.NumberFormat);
-            if (f.Align != CellAlign.General)
-                parts.Add(f.Align.ToString().ToLowerInvariant());
-            if (f.Wrap)
-                parts.Add("wrap");
-            return label + " - " + (parts.Count == 0 ? "nothing" : string.Join(", ", parts.ToArray()));
-        }
-
-        void Add_Click(object sender, RoutedEventArgs e)
-        {
-            EditFormat(-1);
+            int column = ColumnBox.SelectedIndex;
+            if (column >= 0)
+                EditFormat(_formats.FindIndex(f => ExcelColumns.IndexOf(_input, f.Column) == column), column);
         }
 
         // index -1 adds a new format.
-        void EditFormat(int index)
+        void EditFormat(int index, int column)
         {
             var seed = index >= 0 ? _formats[index] : null;
-            var f = ColumnFormatWindow.Edit(Window.GetWindow(this), _input, seed);
+            var f = ColumnFormatWindow.Edit(Window.GetWindow(this), _input, column, seed);
             if (f == null)
                 return;
             if (index >= 0)
@@ -122,8 +117,13 @@ namespace OfficeWorkAssistant.Features.FormatSheet
             int freeze;
             if (!int.TryParse(FreezeColsBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out freeze) || freeze < 0)
             {
-                Status.Text = "Columns to freeze must be 0 or a whole number above 0.";
-                FreezeColsBox.Focus();
+                ShowError("Columns to freeze must be 0 or a whole number above 0.");
+                return;
+            }
+            double width;
+            if (!ColumnFormat.TryWidth(DefaultWidthBox.Text, out width))
+            {
+                ShowError("Default column width must be a number from 0 to 255.");
                 return;
             }
             var s = new FormatSheetSettings
@@ -134,7 +134,11 @@ namespace OfficeWorkAssistant.Features.FormatSheet
                 FreezeColumns = freeze,
                 AutoFilter = FilterBox.IsChecked == true,
                 AutoFit = FitBox.IsChecked == true,
-                Borders = BordersBox.IsChecked == true,
+                SheetCells = SheetPicker.Value,
+                BorderValuesOnly = BorderValuesBox.IsChecked == true,
+                DataRows = RowsPicker.Value,
+                DefaultColumn = DefaultColumnPicker.Value,
+                DefaultColumnWidth = width,
                 BandRows = BandBox.IsChecked == true,
                 BandFill = NamedColors.ToHex(BandColor.Text) ?? BandColor.Text.Trim()
             };
@@ -145,11 +149,17 @@ namespace OfficeWorkAssistant.Features.FormatSheet
             }
             catch (Exception ex)
             {
-                Notices.Show(this, ex.Message, "Format sheet", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowError(ex.Message);
                 return;
             }
             Status.Text = FormatSheetWork.Summary(s) + ".";
             _use(s);
+        }
+
+        void ShowError(string message)
+        {
+            Status.Text = message;
+            Notices.Show(this, message, "Format sheet", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 }

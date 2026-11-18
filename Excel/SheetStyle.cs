@@ -19,6 +19,14 @@ namespace OfficeWorkAssistant.Excel
         Right
     }
 
+    public enum CellVerticalAlign
+    {
+        Default,
+        Top,
+        Center,
+        Bottom
+    }
+
     // How one cell looks. Blank / false / General parts are "not set", so a style laid over
     // another only changes what it sets. Stored in step settings (XML), so plain properties.
     public sealed class CellStyle
@@ -34,6 +42,7 @@ namespace OfficeWorkAssistant.Excel
         // An Excel number format such as "#,##0.00" or "dd/MM/yyyy".
         public string NumberFormat { get; set; }
         public CellAlign Align { get; set; }
+        public CellVerticalAlign VerticalAlign { get; set; }
         public bool Wrap { get; set; }
 
         public CellStyle()
@@ -49,7 +58,7 @@ namespace OfficeWorkAssistant.Excel
             {
                 return string.IsNullOrWhiteSpace(Fill) && string.IsNullOrWhiteSpace(FontColor) && !Bold && !Italic &&
                     !Underline && !Strike && Border == CellBorder.None && string.IsNullOrWhiteSpace(NumberFormat) &&
-                    Align == CellAlign.General && !Wrap;
+                    Align == CellAlign.General && VerticalAlign == CellVerticalAlign.Default && !Wrap;
             }
         }
 
@@ -78,6 +87,8 @@ namespace OfficeWorkAssistant.Excel
                 s.NumberFormat = top.NumberFormat;
             if (top.Align != CellAlign.General)
                 s.Align = top.Align;
+            if (top.VerticalAlign != CellVerticalAlign.Default)
+                s.VerticalAlign = top.VerticalAlign;
             s.Wrap |= top.Wrap;
             return s;
         }
@@ -106,7 +117,8 @@ namespace OfficeWorkAssistant.Excel
             if (Strike) parts.Add("strikethrough");
             if (Border != CellBorder.None) parts.Add(Border == CellBorder.Thin ? "thin border" : "thick border");
             if (!string.IsNullOrWhiteSpace(NumberFormat)) parts.Add("format " + NumberFormat);
-            if (Align != CellAlign.General) parts.Add(Align.ToString().ToLowerInvariant());
+            if (Align != CellAlign.General) parts.Add(Align.ToString().ToLowerInvariant() + " horizontally");
+            if (VerticalAlign != CellVerticalAlign.Default) parts.Add(VerticalAlign.ToString().ToLowerInvariant() + " vertically");
             if (Wrap) parts.Add("wrap");
             return parts.Count == 0 ? "no style" : string.Join(", ", parts.ToArray());
         }
@@ -202,8 +214,8 @@ namespace OfficeWorkAssistant.Excel
 
     // How a whole sheet looks when Save writes it. Travels on the DataTable (ExcelFile.GetStyle)
     // from the Highlight and Format sheet steps to Save. Rows and columns are 0-based data
-    // indexes (row 0 = the first row under the header). Layers, bottom to top: every cell,
-    // columns, banded rows, rows, single cells; the header has its own style.
+    // indexes (row 0 = the first data row). The sheet style underlies the header and data.
+    // Data layers, bottom to top: data rows, column defaults, bands, individual columns, highlights.
     // Never change a SheetStyle that is on a table: Copy it first.
     public sealed class SheetStyle
     {
@@ -214,6 +226,10 @@ namespace OfficeWorkAssistant.Excel
 
         public CellStyle Header { get; set; }
         public CellStyle AllCells { get; set; }
+        public bool BorderValuesOnly { get; set; }
+        public CellStyle DataRows { get; set; }
+        public CellStyle DefaultColumn { get; set; }
+        public double DefaultColumnWidth { get; set; }
         // Every second data row (the 2nd, 4th, ...) gets this.
         public CellStyle Band { get; set; }
         public bool AutoFit { get; set; }
@@ -295,11 +311,15 @@ namespace OfficeWorkAssistant.Excel
         public CellStyle Effective(int row, int col)
         {
             CellStyle s = AllCells;
+            if (DataRows != null)
+                s = s == null ? DataRows : s.Over(DataRows);
+            if (DefaultColumn != null)
+                s = s == null ? DefaultColumn : s.Over(DefaultColumn);
+            if (Band != null && row % 2 == 1)
+                s = s == null ? Band : s.Over(Band);
             CellStyle part;
             if (_columns.TryGetValue(col, out part))
                 s = s == null ? part : s.Over(part);
-            if (Band != null && row % 2 == 1)
-                s = s == null ? Band : s.Over(Band);
             if (_rows.TryGetValue(row, out part))
                 s = s == null ? part : s.Over(part);
             if (_cells.TryGetValue(Key(row, col), out part))

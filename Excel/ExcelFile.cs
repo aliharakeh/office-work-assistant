@@ -264,19 +264,44 @@ namespace OfficeWorkAssistant.Excel
             if (cols == 0)
                 return;
 
+            var sheet = style.AllCells;
+            if (sheet != null && style.BorderValuesOnly && sheet.Border != CellBorder.None)
+            {
+                var line = BorderLine(sheet.Border);
+                sheet = sheet.Copy();
+                sheet.Border = CellBorder.None;
+                for (var c = 0; c < cols; c++)
+                {
+                    if (Header(table.Columns[c]).Length > 0)
+                        ws.Cell(1, c + 1).Style.Border.OutsideBorder = line;
+                }
+                for (var r = 0; r < rows; r++)
+                {
+                    for (var c = 0; c < cols; c++)
+                    {
+                        var value = table.Rows[r][c];
+                        if (value != null && value != DBNull.Value && !string.Empty.Equals(value))
+                            ws.Cell(r + 2, c + 1).Style.Border.OutsideBorder = line;
+                    }
+                }
+            }
+            if (sheet != null && !sheet.IsEmpty)
+                Apply(ws.Range(1, 1, rows + 1, cols), sheet);
+
             if (rows > 0)
             {
-                if (style.AllCells != null)
-                    Apply(ws.Range(2, 1, rows + 1, cols), style.AllCells);
-                foreach (var pair in style.Columns)
-                {
-                    if (pair.Key < cols)
-                        Apply(ws.Range(2, pair.Key + 1, rows + 1, pair.Key + 1), pair.Value);
-                }
+                var data = ws.Range(2, 1, rows + 1, cols);
+                Apply(data, style.DataRows);
+                Apply(data, style.DefaultColumn);
                 if (style.Band != null)
                 {
                     for (var r = 1; r < rows; r += 2)
                         Apply(ws.Range(r + 2, 1, r + 2, cols), style.Band);
+                }
+                foreach (var pair in style.Columns)
+                {
+                    if (pair.Key < cols)
+                        Apply(ws.Range(2, pair.Key + 1, rows + 1, pair.Key + 1), pair.Value);
                 }
                 foreach (var pair in style.Rows)
                 {
@@ -294,6 +319,8 @@ namespace OfficeWorkAssistant.Excel
 
             if (style.AutoFit)
                 ws.Columns(1, cols).AdjustToContents();
+            if (style.DefaultColumnWidth > 0)
+                ws.Columns(1, cols).Width = style.DefaultColumnWidth;
             foreach (var pair in style.Widths)
             {
                 if (pair.Key < cols)
@@ -326,7 +353,7 @@ namespace OfficeWorkAssistant.Excel
                 st.Font.Strikethrough = true;
             if (s.Border != CellBorder.None)
             {
-                var line = s.Border == CellBorder.Thick ? XLBorderStyleValues.Medium : XLBorderStyleValues.Thin;
+                var line = BorderLine(s.Border);
                 st.Border.OutsideBorder = line;
                 st.Border.InsideBorder = line;
             }
@@ -338,8 +365,19 @@ namespace OfficeWorkAssistant.Excel
                 st.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             else if (s.Align == CellAlign.Right)
                 st.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            if (s.VerticalAlign == CellVerticalAlign.Top)
+                st.Alignment.Vertical = XLAlignmentVerticalValues.Top;
+            else if (s.VerticalAlign == CellVerticalAlign.Center)
+                st.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+            else if (s.VerticalAlign == CellVerticalAlign.Bottom)
+                st.Alignment.Vertical = XLAlignmentVerticalValues.Bottom;
             if (s.Wrap)
                 st.Alignment.WrapText = true;
+        }
+
+        static XLBorderStyleValues BorderLine(CellBorder border)
+        {
+            return border == CellBorder.Thick ? XLBorderStyleValues.Medium : XLBorderStyleValues.Thin;
         }
 
         public static DataColumn AddColumn(DataTable table, string header)

@@ -29,6 +29,7 @@ namespace OfficeWorkAssistant.Excel
                 FormatBox.Items.Add(f);
             BorderBox.SelectedIndex = 0;
             AlignBox.SelectedIndex = 0;
+            VerticalAlignBox.SelectedIndex = 0;
             _loading = false;
 
             FillBox.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent, new RoutedEventHandler(Changed));
@@ -37,12 +38,25 @@ namespace OfficeWorkAssistant.Excel
             FontBox.SelectionChanged += Changed;
             BorderBox.SelectionChanged += Changed;
             AlignBox.SelectionChanged += Changed;
+            VerticalAlignBox.SelectionChanged += Changed;
             foreach (var box in new[] { BoldBox, ItalicBox, UnderlineBox, StrikeBox, WrapBox })
             {
                 box.Checked += Changed;
                 box.Unchecked += Changed;
             }
             UpdateSample();
+        }
+
+        public bool BasicOptions
+        {
+            get { return ItalicBox.Visibility == Visibility.Collapsed; }
+            set
+            {
+                var visibility = value ? Visibility.Collapsed : Visibility.Visible;
+                ItalicBox.Visibility = visibility;
+                UnderlineBox.Visibility = visibility;
+                StrikeBox.Visibility = visibility;
+            }
         }
 
         public CellStyle Value
@@ -60,6 +74,7 @@ namespace OfficeWorkAssistant.Excel
                     Wrap = WrapBox.IsChecked == true,
                     Border = (CellBorder)System.Math.Max(0, BorderBox.SelectedIndex),
                     Align = (CellAlign)System.Math.Max(0, AlignBox.SelectedIndex),
+                    VerticalAlign = (CellVerticalAlign)System.Math.Max(0, VerticalAlignBox.SelectedIndex),
                     NumberFormat = (FormatBox.Text ?? "").Trim()
                 };
             }
@@ -76,6 +91,7 @@ namespace OfficeWorkAssistant.Excel
                 WrapBox.IsChecked = s.Wrap;
                 BorderBox.SelectedIndex = (int)s.Border;
                 AlignBox.SelectedIndex = (int)s.Align;
+                VerticalAlignBox.SelectedIndex = (int)s.VerticalAlign;
                 FormatBox.Text = s.NumberFormat ?? "";
                 _loading = false;
                 UpdateSample();
@@ -106,6 +122,10 @@ namespace OfficeWorkAssistant.Excel
                 SampleText.Foreground = BrushOf(s.FontColor) ?? Brushes.Black;
                 SampleText.FontWeight = s.Bold ? FontWeights.Bold : FontWeights.Normal;
                 SampleText.FontStyle = s.Italic ? FontStyles.Italic : FontStyles.Normal;
+                SampleText.TextAlignment = s.Align == CellAlign.Center ? TextAlignment.Center :
+                    s.Align == CellAlign.Right ? TextAlignment.Right : TextAlignment.Left;
+                SampleText.VerticalAlignment = s.VerticalAlign == CellVerticalAlign.Top ? VerticalAlignment.Top :
+                    s.VerticalAlign == CellVerticalAlign.Center ? VerticalAlignment.Center : VerticalAlignment.Bottom;
                 var deco = new TextDecorationCollection();
                 if (s.Underline)
                     deco.Add(TextDecorations.Underline);
@@ -114,7 +134,7 @@ namespace OfficeWorkAssistant.Excel
                 SampleText.TextDecorations = deco;
                 Sample.BorderBrush = s.Border == CellBorder.None ? new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)) : Brushes.Black;
                 Sample.BorderThickness = new Thickness(s.Border == CellBorder.Thick ? 2 : 1);
-                FillBox.ToolTip = NamedColors.IsValid(FillBox.Text) ? "A colour name, or #RRGGBB. Blank = no fill." : "Not a colour: use a name from the list or #RRGGBB.";
+                FillBox.ToolTip = NamedColors.IsValid(FillBox.Text) ? "A colour name, or #RRGGBB. Blank = unchanged." : "Not a colour: use a name from the list or #RRGGBB.";
                 FontBox.ToolTip = NamedColors.IsValid(FontBox.Text) ? "A colour name, or #RRGGBB. Blank = unchanged." : "Not a colour: use a name from the list or #RRGGBB.";
             }));
         }

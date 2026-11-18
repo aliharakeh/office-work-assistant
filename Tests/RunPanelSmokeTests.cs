@@ -113,7 +113,14 @@ internal static class RunPanelSmokeTests
                     narrowInputs[i] = narrowInput;
                     narrowLabels[i] = "From a step with a long title " + new string('W', 100);
                 }
-                CheckLayout(PipelineStepEditor.Create(def, node, narrowInputs, narrowLabels, settings => { }), kind + " long labels");
+                var narrowEditor = PipelineStepEditor.Create(def, node, narrowInputs, narrowLabels, settings => { });
+                if (kind == PipelineStepKind.FormatSheet)
+                {
+                    Expander section;
+                    while ((section = Find<Expander>(narrowEditor, e => !e.IsExpanded)) != null)
+                        section.IsExpanded = true;
+                }
+                CheckLayout(narrowEditor, kind + " long labels");
             }
 
             var dialogCases = new object[][]
@@ -124,7 +131,7 @@ internal static class RunPanelSmokeTests
                 new object[] { "Templates.TemplateColumnWindow", new object[] { null, table, null,
                     new List<OfficeWorkAssistant.Features.Templates.TemplateColumn>(), -1 } },
                 new object[] { "Highlight.HighlightRuleWindow", new object[] { null, table, null, 1 } },
-                new object[] { "FormatSheet.ColumnFormatWindow", new object[] { null, table, null } }
+                new object[] { "FormatSheet.ColumnFormatWindow", new object[] { null, table, 0, null } }
             };
             foreach (var dialogCase in dialogCases)
             {

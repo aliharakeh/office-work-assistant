@@ -327,7 +327,7 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 case PipelineStepKind.EditHeaders: return "Add, clear or rename headers with text or formulas.";
                 case PipelineStepKind.Append: return "Stack the rows of several tables.";
                 case PipelineStepKind.Highlight: return "Colour cells or rows that match a condition.";
-                case PipelineStepKind.FormatSheet: return "Header style, widths, freeze, filter, formats.";
+                case PipelineStepKind.FormatSheet: return "Style the sheet, header, data rows, and columns. Add filters or freeze panes.";
                 case PipelineStepKind.SaveText: return "Save column text, lists, sets or maps to a text / JSON file.";
                 case PipelineStepKind.LoadPdf: return "Read one PDF file or a column of PDF paths.";
                 case PipelineStepKind.ArrangePdf: return "Select, reorder, rotate, duplicate or insert pages.";
@@ -1423,14 +1423,9 @@ namespace OfficeWorkAssistant.Features.Pipeline
             foreach (var edit in s.Columns)
             {
                 if (string.IsNullOrWhiteSpace(edit.Source)) continue;
-                var column = input.Columns[ExcelColumns.Index(input, edit.Source)];
-                string header = ExcelFile.Header(column);
-                int matches = 0;
-                foreach (DataColumn c in input.Columns)
-                    if (string.Equals(ExcelFile.Header(c), header, StringComparison.OrdinalIgnoreCase)) matches++;
-                // Binding ids identify blank and duplicate headers unambiguously.
-                edit.SourceIsId = string.IsNullOrWhiteSpace(header) || matches > 1;
-                edit.Source = edit.SourceIsId ? column.ColumnName : header;
+                bool isId;
+                edit.Source = UnambiguousNameOf(input, edit.Source, out isId);
+                edit.SourceIsId = isId;
             }
             return s;
         }
@@ -1492,7 +1487,11 @@ namespace OfficeWorkAssistant.Features.Pipeline
         {
             var s = Clone(settings);
             foreach (var c in s.Columns)
-                c.Column = NameOf(input, c.Column);
+            {
+                bool isId;
+                c.Column = UnambiguousNameOf(input, c.Column, out isId);
+                c.ColumnIsId = isId;
+            }
             return s;
         }
 
@@ -1501,10 +1500,20 @@ namespace OfficeWorkAssistant.Features.Pipeline
             var s = Clone(settings);
             s.Columns.RemoveAll(c =>
             {
-                var letter = LetterOf(input, c.Column, strict);
+                string letter;
+                if (c.ColumnIsId)
+                {
+                    var column = input.Columns[c.Column];
+                    if (column == null && strict)
+                        throw new InvalidOperationException("Column '" + c.Column + "' is not in this step's input.");
+                    letter = column == null ? null : ExcelColumns.Letter(column.Ordinal);
+                }
+                else
+                    letter = LetterOf(input, c.Column, strict);
                 if (letter == null)
                     return true;
                 c.Column = letter;
+                c.ColumnIsId = false;
                 return false;
             });
             return s;
@@ -1536,6 +1545,17 @@ namespace OfficeWorkAssistant.Features.Pipeline
                 return string.IsNullOrWhiteSpace(ExcelFile.Header(input.Columns[index]))
                     ? input.Columns[index].ColumnName : ExcelFile.Header(input.Columns[index]);
             return letter;
+        }
+
+        static string UnambiguousNameOf(DataTable input, string letter, out bool isId)
+        {
+            var column = input.Columns[ExcelColumns.Index(input, letter)];
+            string header = ExcelFile.Header(column);
+            int matches = 0;
+            foreach (DataColumn candidate in input.Columns)
+                if (string.Equals(ExcelFile.Header(candidate), header, StringComparison.OrdinalIgnoreCase)) matches++;
+            isId = string.IsNullOrWhiteSpace(header) || matches > 1;
+            return isId ? column.ColumnName : header;
         }
 
         static string LetterOf(DataTable input, string name, bool strict)
